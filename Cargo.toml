@@ -37,7 +37,7 @@ bevy_winit = { version = "0.18", default-features = false }
 bevy_tween = { version = "0.12", default-features = false }
 bevy_embedded_assets = "0.15.0"
 crossbeam-queue = "0.3"
-tokio = { version = "1.50", features = ["rt-multi-thread"] }
+tokio = { version = "1.52", features = ["rt-multi-thread"] }
 num-traits = "0.2"
 reqwest = { version = "0.13", default-features = false, features = ["blocking", "rustls"] }
 rfd = "0.17"
