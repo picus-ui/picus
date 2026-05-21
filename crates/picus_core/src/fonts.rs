@@ -79,7 +79,7 @@ pub fn collect_bevy_font_assets(
         };
 
         if let Some(font) = fonts.get(id) {
-            bridge.register_font_bytes(font.data.as_slice());
+            bridge.register_font_bytes(font.data.data());
         }
     }
 }

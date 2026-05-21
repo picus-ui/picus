@@ -177,15 +177,11 @@ where
 
     fn update(&mut self, ctx: &mut UpdateCtx<'_>, _props: &mut PropertiesMut<'_>, event: &Update) {
         match event {
-            Update::HoveredChanged(hovered) => {
-                if self.set_hovered(*hovered) {
-                    ctx.request_render();
-                }
+            Update::HoveredChanged(hovered) if self.set_hovered(*hovered) => {
+                ctx.request_render();
             }
-            Update::ActiveChanged(active) => {
-                if self.set_pressed(*active) {
-                    ctx.request_render();
-                }
+            Update::ActiveChanged(active) if self.set_pressed(*active) => {
+                ctx.request_render();
             }
             Update::DisabledChanged(true) => {
                 let hover_changed = self.set_hovered(false);

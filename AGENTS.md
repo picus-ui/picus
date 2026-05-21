@@ -13,6 +13,7 @@ cross-cutting design decisions that code comments cannot express well.
 
 2. **Verification**
    - Add or update tests for behavior changes.
+   - Use Rust 1.95.0 or newer for Bevy 0.19 workspace checks.
    - Run `cargo test` for every change.
    - For Rust changes, run `cargo fmt` and
      `cargo clippy --all-targets --all-features -- -D warnings`.

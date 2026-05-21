@@ -764,95 +764,88 @@ pub(super) fn build_app(mut activation_service: Option<ActivationService>) -> Ap
         });
 
         #[cfg(target_os = "macos")]
-        app.insert_non_send_resource(ActivationBridge {
+        app.insert_non_send(ActivationBridge {
             service,
             startup_uris,
         });
     }
 
-    app.add_plugins((
-        EmbeddedAssetPlugin {
-            mode: PluginMode::ReplaceDefault,
-        },
-        AssetPlugin::default(),
-        TextPlugin,
-        PicusPlugin,
-    ))
-    .load_style_sheet_ron(include_str!("../../assets/themes/pixcus.ron"))
-    .insert_resource(AppI18n::new(parse_locale("en-US")))
-    .register_i18n_bundle(
-        "en-US",
-        SyncTextSource::String(include_str!("../../assets/locales/en-US/main.ftl")),
-        vec![
-            "Inter",
-            "Noto Sans CJK SC",
-            "Noto Sans CJK JP",
-            "Noto Sans CJK TC",
-            "Noto Sans CJK KR",
-            "sans-serif",
-        ],
-    )
-    .register_i18n_bundle(
-        "zh-CN",
-        SyncTextSource::String(include_str!("../../assets/locales/zh-CN/main.ftl")),
-        vec![
-            "Inter",
-            "Noto Sans CJK SC",
-            "Noto Sans CJK JP",
-            "Noto Sans CJK TC",
-            "Noto Sans CJK KR",
-            "sans-serif",
-        ],
-    )
-    .register_i18n_bundle(
-        "ja-JP",
-        SyncTextSource::String(include_str!("../../assets/locales/ja-JP/main.ftl")),
-        vec![
-            "Inter",
-            "Noto Sans CJK JP",
-            "Noto Sans CJK SC",
-            "Noto Sans CJK TC",
-            "Noto Sans CJK KR",
-            "sans-serif",
-        ],
-    )
-    .register_ui_component::<PixivRoot>()
-    .register_ui_component::<PixivSidebar>()
-    .register_ui_component::<PixivMainColumn>()
-    .register_ui_component::<PixivAuthPanel>()
-    .register_ui_component::<PixivAuthDialogForm>()
-    .register_ui_component::<PixivAccountMenu>()
-    .register_ui_component::<PixivResponsePanel>()
-    .register_ui_component::<PixivSearchPanel>()
-    .register_ui_component::<PixivHomeFeed>()
-    .register_ui_component::<PixivIllustCard>()
-    .register_ui_component::<PixivDetailOverlay>()
-    .register_ui_component::<PixivDetailMetaRail>()
-    .register_ui_component::<PixivOverlayTags>()
-    .register_ui_component::<OverlayTag>()
-    .add_tween_systems(Update, component_tween_system::<CardAnimLens>())
-    .add_systems(Startup, (setup_styles, setup))
-    .add_systems(
-        Update,
-        (
-            drain_ui_actions_and_dispatch
-                .after(picus_core::handle_widget_actions)
-                .after(picus_core::handle_overlay_actions),
-            poll_activation_messages,
-            track_viewport_metrics,
-            sync_feed_scroll_viewport,
-            request_next_feed_page,
-            spawn_network_tasks,
-            apply_network_results,
-            spawn_image_tasks,
-            apply_image_results,
-            ensure_detail_dialog_overlay,
-            reconcile_auth_dialog_overlay_state,
-            reconcile_detail_dialog_overlay_state,
-            reconcile_account_menu_overlay_state,
+    app.add_plugins((AssetPlugin::default(), TextPlugin, PicusPlugin))
+        .load_style_sheet_ron(include_str!("../../assets/themes/pixcus.ron"))
+        .insert_resource(AppI18n::new(parse_locale("en-US")))
+        .register_i18n_bundle(
+            "en-US",
+            SyncTextSource::String(include_str!("../../assets/locales/en-US/main.ftl")),
+            vec![
+                "Inter",
+                "Noto Sans CJK SC",
+                "Noto Sans CJK JP",
+                "Noto Sans CJK TC",
+                "Noto Sans CJK KR",
+                "sans-serif",
+            ],
         )
-            .chain(),
-    );
+        .register_i18n_bundle(
+            "zh-CN",
+            SyncTextSource::String(include_str!("../../assets/locales/zh-CN/main.ftl")),
+            vec![
+                "Inter",
+                "Noto Sans CJK SC",
+                "Noto Sans CJK JP",
+                "Noto Sans CJK TC",
+                "Noto Sans CJK KR",
+                "sans-serif",
+            ],
+        )
+        .register_i18n_bundle(
+            "ja-JP",
+            SyncTextSource::String(include_str!("../../assets/locales/ja-JP/main.ftl")),
+            vec![
+                "Inter",
+                "Noto Sans CJK JP",
+                "Noto Sans CJK SC",
+                "Noto Sans CJK TC",
+                "Noto Sans CJK KR",
+                "sans-serif",
+            ],
+        )
+        .register_ui_component::<PixivRoot>()
+        .register_ui_component::<PixivSidebar>()
+        .register_ui_component::<PixivMainColumn>()
+        .register_ui_component::<PixivAuthPanel>()
+        .register_ui_component::<PixivAuthDialogForm>()
+        .register_ui_component::<PixivAccountMenu>()
+        .register_ui_component::<PixivResponsePanel>()
+        .register_ui_component::<PixivSearchPanel>()
+        .register_ui_component::<PixivHomeFeed>()
+        .register_ui_component::<PixivIllustCard>()
+        .register_ui_component::<PixivDetailOverlay>()
+        .register_ui_component::<PixivDetailMetaRail>()
+        .register_ui_component::<PixivOverlayTags>()
+        .register_ui_component::<OverlayTag>()
+        .add_tween_systems(Update, component_tween_system::<CardAnimLens>())
+        .add_systems(Startup, (setup_styles, setup))
+        .add_systems(
+            Update,
+            (
+                drain_ui_actions_and_dispatch
+                    .after(picus_core::handle_widget_actions)
+                    .after(picus_core::handle_overlay_actions),
+                poll_activation_messages,
+                track_viewport_metrics,
+                sync_feed_scroll_viewport,
+                request_next_feed_page,
+                spawn_network_tasks,
+                apply_network_results,
+                spawn_image_tasks,
+                apply_image_results,
+                ensure_detail_dialog_overlay,
+                reconcile_auth_dialog_overlay_state,
+                reconcile_detail_dialog_overlay_state,
+                reconcile_account_menu_overlay_state,
+            )
+                .chain(),
+        );
     app
 }
 

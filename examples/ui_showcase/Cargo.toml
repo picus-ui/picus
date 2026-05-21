@@ -7,7 +7,6 @@ license.workspace = true
 [dependencies]
 picus_core.workspace = true
 bevy_ecs.workspace = true
-bevy_embedded_assets.workspace = true
 shared_utils.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true

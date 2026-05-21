@@ -145,15 +145,13 @@ impl Widget for EcsDragThumbWidget {
                     ctx.request_render();
                 }
             }
-            PointerEvent::Move(update) => {
-                if ctx.is_active() {
-                    let axis_pos = self.axis_position(update);
-                    if let Some(last) = self.last_axis_position {
-                        self.push_drag_delta(axis_pos - last);
-                        ctx.submit_action::<Self::Action>(EcsDragThumbWidgetAction::StateChanged);
-                    }
-                    self.last_axis_position = Some(axis_pos);
+            PointerEvent::Move(update) if ctx.is_active() => {
+                let axis_pos = self.axis_position(update);
+                if let Some(last) = self.last_axis_position {
+                    self.push_drag_delta(axis_pos - last);
+                    ctx.submit_action::<Self::Action>(EcsDragThumbWidgetAction::StateChanged);
                 }
+                self.last_axis_position = Some(axis_pos);
             }
             PointerEvent::Up(PointerButtonEvent { button, .. }) => {
                 if matches!(button, Some(PointerButton::Primary)) {
@@ -196,15 +194,11 @@ impl Widget for EcsDragThumbWidget {
 
     fn update(&mut self, ctx: &mut UpdateCtx<'_>, _props: &mut PropertiesMut<'_>, event: &Update) {
         match event {
-            Update::HoveredChanged(hovered) => {
-                if self.set_hovered(*hovered) {
-                    ctx.request_render();
-                }
+            Update::HoveredChanged(hovered) if self.set_hovered(*hovered) => {
+                ctx.request_render();
             }
-            Update::ActiveChanged(active) => {
-                if self.set_pressed(*active) {
-                    ctx.request_render();
-                }
+            Update::ActiveChanged(active) if self.set_pressed(*active) => {
+                ctx.request_render();
             }
             Update::DisabledChanged(true) => {
                 let hover_changed = self.set_hovered(false);

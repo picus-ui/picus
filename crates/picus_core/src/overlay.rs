@@ -1596,7 +1596,7 @@ pub fn sync_overlay_positions(world: &mut World) {
     };
 
     let hit_boxes = {
-        let Some(runtime) = world.get_non_send_resource::<MasonryRuntime>() else {
+        let Some(runtime) = world.get_non_send::<MasonryRuntime>() else {
             return;
         };
         let root = runtime.render_root.get_layer_root(0);
@@ -1806,7 +1806,7 @@ pub fn handle_global_overlay_clicks(world: &mut World) {
     };
 
     let (top_overlay_widget_ids, preferred_overlay_widget_id) = {
-        let Some(runtime) = world.get_non_send_resource::<MasonryRuntime>() else {
+        let Some(runtime) = world.get_non_send::<MasonryRuntime>() else {
             return;
         };
 
@@ -1826,22 +1826,18 @@ pub fn handle_global_overlay_clicks(world: &mut World) {
 
     let (anchor_widget_ids, anchor_widget_id) = anchor_entity
         .and_then(|anchor| {
-            world
-                .get_non_send_resource::<MasonryRuntime>()
-                .map(|runtime| {
-                    let all = runtime.find_widget_ids_for_entity_bits(anchor.to_bits());
-                    let preferred = runtime
-                        .find_widget_id_for_entity_bits(anchor.to_bits(), true)
-                        .or_else(|| {
-                            runtime.find_widget_id_for_entity_bits(anchor.to_bits(), false)
-                        });
-                    (all, preferred)
-                })
+            world.get_non_send::<MasonryRuntime>().map(|runtime| {
+                let all = runtime.find_widget_ids_for_entity_bits(anchor.to_bits());
+                let preferred = runtime
+                    .find_widget_id_for_entity_bits(anchor.to_bits(), true)
+                    .or_else(|| runtime.find_widget_id_for_entity_bits(anchor.to_bits(), false));
+                (all, preferred)
+            })
         })
         .unwrap_or_default();
 
     let (hit_path, top_hit_widget_id, top_hit_entity) = {
-        let Some(mut runtime) = world.get_non_send_resource_mut::<MasonryRuntime>() else {
+        let Some(mut runtime) = world.get_non_send_mut::<MasonryRuntime>() else {
             return;
         };
 
@@ -1865,7 +1861,7 @@ pub fn handle_global_overlay_clicks(world: &mut World) {
     };
 
     let hit_entities = world
-        .get_non_send_resource::<MasonryRuntime>()
+        .get_non_send::<MasonryRuntime>()
         .map(|runtime| {
             hit_path
                 .iter()
@@ -1915,7 +1911,7 @@ pub fn handle_global_overlay_clicks(world: &mut World) {
     let clicked_anchor_by_rect = anchor_widget_id
         .and_then(|widget_id| {
             world
-                .get_non_send_resource::<MasonryRuntime>()
+                .get_non_send::<MasonryRuntime>()
                 .and_then(|runtime| runtime.get_widget_bounding_box(widget_id))
         })
         .is_some_and(|bounds| {
@@ -1973,7 +1969,7 @@ pub fn handle_global_overlay_clicks(world: &mut World) {
                 .get::<OverlayComputedPosition>(top_overlay_entity)
                 .copied();
             let (masonry_sf, subtree) = world
-                .get_non_send_resource::<MasonryRuntime>()
+                .get_non_send::<MasonryRuntime>()
                 .map(|r| {
                     let subtree = preferred_overlay_widget_id
                         .map(|widget_id| r.get_overlay_subtree_info(widget_id))

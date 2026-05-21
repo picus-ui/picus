@@ -6,6 +6,12 @@ use std::{
     time::Duration,
 };
 
+use crate::bevy_tween::{
+    bevy_time_runner::{TimeContext, TimeRunner, TimeSpan},
+    interpolate::Interpolator,
+    interpolation::EaseKind,
+    tween::ComponentTween,
+};
 use crate::{
     AppI18n, AppPicusExt, ColorStyle, InteractionState, PicusPlugin, ProjectionCtx, Selector,
     StyleRule, StyleSetter, StyleSheet, SyncTextSource, UiEventQueue, UiProjectorRegistry, UiRoot,
@@ -19,14 +25,9 @@ use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 use bevy_input::{
     ButtonInput, ButtonState,
     mouse::{MouseButton, MouseButtonInput, MouseScrollUnit, MouseWheel},
+    touch::TouchPhase,
 };
 use bevy_math::{Rect, Vec2};
-use bevy_tween::{
-    bevy_time_runner::{TimeContext, TimeRunner, TimeSpan},
-    interpolate::Interpolator,
-    interpolation::EaseKind,
-    tween::ComponentTween,
-};
 use bevy_window::{CursorMoved, PrimaryWindow, Window, WindowResized};
 use masonry::core::{Widget, WidgetId, WidgetRef};
 
@@ -86,7 +87,7 @@ fn plugin_wires_synthesis_and_runtime() {
     let synthesized = app.world().resource::<crate::SynthesizedUiViews>();
     assert_eq!(synthesized.roots.len(), 2);
 
-    let _runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+    let _runtime = app.world().non_send::<crate::MasonryRuntime>();
 }
 
 #[test]
@@ -427,9 +428,7 @@ fn input_bridge_uses_primary_window_cursor_for_click_and_emits_move_before_down_
     app.update();
 
     {
-        let mut runtime = app
-            .world_mut()
-            .non_send_resource_mut::<crate::MasonryRuntime>();
+        let mut runtime = app.world_mut().non_send_mut::<crate::MasonryRuntime>();
         runtime.clear_pointer_trace_for_tests();
     }
 
@@ -446,7 +445,7 @@ fn input_bridge_uses_primary_window_cursor_for_click_and_emits_move_before_down_
 
     app.update();
 
-    let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+    let runtime = app.world().non_send::<crate::MasonryRuntime>();
     assert_eq!(
         runtime.pointer_position_for_tests(),
         Vec2::new(320.0, 180.0)
@@ -482,9 +481,7 @@ fn input_bridge_uses_primary_window_cursor_for_mouse_wheel_events() {
     app.update();
 
     {
-        let mut runtime = app
-            .world_mut()
-            .non_send_resource_mut::<crate::MasonryRuntime>();
+        let mut runtime = app.world_mut().non_send_mut::<crate::MasonryRuntime>();
         runtime.clear_pointer_trace_for_tests();
     }
 
@@ -493,11 +490,12 @@ fn input_bridge_uses_primary_window_cursor_for_mouse_wheel_events() {
         x: 0.0,
         y: -1.0,
         window: window_entity,
+        phase: TouchPhase::Moved,
     });
 
     app.update();
 
-    let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+    let runtime = app.world().non_send::<crate::MasonryRuntime>();
     assert_eq!(runtime.pointer_position_for_tests(), Vec2::new(144.0, 96.0));
     assert_eq!(
         runtime.pointer_trace_for_tests(),
@@ -537,7 +535,7 @@ fn input_bridge_uses_primary_window_logical_size_for_resize_events() {
 
     app.update();
 
-    let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+    let runtime = app.world().non_send::<crate::MasonryRuntime>();
     assert_eq!(runtime.viewport_size(), (1280.0, 720.0));
 }
 
@@ -1656,7 +1654,7 @@ fn overlay_click_inside_computed_overlay_position_not_dismissed_on_hidpi() {
 
     let opaque_debug = format!("opaque_hitbox_entity={}", dialog.to_bits());
     let opaque_widget_id = {
-        let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+        let runtime = app.world().non_send::<crate::MasonryRuntime>();
         let root = runtime.render_root.get_layer_root(0);
         find_widget_id_by_debug_text(root, &opaque_debug)
             .expect("dialog should project an entity-tagged OpaqueHitboxWidget")
@@ -2131,9 +2129,7 @@ fn run_global_overlay_click(app: &mut App, window_entity: Entity, position: Vec2
 fn hit_path_for_position(app: &mut App, window_entity: Entity, position: Vec2) -> Vec<WidgetId> {
     set_window_cursor_position(app, window_entity, position);
 
-    let mut runtime = app
-        .world_mut()
-        .non_send_resource_mut::<crate::MasonryRuntime>();
+    let mut runtime = app.world_mut().non_send_mut::<crate::MasonryRuntime>();
     let _ = runtime.render_root.redraw();
     runtime.get_hit_path((position.x as f64, position.y as f64).into())
 }
@@ -2152,7 +2148,7 @@ fn find_widget_id_by_debug_text(
 }
 
 fn widget_center_for_widget_id(app: &App, widget_id: WidgetId) -> Vec2 {
-    let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+    let runtime = app.world().non_send::<crate::MasonryRuntime>();
     let widget = runtime
         .render_root
         .get_widget(widget_id)
@@ -2168,7 +2164,7 @@ fn widget_center_for_widget_id(app: &App, widget_id: WidgetId) -> Vec2 {
 }
 
 fn widget_inset_point_for_widget_id(app: &App, widget_id: WidgetId, inset: f64) -> Vec2 {
-    let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+    let runtime = app.world().non_send::<crate::MasonryRuntime>();
     let widget = runtime
         .render_root
         .get_widget(widget_id)
@@ -2180,7 +2176,7 @@ fn widget_inset_point_for_widget_id(app: &App, widget_id: WidgetId, inset: f64) 
 }
 
 fn widget_center_for_entity(app: &App, entity: Entity) -> Vec2 {
-    let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+    let runtime = app.world().non_send::<crate::MasonryRuntime>();
     let widget_id = runtime
         .find_widget_id_for_entity_bits(entity.to_bits(), true)
         .or_else(|| runtime.find_widget_id_for_entity_bits(entity.to_bits(), false))
@@ -2312,7 +2308,7 @@ fn dialog_padding_click_is_in_overlay_hit_path_and_does_not_dismiss() {
 
     let opaque_debug = format!("opaque_hitbox_entity={}", dialog.to_bits());
     let opaque_widget_id = {
-        let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+        let runtime = app.world().non_send::<crate::MasonryRuntime>();
         let root = runtime.render_root.get_layer_root(0);
         find_widget_id_by_debug_text(root, &opaque_debug)
             .expect("dialog should project an entity-tagged OpaqueHitboxWidget")
@@ -2355,7 +2351,7 @@ fn dialog_dismiss_button_targets_dialog_entity() {
     );
 
     let button_rect = {
-        let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+        let runtime = app.world().non_send::<crate::MasonryRuntime>();
         let root = runtime.render_root.get_layer_root(0);
         let mut button_rects = Vec::new();
         collect_widget_bounds_by_short_name(root, "EcsButtonWithChildWidget", &mut button_rects);
@@ -2382,7 +2378,7 @@ fn dialog_dismiss_button_targets_dialog_entity() {
     );
 
     let (hit_widget, hit_debug_text) = {
-        let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+        let runtime = app.world().non_send::<crate::MasonryRuntime>();
         let root = runtime.render_root.get_layer_root(0);
         root.find_widget_under_pointer((click_position.x as f64, click_position.y as f64).into())
             .map(|widget| {
@@ -2438,7 +2434,7 @@ fn dialog_projects_single_dismiss_button_without_fullscreen_backdrop_button() {
     );
 
     let button_rects = {
-        let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+        let runtime = app.world().non_send::<crate::MasonryRuntime>();
         let root = runtime.render_root.get_layer_root(0);
         let mut button_rects = Vec::new();
         collect_widget_bounds_by_short_name(root, "EcsButtonWithChildWidget", &mut button_rects);
@@ -2683,14 +2679,14 @@ fn ui_button_projects_to_ecs_button_with_child_widget() {
 
     let debug = format!("entity={}", button.to_bits());
     let widget_id = {
-        let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+        let runtime = app.world().non_send::<crate::MasonryRuntime>();
         let root = runtime.render_root.get_layer_root(0);
         find_widget_id_by_debug_text(root, &debug)
             .expect("UiButton should project an entity-tagged action button widget")
     };
 
     let short_type = {
-        let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+        let runtime = app.world().non_send::<crate::MasonryRuntime>();
         runtime
             .render_root
             .get_widget(widget_id)
@@ -2776,7 +2772,7 @@ fn dropdown_padding_click_is_in_overlay_hit_path_and_does_not_dismiss() {
 
     let opaque_debug = format!("opaque_hitbox_entity={}", dropdown.to_bits());
     let opaque_widget_id = {
-        let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+        let runtime = app.world().non_send::<crate::MasonryRuntime>();
         let root = runtime.render_root.get_layer_root(0);
         find_widget_id_by_debug_text(root, &opaque_debug)
             .expect("dropdown should project an entity-tagged OpaqueHitboxWidget")
@@ -2830,14 +2826,14 @@ fn dropdown_item_text_region_hits_button_entity_instead_of_child_subwidget() {
 
     let hit_position = {
         let debug = format!("entity={}", item_entity.to_bits());
-        let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+        let runtime = app.world().non_send::<crate::MasonryRuntime>();
         let root = runtime.render_root.get_layer_root(0);
         let widget_id = find_widget_id_by_debug_text(root, &debug)
             .expect("dropdown item button should expose an entity-tagged widget");
         widget_center_for_widget_id(&app, widget_id)
     };
     let (hit_widget, hit_debug_text) = {
-        let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+        let runtime = app.world().non_send::<crate::MasonryRuntime>();
         let root = runtime.render_root.get_layer_root(0);
         root.find_widget_under_pointer((hit_position.x as f64, hit_position.y as f64).into())
             .map(|widget| {
@@ -3713,7 +3709,7 @@ fn scroll_view_left_aligns_narrow_content_after_viewport_stretch() {
     app.update();
     app.update();
 
-    let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+    let runtime = app.world().non_send::<crate::MasonryRuntime>();
     let scroll_widget_id = runtime
         .find_widget_id_for_entity_bits(scroll_view.to_bits(), true)
         .or_else(|| runtime.find_widget_id_for_entity_bits(scroll_view.to_bits(), false))

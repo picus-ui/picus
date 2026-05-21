@@ -115,7 +115,7 @@ pub(super) fn poll_activation_messages(world: &mut World) {
 
 #[cfg(target_os = "macos")]
 pub(super) fn poll_activation_messages(world: &mut World) {
-    let Some(mut activation) = world.get_non_send_resource_mut::<ActivationBridge>() else {
+    let Some(mut activation) = world.get_non_send_mut::<ActivationBridge>() else {
         return;
     };
 

@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use bevy_embedded_assets::{EmbeddedAssetPlugin, PluginMode};
 use picus_core::{
     AppI18n, AppPicusExt, BuiltinUiAction, HasTooltip, LocalizeText, PicusPlugin, ProjectionCtx,
     StyleClass, SyncAssetSource, SyncTextSource, ToastKind, UiButton, UiCheckbox,
@@ -1035,53 +1034,46 @@ fn build_showcase_app() -> App {
     init_logging();
 
     let mut app = App::new();
-    app.add_plugins((
-        EmbeddedAssetPlugin {
-            mode: PluginMode::ReplaceDefault,
-        },
-        AssetPlugin::default(),
-        TextPlugin,
-        PicusPlugin,
-    ))
-    .load_style_sheet_ron(include_str!("../assets/themes/ui_showcase.ron"))
-    .insert_resource(AppI18n::new(parse_locale("en-US")))
-    .register_xilem_font(SyncAssetSource::Bytes(include_bytes!(
-        "../../../assets/fonts/NotoSans-Regular.ttf",
-    )))
-    .register_xilem_font(SyncAssetSource::Bytes(include_bytes!(
-        "../../../assets/fonts/NotoSansCJKsc-Regular.otf",
-    )))
-    .register_xilem_font(SyncAssetSource::Bytes(include_bytes!(
-        "../../../assets/fonts/NotoSansCJKjp-Regular.otf",
-    )))
-    .register_i18n_bundle(
-        "en-US",
-        SyncTextSource::String(include_str!("../assets/locales/en-US/main.ftl")),
-        cjk_fallback_font_stack(),
-    )
-    .register_i18n_bundle(
-        "zh-CN",
-        SyncTextSource::String(include_str!("../assets/locales/zh-CN/main.ftl")),
-        zh_cjk_fallback_font_stack(),
-    )
-    .register_i18n_bundle(
-        "ja-JP",
-        SyncTextSource::String(include_str!("../assets/locales/ja-JP/main.ftl")),
-        ja_cjk_fallback_font_stack(),
-    )
-    .insert_resource(ShowcaseState::default())
-    .register_ui_component::<ShowcaseRoot>()
-    .register_ui_component::<StatusDisplay>()
-    .add_systems(
-        Startup,
-        (setup_showcase, ensure_showcase_default_theme_variant),
-    )
-    .add_systems(
-        Update,
-        drain_showcase_events
-            .after(picus_core::handle_widget_actions)
-            .after(picus_core::handle_overlay_actions),
-    );
+    app.add_plugins((AssetPlugin::default(), TextPlugin, PicusPlugin))
+        .load_style_sheet_ron(include_str!("../assets/themes/ui_showcase.ron"))
+        .insert_resource(AppI18n::new(parse_locale("en-US")))
+        .register_xilem_font(SyncAssetSource::Bytes(include_bytes!(
+            "../../../assets/fonts/NotoSans-Regular.ttf",
+        )))
+        .register_xilem_font(SyncAssetSource::Bytes(include_bytes!(
+            "../../../assets/fonts/NotoSansCJKsc-Regular.otf",
+        )))
+        .register_xilem_font(SyncAssetSource::Bytes(include_bytes!(
+            "../../../assets/fonts/NotoSansCJKjp-Regular.otf",
+        )))
+        .register_i18n_bundle(
+            "en-US",
+            SyncTextSource::String(include_str!("../assets/locales/en-US/main.ftl")),
+            cjk_fallback_font_stack(),
+        )
+        .register_i18n_bundle(
+            "zh-CN",
+            SyncTextSource::String(include_str!("../assets/locales/zh-CN/main.ftl")),
+            zh_cjk_fallback_font_stack(),
+        )
+        .register_i18n_bundle(
+            "ja-JP",
+            SyncTextSource::String(include_str!("../assets/locales/ja-JP/main.ftl")),
+            ja_cjk_fallback_font_stack(),
+        )
+        .insert_resource(ShowcaseState::default())
+        .register_ui_component::<ShowcaseRoot>()
+        .register_ui_component::<StatusDisplay>()
+        .add_systems(
+            Startup,
+            (setup_showcase, ensure_showcase_default_theme_variant),
+        )
+        .add_systems(
+            Update,
+            drain_showcase_events
+                .after(picus_core::handle_widget_actions)
+                .after(picus_core::handle_overlay_actions),
+        );
 
     app
 }

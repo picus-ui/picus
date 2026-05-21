@@ -1140,7 +1140,7 @@ pub fn rebuild_masonry_runtime(world: &mut World) {
 
     let next_root = compose_runtime_root(&roots);
 
-    let Some(mut runtime) = world.get_non_send_resource_mut::<MasonryRuntime>() else {
+    let Some(mut runtime) = world.get_non_send_mut::<MasonryRuntime>() else {
         return;
     };
 

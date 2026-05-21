@@ -7,7 +7,6 @@ use std::sync::Mutex;
 
 use anyhow::{Context, Result};
 use bevy_asset::{AssetPlugin, Assets, Handle, RenderAssetUsages};
-use bevy_embedded_assets::{EmbeddedAssetPlugin, PluginMode};
 use bevy_image::Image as BevyImage;
 use bevy_text::TextPlugin;
 use crossbeam_channel::{Receiver, Sender, unbounded};

@@ -49,6 +49,7 @@
 #![forbid(unsafe_code)]
 
 pub mod app_ext;
+pub mod bevy_tween;
 pub mod components;
 pub mod ecs;
 pub mod events;
@@ -74,7 +75,6 @@ pub use bevy_input;
 pub use bevy_math;
 pub use bevy_tasks;
 pub use bevy_text;
-pub use bevy_tween;
 pub use bevy_window;
 pub use rfd;
 pub use xilem;

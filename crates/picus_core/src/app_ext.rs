@@ -41,10 +41,10 @@ fn flush_pending_font_registrations(app: &mut App) {
     {
         let world = app.world_mut();
         world.init_resource::<UiEventQueue>();
-        world.init_non_send_resource::<MasonryRuntime>();
+        world.init_non_send::<MasonryRuntime>();
     }
 
-    let mut runtime = app.world_mut().non_send_resource_mut::<MasonryRuntime>();
+    let mut runtime = app.world_mut().non_send_mut::<MasonryRuntime>();
     for font_bytes in pending {
         runtime
             .render_root

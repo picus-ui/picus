@@ -1,3 +1,7 @@
+use crate::bevy_tween::{
+    BevyTweenRegisterSystems, DefaultTweenPlugins, TweenCorePlugin, TweenSystemSet,
+    component_tween_system,
+};
 use bevy_app::{App, Last, Plugin, PostUpdate, PreUpdate, TaskPoolPlugin, Update};
 use bevy_asset::{AssetApp, AssetEvent, AssetPlugin};
 use bevy_ecs::schedule::IntoScheduleConfigs;
@@ -5,10 +9,6 @@ use bevy_input::keyboard::KeyboardInput;
 use bevy_input::mouse::{MouseButtonInput, MouseWheel};
 use bevy_text::Font;
 use bevy_time::TimePlugin;
-use bevy_tween::{
-    BevyTweenRegisterSystems, DefaultTweenPlugins, TweenCorePlugin, TweenSystemSet,
-    component_tween_system,
-};
 use bevy_window::{
     CursorLeft, CursorMoved, Ime, WindowFocused, WindowResized, WindowScaleFactorChanged,
 };
@@ -102,7 +102,7 @@ impl Plugin for PicusPlugin {
             .init_resource::<AppI18n>()
             .init_resource::<OverlayStack>()
             .init_resource::<OverlayPointerRoutingState>()
-            .init_non_send_resource::<MasonryRuntime>()
+            .init_non_send::<MasonryRuntime>()
             .add_message::<CursorMoved>()
             .add_message::<CursorLeft>()
             .add_message::<KeyboardInput>()

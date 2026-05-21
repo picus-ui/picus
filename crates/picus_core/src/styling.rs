@@ -6,6 +6,12 @@ use std::{
     time::Duration,
 };
 
+use crate::bevy_tween::{
+    bevy_time_runner::{TimeContext, TimeRunner, TimeSpan},
+    interpolate::Interpolator,
+    interpolation::EaseKind,
+    tween::{ComponentTween, TweenInterpolationValue, TweenPreviousValue},
+};
 use bevy_asset::{
     Asset, AssetEvent, AssetLoader, AssetServer, Assets, Handle, LoadContext, io::Reader,
 };
@@ -19,12 +25,6 @@ use bevy_ecs::{
 };
 use bevy_reflect::TypePath;
 use bevy_time::Time;
-use bevy_tween::{
-    bevy_time_runner::{TimeContext, TimeRunner, TimeSpan},
-    interpolate::Interpolator,
-    interpolation::EaseKind,
-    tween::{ComponentTween, TweenInterpolationValue, TweenPreviousValue},
-};
 use masonry::core::HasProperty;
 use masonry::theme;
 use serde::{
@@ -1029,10 +1029,10 @@ pub fn sync_stylesheet_asset_events(world: &mut World) {
             match event {
                 AssetEvent::Added { id }
                 | AssetEvent::Modified { id }
-                | AssetEvent::LoadedWithDependencies { id } => {
-                    if *id == active_handle_id {
-                        should_refresh = true;
-                    }
+                | AssetEvent::LoadedWithDependencies { id }
+                    if *id == active_handle_id =>
+                {
+                    should_refresh = true;
                 }
                 _ => {}
             }

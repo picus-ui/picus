@@ -23,20 +23,18 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-bevy_a11y = { version = "0.18", default-features = false }
-bevy_app = { version = "0.18", default-features = false, features = ["std"] }
-bevy_asset = { version = "0.18", default-features = false }
-bevy_ecs = { version = "0.18", default-features = false, features = ["std"] }
-bevy_input = { version = "0.18", default-features = false, features = ["std", "mouse", "keyboard"] }
-bevy_math = { version = "0.18", default-features = false, features = ["std"] }
-bevy_image = { version = "0.18", default-features = false }
-bevy_text = { version = "0.18", default-features = false }
-bevy_tasks = { version = "0.18", default-features = false, features = ["multi_threaded"] }
-bevy_time = { version = "0.18", default-features = false, features = ["std"] }
-bevy_window = { version = "0.18", default-features = false, features = ["std"] }
-bevy_winit = { version = "0.18", default-features = false }
-bevy_tween = { version = "0.12", default-features = false }
-bevy_embedded_assets = "0.15.0"
+bevy_a11y = { version = "0.19.0-dev", default-features = false }
+bevy_app = { version = "0.19.0-dev", default-features = false, features = ["std"] }
+bevy_asset = { version = "0.19.0-dev", default-features = false }
+bevy_ecs = { version = "0.19.0-dev", default-features = false, features = ["std"] }
+bevy_input = { version = "0.19.0-dev", default-features = false, features = ["std", "mouse", "keyboard"] }
+bevy_math = { version = "0.19.0-dev", default-features = false, features = ["std"] }
+bevy_image = { version = "0.19.0-dev", default-features = false }
+bevy_text = { version = "0.19.0-dev", default-features = false }
+bevy_tasks = { version = "0.19.0-dev", default-features = false, features = ["multi_threaded"] }
+bevy_time = { version = "0.19.0-dev", default-features = false, features = ["std"] }
+bevy_window = { version = "0.19.0-dev", default-features = false, features = ["std"] }
+bevy_winit = { version = "0.19.0-dev", default-features = false }
 crossbeam-queue = "0.3"
 crossbeam-channel = "0.5"
 tokio = { version = "1.52", features = ["rt-multi-thread"] }
@@ -53,7 +51,7 @@ xilem_masonry = { path = "third_party/xilem/xilem_masonry" }
 vello = "0.9"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-bevy_reflect = { version = "0.18", default-features = false }
+bevy_reflect = { version = "0.19.0-dev", default-features = false }
 serde = { version = "1", features = ["derive"] }
 ron = "0.12"
 lucide-icons = "1.16.0"
@@ -82,21 +80,21 @@ picus_surface = { path = "crates/picus_surface" }
 shared_utils = { path = "examples/shared_utils" }
 
 [patch.crates-io]
-bevy = { path = "third_party/bevy" }
 bevy_a11y = { path = "third_party/bevy/crates/bevy_a11y" }
 bevy_android = { path = "third_party/bevy/crates/bevy_android" }
 bevy_app = { path = "third_party/bevy/crates/bevy_app" }
 bevy_asset = { path = "third_party/bevy/crates/bevy_asset" }
 bevy_asset_macros = { path = "third_party/bevy/crates/bevy_asset/macros" }
+bevy_clipboard = { path = "third_party/bevy/crates/bevy_clipboard" }
 bevy_color = { path = "third_party/bevy/crates/bevy_color" }
 bevy_derive = { path = "third_party/bevy/crates/bevy_derive" }
 bevy_diagnostic = { path = "third_party/bevy/crates/bevy_diagnostic" }
 bevy_ecs = { path = "third_party/bevy/crates/bevy_ecs" }
+bevy_ecs_macro_logic = { path = "third_party/bevy/crates/bevy_ecs/macro_logic" }
 bevy_ecs_macros = { path = "third_party/bevy/crates/bevy_ecs/macros" }
 bevy_image = { path = "third_party/bevy/crates/bevy_image" }
 bevy_input = { path = "third_party/bevy/crates/bevy_input" }
 bevy_input_focus = { path = "third_party/bevy/crates/bevy_input_focus" }
-bevy_internal = { path = "third_party/bevy/crates/bevy_internal" }
 bevy_log = { path = "third_party/bevy/crates/bevy_log" }
 bevy_macro_utils = { path = "third_party/bevy/crates/bevy_macro_utils" }
 bevy_math = { path = "third_party/bevy/crates/bevy_math" }
@@ -107,7 +105,38 @@ bevy_reflect_derive = { path = "third_party/bevy/crates/bevy_reflect/derive" }
 bevy_tasks = { path = "third_party/bevy/crates/bevy_tasks" }
 bevy_text = { path = "third_party/bevy/crates/bevy_text" }
 bevy_time = { path = "third_party/bevy/crates/bevy_time" }
-bevy_transform = { path = "third_party/bevy/crates/bevy_transform" }
 bevy_utils = { path = "third_party/bevy/crates/bevy_utils" }
 bevy_window = { path = "third_party/bevy/crates/bevy_window" }
 bevy_winit = { path = "third_party/bevy/crates/bevy_winit" }
+
+[workspace.lints.clippy]
+doc_markdown = "warn"
+manual_let_else = "warn"
+match_same_arms = "warn"
+redundant_closure_for_method_calls = "warn"
+redundant_else = "warn"
+semicolon_if_nothing_returned = "warn"
+type_complexity = "allow"
+undocumented_unsafe_blocks = "warn"
+unwrap_or_default = "warn"
+needless_lifetimes = "allow"
+too_many_arguments = "allow"
+nonstandard_macro_braces = "warn"
+print_stdout = "warn"
+print_stderr = "warn"
+ptr_as_ptr = "warn"
+ptr_cast_constness = "warn"
+ref_as_ptr = "warn"
+too_long_first_doc_paragraph = "allow"
+std_instead_of_core = "warn"
+std_instead_of_alloc = "warn"
+alloc_instead_of_core = "warn"
+allow_attributes = "warn"
+allow_attributes_without_reason = "warn"
+
+[workspace.lints.rust]
+missing_docs = "warn"
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(docsrs_dep)'] }
+unsafe_code = "deny"
+unsafe_op_in_unsafe_fn = "warn"
+unused_qualifications = "warn"
