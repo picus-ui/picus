@@ -233,6 +233,7 @@ pub(crate) struct ResolvedProtocolRegistration {
     pub executable: PathBuf,
     #[cfg(any(target_os = "linux", windows))]
     pub icon: Option<PathBuf>,
+    #[cfg(target_os = "macos")]
     pub macos_bundle: Option<MacosBundleConfig>,
 }
 
@@ -420,6 +421,7 @@ fn resolve_protocol_registration(
         executable,
         #[cfg(any(target_os = "linux", windows))]
         icon: protocol.icon.clone(),
+        #[cfg(target_os = "macos")]
         macos_bundle: protocol.macos_bundle.clone(),
     })
 }

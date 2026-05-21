@@ -729,7 +729,7 @@ fn chess_piece_font_family() -> &'static str {
 
     #[cfg(target_os = "windows")]
     {
-        return "Segoe UI Symbol";
+        "Segoe UI Symbol"
     }
 
     #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]

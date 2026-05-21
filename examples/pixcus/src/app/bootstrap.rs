@@ -857,11 +857,9 @@ pub(super) fn build_app(mut activation_service: Option<ActivationService>) -> Ap
 }
 
 pub fn run() -> std::result::Result<(), EventLoopError> {
-    let mut protocol = ProtocolRegistration::new("pixiv", "Pixiv OAuth callback", None);
+    let protocol = ProtocolRegistration::new("pixiv", "Pixiv OAuth callback", None);
     #[cfg(target_os = "macos")]
-    {
-        protocol = protocol.with_macos_bundle(pixiv_macos_bundle_config());
-    }
+    let protocol = protocol.with_macos_bundle(pixiv_macos_bundle_config());
 
     let activation_config = ActivationConfig::new(PIXIV_ACTIVATION_APP_ID).with_protocol(protocol);
 

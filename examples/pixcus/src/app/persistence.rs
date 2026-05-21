@@ -153,7 +153,7 @@ fn auth_base_dir(namespace: &str, app_dir: &str) -> PathBuf {
                     .map(|path| path.join("AppData").join("Roaming"))
             })
             .unwrap_or_else(std::env::temp_dir);
-        return base.join(namespace).join(app_dir);
+        base.join(namespace).join(app_dir)
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]

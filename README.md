@@ -188,7 +188,7 @@ cargo run -p example_ui_showcase
 - Resolve styles in projectors using helper functions
 - Support for hover/pressed states and smooth color transitions
 
-See [STYLING.md](./STYLING.md) for the full guide on selectors, cascade rules, and transition configuration.
+See [AGENTS.md](./AGENTS.md#8-styling-system-reference) for the full guide on selectors, cascade rules, and transition configuration.
 
 ---
 
