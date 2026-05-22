@@ -66,6 +66,9 @@ fn load_auth_state_from_path(path: &Path) -> Result<Option<StoredAuthState>> {
                 .with_context(|| format!("failed to read auth session file `{}`", path.display()));
         }
     };
+    if raw.trim().is_empty() {
+        return Ok(None);
+    }
 
     let persisted: PersistedAuth = serde_json::from_str(&raw)
         .with_context(|| format!("failed to parse auth session json `{}`", path.display()))?;
@@ -244,6 +247,27 @@ mod tests {
         assert!(loaded.user_summary.is_none());
 
         let _ = fs::remove_file(legacy_path);
+    }
+
+    #[test]
+    fn load_auth_state_treats_empty_file_as_absent() {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after unix epoch")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "{AUTH_NAMESPACE}-pixiv-auth-empty-test-{}-{nanos}.json",
+            std::process::id()
+        ));
+
+        fs::write(&path, " \n\t").expect("empty auth file should write");
+        assert!(
+            load_auth_state_from_path(&path)
+                .expect("empty auth file should load as absent")
+                .is_none()
+        );
+
+        let _ = fs::remove_file(path);
     }
 
     #[test]
