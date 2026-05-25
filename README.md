@@ -161,7 +161,7 @@ The workspace includes several example applications:
 
 | App | Cargo package | Description |
 |-----|---------------|-------------|
-| `ui_showcase` | `example_ui_showcase` | Component gallery with theming and localization |
+| `gallery` | `example_gallery` | MewUI-inspired component gallery with Picus controls |
 | `chess_game` | `example_chess_game` | Full chess UI with embedded engine |
 | `async_downloader` | `example_async_downloader` | Async operations with progress UI |
 | `calculator` | `example_calculator` | Standard calculator interface |
@@ -174,7 +174,7 @@ The workspace includes several example applications:
 Run any example from the repository root:
 
 ```bash
-cargo run -p example_ui_showcase
+cargo run -p example_gallery
 ```
 
 ---

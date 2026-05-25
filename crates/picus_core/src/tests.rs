@@ -129,6 +129,43 @@ fn plugin_boots_with_embedded_fluent_dark_theme_and_applies_on_first_update() {
 }
 
 #[test]
+fn embedded_fluent_theme_defines_priority_control_visual_styles() {
+    let mut app = App::new();
+    app.add_plugins(PicusPlugin);
+    app.update();
+
+    let badge = app.world_mut().spawn((crate::UiBadge::new("Beta"),)).id();
+    let progress = app
+        .world_mut()
+        .spawn((crate::UiProgressBar::determinate(0.5),))
+        .id();
+
+    let badge_style = resolve_style(app.world(), badge);
+    assert!(badge_style.layout.corner_radius > 20.0);
+    assert!(badge_style.colors.bg.is_some());
+    assert!(badge_style.colors.border.is_some());
+
+    let progress_style = resolve_style(app.world(), progress);
+    assert_eq!(progress_style.layout.padding, 0.0);
+    assert!(progress_style.layout.corner_radius > 20.0);
+    assert!(progress_style.colors.bg.is_some());
+
+    let checkbox_box = crate::resolve_style_for_classes(app.world(), ["template.checkbox.box"]);
+    assert!(checkbox_box.colors.bg.is_some());
+    assert!(checkbox_box.colors.border.is_some());
+
+    let switch_on = crate::resolve_style_for_classes(
+        app.world(),
+        ["template.switch.track", "template.switch.track.on"],
+    );
+    assert!(switch_on.colors.bg.is_some());
+    assert!(switch_on.colors.border.is_some());
+
+    let progress_fill = crate::resolve_style_for_classes(app.world(), ["template.progress.fill"]);
+    assert!(progress_fill.colors.bg.is_some());
+}
+
+#[test]
 fn active_style_variant_switches_automatically_without_install_calls() {
     let mut app = App::new();
     app.add_plugins(PicusPlugin);

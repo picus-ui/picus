@@ -1,54 +1,40 @@
 use super::{
     core::{BuiltinUiAction, ProjectionCtx, UiView},
-    utils::{localized_font_stack, translate_text},
+    utils::{VectorIcon, localized_font_stack, translate_text, vector_icon},
 };
 use crate::{
     ecs::{
-        LocalizeText, PartSwitchThumb, PartSwitchTrack, UiBadge, UiButton, UiCheckbox, UiImage,
-        UiLabel, UiMultilineTextInput, UiPasswordInput, UiProgressBar, UiSlider, UiSwitch,
-        UiTextInput,
+        LocalizeText, UiBadge, UiButton, UiCheckbox, UiImage, UiLabel, UiMultilineTextInput,
+        UiPasswordInput, UiProgressBar, UiSlider, UiSwitch, UiTextInput,
     },
     i18n::resolve_localized_text,
     styling::{
         apply_direct_widget_style, apply_label_style, apply_widget_style, font_stack_from_style,
-        resolve_style,
+        resolve_style, resolve_style_for_entity_classes,
     },
-    views::{ecs_button_with_child, ecs_checkbox, ecs_slider, ecs_text_input},
+    views::{ecs_button_with_child, ecs_slider, ecs_text_input},
     widget_actions::WidgetUiAction,
 };
-use bevy_ecs::{hierarchy::Children, prelude::*};
-use masonry::layout::Length;
+use bevy_ecs::prelude::*;
+use masonry::layout::{Dim, Length, UnitPoint};
 use masonry::properties::Padding;
 use masonry::widgets::InsertNewline;
 use std::sync::Arc;
 use tracing::trace;
 use xilem_masonry::style::Style as _;
 use xilem_masonry::view::{
-    FlexExt as _, badge, flex_row, image as xilem_image, label, progress_bar, sized_box,
-    transformed,
+    CrossAxisAlignment, FlexExt as _, flex_row, image as xilem_image, label, sized_box,
+    transformed, zstack,
 };
 
-fn child_entity_views(ctx: &ProjectionCtx<'_>) -> Vec<(Entity, UiView)> {
-    let child_entities = ctx
-        .world
-        .get::<Children>(ctx.entity)
-        .map(|children| children.iter().collect::<Vec<_>>())
-        .unwrap_or_default();
-
-    child_entities
-        .into_iter()
-        .zip(ctx.children.iter().cloned())
-        .collect::<Vec<_>>()
-}
-
-fn first_part_view<P: Component>(
-    ctx: &ProjectionCtx<'_>,
-    pairs: &[(Entity, UiView)],
-) -> Option<UiView> {
-    pairs
-        .iter()
-        .find_map(|(entity, view)| ctx.world.get::<P>(*entity).map(|_| view.clone()))
-}
+const CHECKBOX_BOX_SIZE: f64 = 18.0;
+const CHECKBOX_MARK_SIZE: f64 = 14.0;
+const SWITCH_TRACK_WIDTH: f64 = 42.0;
+const SWITCH_TRACK_HEIGHT: f64 = 22.0;
+const SWITCH_THUMB_SIZE: f64 = 18.0;
+const PROGRESS_BAR_WIDTH: f64 = 240.0;
+const PROGRESS_BAR_HEIGHT: f64 = 8.0;
+const PROGRESS_INDETERMINATE_WIDTH: f64 = 80.0;
 
 fn placeholder_color_from_style(style: &crate::styling::ResolvedStyle) -> xilem::Color {
     style
@@ -135,35 +121,63 @@ pub(crate) fn project_badge(badge_component: &UiBadge, ctx: ProjectionCtx<'_>) -
     }
 
     Arc::new(apply_widget_style(
-        badge(apply_label_style(label(text), &style)),
+        apply_label_style(label(text), &style),
         &style,
     ))
 }
 
 pub(crate) fn project_checkbox(checkbox: &UiCheckbox, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-
-    let mut checkbox_view = ecs_checkbox(
-        ctx.entity,
-        checkbox.label.clone(),
-        checkbox.checked,
-        move |checked| WidgetUiAction::SetCheckbox {
-            checkbox: ctx.entity,
-            checked,
-        },
-    )
-    .text_size(style.text.size);
-
-    if let Some(font_stack) = font_stack_from_style(&style) {
-        checkbox_view = checkbox_view.font(font_stack);
-    }
-    if let Some(text_color) = style.colors.text {
-        checkbox_view = checkbox_view
-            .text_color(text_color)
-            .checkmark_color(text_color);
+    let mut style = resolve_style(ctx.world, ctx.entity);
+    let label_text = resolve_localized_text(ctx.world, ctx.entity, &checkbox.label);
+    if let Some(stack) = localized_font_stack(ctx.world, ctx.entity) {
+        style.font_family = Some(stack);
     }
 
-    Arc::new(apply_direct_widget_style(checkbox_view, &style))
+    let box_style = if checkbox.checked {
+        resolve_style_for_entity_classes(
+            ctx.world,
+            ctx.entity,
+            ["template.checkbox.box", "template.checkbox.box.checked"],
+        )
+    } else {
+        resolve_style_for_entity_classes(ctx.world, ctx.entity, ["template.checkbox.box"])
+    };
+    let mark_style =
+        resolve_style_for_entity_classes(ctx.world, ctx.entity, ["template.checkbox.mark"]);
+    let mark_color = mark_style
+        .colors
+        .text
+        .or(style.colors.text)
+        .unwrap_or(xilem::Color::WHITE);
+    let mark_size = (mark_style.text.size as f64).clamp(10.0, CHECKBOX_MARK_SIZE);
+
+    let box_layer: UiView = Arc::new(apply_widget_style(
+        sized_box(label(""))
+            .width(Dim::Fixed(Length::px(CHECKBOX_BOX_SIZE)))
+            .height(Dim::Fixed(Length::px(CHECKBOX_BOX_SIZE))),
+        &box_style,
+    ));
+    let mut indicator_layers = vec![box_layer];
+    if checkbox.checked {
+        indicator_layers.push(vector_icon(VectorIcon::Check, mark_size, mark_color));
+    }
+    let indicator = zstack(indicator_layers).alignment(UnitPoint::CENTER);
+    let label_child = apply_label_style(label(label_text), &style);
+
+    let content = flex_row(vec![indicator.into_any_flex(), label_child.into_any_flex()])
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .gap(Length::px(style.layout.gap.max(8.0)));
+
+    Arc::new(apply_direct_widget_style(
+        ecs_button_with_child(
+            ctx.entity,
+            WidgetUiAction::ToggleCheckbox {
+                checkbox: ctx.entity,
+            },
+            content,
+        ),
+        &style,
+    ))
 }
 
 pub(crate) fn project_slider(slider: &UiSlider, ctx: ProjectionCtx<'_>) -> UiView {
@@ -184,15 +198,60 @@ pub(crate) fn project_slider(slider: &UiSlider, ctx: ProjectionCtx<'_>) -> UiVie
 }
 
 pub(crate) fn project_switch(switch_component: &UiSwitch, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let parts = child_entity_views(&ctx);
+    let mut style = resolve_style(ctx.world, ctx.entity);
+    if let Some(stack) = localized_font_stack(ctx.world, ctx.entity) {
+        style.font_family = Some(stack);
+    }
 
-    let track = first_part_view::<PartSwitchTrack>(&ctx, &parts)
-        .unwrap_or_else(|| Arc::new(label(if switch_component.on { "On" } else { "Off" })));
-    let thumb =
-        first_part_view::<PartSwitchThumb>(&ctx, &parts).unwrap_or_else(|| Arc::new(label("●")));
+    let track_style = if switch_component.on {
+        resolve_style_for_entity_classes(
+            ctx.world,
+            ctx.entity,
+            ["template.switch.track", "template.switch.track.on"],
+        )
+    } else {
+        resolve_style_for_entity_classes(ctx.world, ctx.entity, ["template.switch.track"])
+    };
+    let thumb_style =
+        resolve_style_for_entity_classes(ctx.world, ctx.entity, ["template.switch.thumb"]);
+    let thumb_x = if switch_component.on {
+        SWITCH_TRACK_WIDTH - SWITCH_THUMB_SIZE - 2.0
+    } else {
+        2.0
+    };
 
-    let content = flex_row(vec![track.into_any_flex(), thumb.into_any_flex()])
+    let track: UiView = Arc::new(apply_widget_style(
+        sized_box(label(""))
+            .width(Dim::Fixed(Length::px(SWITCH_TRACK_WIDTH)))
+            .height(Dim::Fixed(Length::px(SWITCH_TRACK_HEIGHT))),
+        &track_style,
+    ));
+    let thumb: UiView = Arc::new(apply_widget_style(
+        sized_box(label(""))
+            .width(Dim::Fixed(Length::px(SWITCH_THUMB_SIZE)))
+            .height(Dim::Fixed(Length::px(SWITCH_THUMB_SIZE))),
+        &thumb_style,
+    ));
+    let switch_visual: UiView = Arc::new(
+        zstack(vec![
+            track,
+            Arc::new(transformed(thumb).translate((thumb_x, 2.0))),
+        ])
+        .alignment(UnitPoint::TOP_LEFT),
+    );
+
+    let mut items = vec![switch_visual.into_any_flex()];
+    if let Some(label_text) = switch_component
+        .label
+        .as_ref()
+        .filter(|label| !label.is_empty())
+        .map(|label| resolve_localized_text(ctx.world, ctx.entity, label))
+    {
+        items.push(apply_label_style(label(label_text), &style).into_any_flex());
+    }
+
+    let content = flex_row(items)
+        .cross_axis_alignment(CrossAxisAlignment::Center)
         .gap(Length::px(style.layout.gap.max(8.0)));
 
     Arc::new(apply_direct_widget_style(
@@ -207,23 +266,41 @@ pub(crate) fn project_switch(switch_component: &UiSwitch, ctx: ProjectionCtx<'_>
 
 pub(crate) fn project_progress_bar(progress: &UiProgressBar, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
-    let scale = style.layout.scale.max(0.01);
+    let (fill_width, fill_offset, fill_style) = match progress.progress {
+        Some(value) => (
+            PROGRESS_BAR_WIDTH * value.clamp(0.0, 1.0),
+            0.0,
+            resolve_style_for_entity_classes(ctx.world, ctx.entity, ["template.progress.fill"]),
+        ),
+        None => (
+            PROGRESS_INDETERMINATE_WIDTH,
+            (PROGRESS_BAR_WIDTH - PROGRESS_INDETERMINATE_WIDTH) * 0.35,
+            resolve_style_for_entity_classes(
+                ctx.world,
+                ctx.entity,
+                ["template.progress.fill", "template.progress.indeterminate"],
+            ),
+        ),
+    };
 
-    Arc::new(
-        transformed(
-            sized_box(
-                progress_bar(progress.progress)
-                    .corner_radius(Length::px(style.layout.corner_radius))
-                    .border(
-                        style.colors.border.unwrap_or(xilem::Color::TRANSPARENT),
-                        Length::px(style.layout.border_width),
-                    )
-                    .background_color(style.colors.bg.unwrap_or(xilem::Color::TRANSPARENT)),
-            )
-            .padding(style_padding(style.layout.padding)),
-        )
-        .scale(scale),
-    )
+    let fill: UiView = Arc::new(apply_widget_style(
+        sized_box(label(""))
+            .width(Dim::Fixed(Length::px(fill_width.max(0.0))))
+            .height(Dim::Fixed(Length::px(PROGRESS_BAR_HEIGHT))),
+        &fill_style,
+    ));
+    let fill_layer = if fill_offset > 0.0 {
+        Arc::new(transformed(fill).translate((fill_offset, 0.0))) as UiView
+    } else {
+        fill
+    };
+
+    Arc::new(apply_widget_style(
+        sized_box(zstack(vec![fill_layer]).alignment(UnitPoint::LEFT))
+            .width(Dim::Fixed(Length::px(PROGRESS_BAR_WIDTH)))
+            .height(Dim::Fixed(Length::px(PROGRESS_BAR_HEIGHT))),
+        &style,
+    ))
 }
 
 pub(crate) fn project_text_input(input: &UiTextInput, ctx: ProjectionCtx<'_>) -> UiView {

@@ -63,7 +63,7 @@ Crates:
 
 Example applications live under `examples/`: `async_downloader`, `calculator`,
 `chess_game`, `game_2048`, `overlay_hit_routing`, `pixcus`, `shared_utils`,
-`timer`, `todo_list`, and `ui_showcase`.
+`timer`, `todo_list`, and `gallery`.
 
 ## 3. Runtime Architecture
 
@@ -129,6 +129,10 @@ placement, `UiLabel`, `UiButton`, `UiCanvas`/`UiCanvasCommand` plus
 `UiCanvasPosition` child positioning, `UiImage`, `UiTextInput`,
 `UiPasswordInput`, `UiMultilineTextInput`, `UiListView`, `UiTable`,
 `UiDataTable`, and `LocalizeText`.
+
+Priority built-ins (`UiButton`, `UiBadge`, `UiProgressBar`, `UiSwitch`, and
+`UiCheckbox`) own their Picus-composed visual structure instead of exposing raw
+Xilem default component appearance.
 
 ## 6. Synthesis and Events
 

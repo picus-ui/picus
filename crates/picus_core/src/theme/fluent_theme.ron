@@ -70,7 +70,7 @@
       selector: Type("UiButton"),
       setter: (
         layout: (
-          padding: Var("space-sm"),
+          padding: Var("space-md"),
           corner_radius: Var("radius-md"),
           border_width: Var("border-thin"),
           justify_content: Center,
@@ -109,17 +109,39 @@
     ),
 
     (
+      selector: Type("UiBadge"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-pill"),
+          border_width: Var("border-thin"),
+          justify_content: Center,
+          align_items: Center,
+        ),
+        colors: (
+          bg: Var("surface-tab-active"),
+          border: Var("surface-accent"),
+          text: Var("text-primary"),
+        ),
+        text: (
+          size: 12.0,
+          text_align: Center,
+        ),
+      ),
+    ),
+
+    (
       selector: Type("UiCheckbox"),
       setter: (
         layout: (
           padding: Var("space-sm"),
           corner_radius: Var("radius-md"),
-          border_width: Var("border-thin"),
+          border_width: 0.0,
           gap: Var("gap-md"),
         ),
         colors: (
-          bg: Var("surface-subtle"),
-          border: Var("border-default"),
+          bg: Var("transparent"),
+          border: Var("transparent"),
           text: Var("text-primary"),
         ),
         transition: Var("duration-fast"),
@@ -180,14 +202,14 @@
       selector: Type("UiSwitch"),
       setter: (
         layout: (
-          padding: Var("space-sm"),
+          padding: Var("space-xs"),
           corner_radius: Var("radius-pill"),
-          border_width: Var("border-thin"),
+          border_width: 0.0,
           gap: Var("gap-md"),
         ),
         colors: (
-          bg: Var("surface-panel"),
-          border: Var("border-default"),
+          bg: Var("transparent"),
+          border: Var("transparent"),
           text: Var("text-primary"),
         ),
         transition: Var("duration-fast"),
@@ -244,6 +266,21 @@
       setter: (
         colors: (
           bg: Var("surface-subtle-pressed"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Type("UiProgressBar"),
+      setter: (
+        layout: (
+          padding: 0.0,
+          corner_radius: Var("radius-pill"),
+          border_width: 0.0,
+        ),
+        colors: (
+          bg: Var("scrollbar-track"),
+          border: Var("transparent"),
         ),
       ),
     ),
@@ -1199,10 +1236,59 @@
     ),
 
     (
-      selector: Class("template.checkbox.indicator"),
+      selector: Class("template.checkbox.box"),
+      setter: (
+        layout: (
+          padding: 0.0,
+          corner_radius: 3.0,
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-elevated"),
+          border: Var("border-default"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Class("template.checkbox.box"), PseudoClass(Hovered)]),
       setter: (
         colors: (
-          text: Var("accent-primary"),
+          bg: Var("surface-subtle-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("template.checkbox.box"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-pressed"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("template.checkbox.box.checked"),
+      setter: (
+        layout: (
+          padding: 0.0,
+          corner_radius: 3.0,
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-accent"),
+          border: Var("surface-accent"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("template.checkbox.mark"),
+      setter: (
+        colors: (
+          text: Var("text-on-accent"),
+        ),
+        text: (
+          size: 14.0,
+          text_align: Center,
         ),
       ),
     ),
@@ -1223,10 +1309,84 @@
       ),
     ),
     (
-      selector: Class("template.switch.thumb"),
+      selector: Class("template.switch.track"),
+      setter: (
+        layout: (
+          padding: 0.0,
+          corner_radius: Var("radius-pill"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          border: Var("border-default"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Class("template.switch.track"), PseudoClass(Hovered)]),
       setter: (
         colors: (
-          text: Var("accent-primary"),
+          bg: Var("surface-subtle-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("template.switch.track"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-pressed"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("template.switch.track.on"),
+      setter: (
+        layout: (
+          padding: 0.0,
+          corner_radius: Var("radius-pill"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-accent"),
+          border: Var("surface-accent"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("template.switch.thumb"),
+      setter: (
+        layout: (
+          padding: 0.0,
+          corner_radius: Var("radius-pill"),
+          border_width: 0.0,
+        ),
+        colors: (
+          bg: Var("text-on-accent"),
+          border: Var("transparent"),
+        ),
+        box_shadow: Var("shadow-ui-component"),
+      ),
+    ),
+    (
+      selector: Class("template.progress.fill"),
+      setter: (
+        layout: (
+          padding: 0.0,
+          corner_radius: Var("radius-pill"),
+          border_width: 0.0,
+        ),
+        colors: (
+          bg: Var("surface-accent"),
+          border: Var("transparent"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("template.progress.indeterminate"),
+      setter: (
+        colors: (
+          bg: Var("surface-accent-hover"),
         ),
       ),
     ),

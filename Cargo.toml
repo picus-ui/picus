@@ -8,12 +8,12 @@ members = [
 	"examples/calculator",
 	"examples/chess_game",
 	"examples/game_2048",
+	"examples/gallery",
 	"examples/overlay_hit_routing",
 	"examples/pixcus",
 	"examples/shared_utils",
 	"examples/timer",
 	"examples/todo_list",
-	"examples/ui_showcase",
 ]
 
 [workspace.package]
