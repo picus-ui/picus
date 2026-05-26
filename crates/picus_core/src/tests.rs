@@ -29,7 +29,7 @@ use bevy_input::{
 };
 use bevy_math::{Rect, Vec2};
 use bevy_window::{CursorMoved, PrimaryWindow, Window, WindowResized};
-use masonry::core::{Widget, WidgetId, WidgetRef};
+use masonry_core::core::{Widget, WidgetId, WidgetRef};
 
 #[derive(Component, Debug, Clone, Copy)]
 struct TestRoot;
@@ -1559,7 +1559,7 @@ fn new_grid_canvas_and_image_options_are_data_complete() {
     );
 
     let image = crate::UiImage::from_bgra8(2, 1, vec![0, 0, 255, 255, 0, 255, 0, 128])
-        .quality(masonry::peniko::ImageQuality::High)
+        .quality(masonry_core::peniko::ImageQuality::High)
         .alpha(0.5)
         .view_box(crate::UiImageViewBox::pixels(0.0, 0.0, 1.0, 1.0))
         .alignment(
@@ -3763,7 +3763,7 @@ fn stylesheet_box_shadow_token_parses_and_resolves() {
         crate::xilem::Color::from_rgba8(0, 0, 0, 89),
         (0.0, 12.0),
     )
-    .blur(crate::xilem::masonry::layout::Length::px(24.0));
+    .blur(crate::masonry_core::layout::Length::px(24.0));
 
     assert_eq!(resolved.box_shadow, Some(expected));
 }

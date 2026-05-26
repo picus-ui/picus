@@ -5,7 +5,7 @@ use bevy_input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy_math::Vec2;
 use bevy_time::Time;
 use bevy_window::{PrimaryWindow, Window};
-use masonry::core::{Widget, WidgetRef};
+use masonry_core::core::{Widget, WidgetRef};
 
 use crate::{
     AnchoredTo, AutoDismiss, HasTooltip, InteractionState, MasonryRuntime, OverlayAnchorRect,
@@ -157,7 +157,7 @@ fn parse_entity_bits_from_debug(debug: &str) -> Option<u64> {
 
 fn collect_scroll_view_targets_from_hit_path(
     runtime: &MasonryRuntime,
-    hit_path: &[masonry::core::WidgetId],
+    hit_path: &[masonry_core::core::WidgetId],
     parents: &Query<&ChildOf>,
     scroll_markers: &Query<(), With<UiScrollView>>,
 ) -> Vec<Entity> {

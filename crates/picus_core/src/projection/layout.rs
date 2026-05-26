@@ -4,7 +4,7 @@ use crate::{
     styling::{apply_flex_alignment, apply_widget_style, resolve_style},
 };
 use bevy_ecs::{entity::Entity, hierarchy::Children};
-use masonry::layout::{Dim, Length};
+use masonry_core::layout::{Dim, Length};
 use std::sync::Arc;
 use xilem_masonry::style::Style;
 use xilem_masonry::view::{FlexExt as _, GridExt as _, GridParams, flex_col, flex_row, grid};

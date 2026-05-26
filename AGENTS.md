@@ -50,7 +50,10 @@ cross-cutting design decisions that code comments cannot express well.
 ## 2. Workspace
 
 `picus` is a Bevy-first UI framework that combines ECS state management with a
-retained Xilem/Masonry UI runtime.
+retained Masonry Core UI runtime. `picus_core` depends directly on
+`masonry_core`; the higher-level `masonry` crate is a legacy transitive adapter
+through `xilem`/`xilem_masonry` and should not be reintroduced as a direct Picus
+dependency.
 
 Crates:
 
@@ -67,13 +70,13 @@ Example applications live under `examples/`: `async_downloader`, `calculator`,
 
 ## 3. Runtime Architecture
 
-Bevy owns scheduling, windows, and input. Masonry runs as a retained runtime
+Bevy owns scheduling, windows, and input. Masonry Core runs as a retained runtime
 resource driven by Bevy systems; GUI apps use Bevy's native `App::run()` and
 `bevy_winit` lifecycle.
 
-`MasonryRuntime` is a `NonSend` resource containing Masonry `RenderRoot`, Xilem
-view state, pointer state, primary-window metrics, `picus_surface` state, and
-Vello renderer state.
+`MasonryRuntime` is a `NonSend` resource containing a `masonry_core::app::RenderRoot`,
+Xilem view state, pointer state, primary-window metrics, `picus_surface` state,
+and Vello renderer state.
 
 System stages:
 
@@ -88,13 +91,13 @@ Runtime invariants:
 
 - Initial primary-window attachment injects a logical resize before hit testing.
 - Retained UI rendering does not depend on Bevy render-graph integration.
-- The paint pass redraws Masonry, renders through `picus_surface`, blits to the
+- The paint pass redraws Masonry Core, renders through `picus_surface`, blits to the
   swapchain, presents, and requests the next redraw.
 
 ## 4. Input, IME, and Hit Testing
 
 `inject_bevy_input_into_masonry` translates Bevy window/input messages into
-Masonry pointer, text, IME, focus, resize, and rescale events.
+Masonry Core pointer, text, IME, focus, resize, and rescale events.
 
 Pointer invariants:
 

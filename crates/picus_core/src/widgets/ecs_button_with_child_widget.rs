@@ -1,7 +1,7 @@
 use std::any::TypeId;
 
 use bevy_ecs::entity::Entity;
-use masonry::{
+use masonry_core::{
     accesskit::{Node, Role},
     core::keyboard::{Key, NamedKey},
     core::{
@@ -12,8 +12,9 @@ use masonry::{
     imaging::Painter,
     kurbo::{Axis, Size},
     layout::{LayoutSize, LenReq, Length, SizeDef},
-    properties::{Background, BorderColor, BorderWidth, ContentColor, CornerRadius, Padding},
+    properties::{Background, BorderColor, BorderWidth, CornerRadius, Padding},
 };
+use xilem_masonry::masonry::properties::ContentColor;
 
 use crate::{
     events::{UiEvent, push_global_ui_event},
@@ -37,11 +38,7 @@ impl<A> UsesProperty<ContentColor> for EcsButtonWithChildWidget<A> where
 
 impl<A> EcsButtonWithChildWidget<A> {
     #[must_use]
-    pub fn new(
-        entity: Entity,
-        action: A,
-        child: masonry::core::NewWidget<impl Widget + ?Sized>,
-    ) -> Self {
+    pub fn new(entity: Entity, action: A, child: NewWidget<impl Widget + ?Sized>) -> Self {
         Self {
             entity,
             action,
@@ -166,7 +163,7 @@ where
         _props: &mut PropertiesMut<'_>,
         event: &AccessEvent,
     ) {
-        if matches!(event.action, masonry::accesskit::Action::Click) {
+        if matches!(event.action, masonry_core::accesskit::Action::Click) {
             self.push_action();
             ctx.submit_action::<Self::Action>(EcsButtonWidgetAction::StateChanged);
             ctx.request_render();
@@ -259,7 +256,7 @@ where
         _props: &PropertiesRef<'_>,
         node: &mut Node,
     ) {
-        node.add_action(masonry::accesskit::Action::Click);
+        node.add_action(masonry_core::accesskit::Action::Click);
     }
 
     fn children_ids(&self) -> ChildrenIds {

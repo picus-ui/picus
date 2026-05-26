@@ -10,7 +10,7 @@ use std::{
 use bevy_asset::{AssetEvent, Assets};
 use bevy_ecs::{message::MessageReader, prelude::*, system::NonSendMut};
 use bevy_text::Font;
-use masonry::peniko::Blob;
+use masonry_core::peniko::Blob;
 
 use crate::MasonryRuntime;
 

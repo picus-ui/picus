@@ -15,7 +15,7 @@ use crate::{
     views::{ecs_button_with_child, opaque_hitbox_for_entity},
 };
 use bevy_ecs::{hierarchy::Children, prelude::Entity};
-use masonry::layout::{Dim, Length};
+use masonry_core::layout::{Dim, Length};
 use std::sync::Arc;
 use xilem::{palette::css::BLACK, style::BoxShadow, style::Style as _};
 use xilem_masonry::view::{

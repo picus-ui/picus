@@ -8,7 +8,7 @@ use crate::{
     styling::{ResolvedStyle, apply_label_style},
 };
 use bevy_ecs::prelude::*;
-use masonry::layout::{Dim, Length};
+use masonry_core::layout::{Dim, Length};
 use xilem_masonry::style::Style as _;
 use xilem_masonry::view::{label, sized_box};
 

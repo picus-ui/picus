@@ -76,6 +76,7 @@ pub use bevy_math;
 pub use bevy_tasks;
 pub use bevy_text;
 pub use bevy_window;
+pub use masonry_core;
 pub use rfd;
 pub use xilem;
 pub use xilem_masonry;

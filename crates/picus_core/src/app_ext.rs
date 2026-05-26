@@ -2,7 +2,7 @@ use bevy_app::{App, Update};
 use bevy_asset::AssetServer;
 use bevy_ecs::prelude::Component;
 use fluent::{FluentResource, concurrent::FluentBundle};
-use masonry::peniko::Blob;
+use masonry_core::peniko::Blob;
 use std::{fs, io, path::Path, sync::Arc};
 use unic_langid::LanguageIdentifier;
 

@@ -3,14 +3,12 @@ use super::*;
 use picus_core::{
     UiScrollView,
     bevy_math::Vec2,
-    opaque_hitbox_for_entity,
-    xilem::{
-        masonry::{
-            layout::{Length, UnitPoint},
-            properties::Padding,
-        },
-        view::{transformed, zstack},
+    masonry_core::{
+        layout::{Length, UnitPoint},
+        properties::Padding,
     },
+    opaque_hitbox_for_entity,
+    xilem::view::{transformed, zstack},
 };
 
 const FEED_OVERSCAN_Y: f64 = 240.0;

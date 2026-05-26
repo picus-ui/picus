@@ -42,7 +42,7 @@ reqwest = { version = "0.13", default-features = false, features = ["blocking", 
 rfd = "0.17"
 fluent = "0.17"
 unic-langid = { version = "0.9", features = ["macros"] }
-masonry = { git = "https://github.com/linebender/xilem.git", rev = "72c6517ad035f352c70f939f4754a3f79fca23fd" }
+masonry_core = { git = "https://github.com/linebender/xilem.git", rev = "72c6517ad035f352c70f939f4754a3f79fca23fd" }
 masonry_imaging = { git = "https://github.com/linebender/xilem.git", rev = "72c6517ad035f352c70f939f4754a3f79fca23fd", features = ["imaging_vello"] }
 masonry_winit = { git = "https://github.com/linebender/xilem.git", rev = "72c6517ad035f352c70f939f4754a3f79fca23fd" }
 xilem = { git = "https://github.com/linebender/xilem.git", rev = "72c6517ad035f352c70f939f4754a3f79fca23fd" }

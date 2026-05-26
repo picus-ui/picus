@@ -14,7 +14,7 @@ use bevy_input::{
 };
 use bevy_math::Vec2;
 use bevy_window::{PrimaryWindow, Window};
-use masonry::core::{Widget, WidgetRef};
+use masonry_core::core::{Widget, WidgetRef};
 
 use crate::projection::dialog::{
     dialog_surface_gap, dialog_surface_padding, estimate_dialog_surface_height_px,

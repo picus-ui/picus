@@ -1,7 +1,7 @@
 use std::any::TypeId;
 
 use bevy_ecs::entity::Entity;
-use masonry::{
+use masonry_core::{
     accesskit::{Node, Role},
     core::{
         AccessCtx, ChildrenIds, EventCtx, LayoutCtx, MeasureCtx, NewWidget, PaintCtx, PointerEvent,

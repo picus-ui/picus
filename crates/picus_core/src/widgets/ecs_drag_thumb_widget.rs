@@ -1,20 +1,20 @@
 use std::any::TypeId;
 
 use bevy_ecs::entity::Entity;
-use masonry::{
+use masonry_core::{
     accesskit::{Node, Role},
     core::{
-        AccessCtx, AccessEvent, ChildrenIds, EventCtx, LayoutCtx, MeasureCtx, PaintCtx,
+        AccessCtx, AccessEvent, ArcStr, ChildrenIds, EventCtx, LayoutCtx, MeasureCtx, PaintCtx,
         PointerButton, PointerButtonEvent, PointerEvent, PointerUpdate, PropertiesMut,
         PropertiesRef, Property, RegisterCtx, TextEvent, Update, UpdateCtx, UsesProperty, Widget,
         WidgetMut, WidgetPod,
     },
     imaging::Painter,
-    kurbo::Size,
+    kurbo::{Axis, Size},
     layout::{LayoutSize, LenReq, Length, SizeDef},
-    properties::{Background, BorderColor, BorderWidth, ContentColor, CornerRadius, Padding},
-    widgets::Label,
+    properties::{Background, BorderColor, BorderWidth, CornerRadius, Padding},
 };
+use xilem_masonry::masonry::{properties::ContentColor, widgets::Label};
 
 use crate::{
     ScrollAxis, WidgetUiAction,
@@ -42,7 +42,7 @@ impl UsesProperty<ContentColor> for EcsDragThumbWidget {}
 
 impl EcsDragThumbWidget {
     #[must_use]
-    pub fn new(entity: Entity, axis: ScrollAxis, label: impl Into<masonry::core::ArcStr>) -> Self {
+    pub fn new(entity: Entity, axis: ScrollAxis, label: impl Into<ArcStr>) -> Self {
         Self {
             entity,
             axis,
@@ -61,7 +61,7 @@ impl EcsDragThumbWidget {
         this.widget.axis = axis;
     }
 
-    pub fn set_label(this: &mut WidgetMut<'_, Self>, label: impl Into<masonry::core::ArcStr>) {
+    pub fn set_label(this: &mut WidgetMut<'_, Self>, label: impl Into<ArcStr>) {
         Label::set_text(&mut this.ctx.get_mut(&mut this.widget.label), label);
     }
 
@@ -232,7 +232,7 @@ impl Widget for EcsDragThumbWidget {
         &mut self,
         ctx: &mut MeasureCtx<'_>,
         _props: &PropertiesRef<'_>,
-        axis: masonry::kurbo::Axis,
+        axis: Axis,
         len_req: LenReq,
         cross_length: Option<Length>,
     ) -> Length {

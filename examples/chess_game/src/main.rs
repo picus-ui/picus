@@ -9,15 +9,15 @@ use picus_core::{
     UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
-    button, button_with_child, checkbox, resolve_style, resolve_style_for_classes,
-    run_app_with_window_options, slider,
+    button, button_with_child, checkbox,
+    masonry_core::{
+        dpi::LogicalSize,
+        layout::{AsUnit, Length},
+        properties::Padding,
+    },
+    resolve_style, resolve_style_for_classes, run_app_with_window_options, slider,
     xilem::{
         Color,
-        masonry::{
-            dpi::LogicalSize,
-            layout::{AsUnit, Length},
-            properties::Padding,
-        },
         style::Style as _,
         view::{
             CrossAxisAlignment, FlexExt as _, GridExt as _, flex_col, flex_row, grid, label, prose,

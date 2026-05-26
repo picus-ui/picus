@@ -25,8 +25,12 @@ use bevy_ecs::{
 };
 use bevy_reflect::TypePath;
 use bevy_time::Time;
-use masonry::core::UsesProperty;
-use masonry::theme;
+use masonry_core::core::UsesProperty;
+use masonry_core::{
+    layout::Length,
+    parley::{Alignment as ParleyTextAlign, FontFamily, FontFamilyName, GenericFamily},
+    properties::{Background, BorderColor, BorderWidth, BoxShadow, CornerRadius, Padding},
+};
 use serde::{
     Deserialize,
     de::{
@@ -35,19 +39,15 @@ use serde::{
     },
 };
 use xilem::{Color, style::Style as _};
-use xilem_masonry::masonry::layout::Length;
-use xilem_masonry::masonry::parley::{
-    Alignment as ParleyTextAlign, FontFamily, FontFamilyName, GenericFamily,
-};
-use xilem_masonry::masonry::properties::{
-    Background, BorderColor, BorderWidth, BoxShadow, CornerRadius, LineBreaking, Padding,
-};
+use xilem_masonry::masonry::properties::LineBreaking;
 use xilem_masonry::{
     WidgetView,
     view::{CrossAxisAlignment, Flex, Label, MainAxisAlignment, TextInput, sized_box, transformed},
 };
 
 use crate::UiEventQueue;
+
+pub(crate) const DEFAULT_TEXT_SIZE: f32 = 15.0;
 
 /// Marker component for CSS-like class names attached to an entity.
 #[derive(Component, Debug, Clone, Default, PartialEq, Eq)]
@@ -1098,7 +1098,7 @@ pub struct ResolvedTextStyle {
 impl Default for ResolvedTextStyle {
     fn default() -> Self {
         Self {
-            size: theme::TEXT_SIZE_NORMAL,
+            size: DEFAULT_TEXT_SIZE,
             text_align: TextAlign::Start,
         }
     }
@@ -1467,7 +1467,7 @@ fn to_resolved_layout(layout: &LayoutStyle) -> ResolvedLayoutStyle {
 
 fn to_resolved_text(text: &TextStyle) -> ResolvedTextStyle {
     ResolvedTextStyle {
-        size: text.size.unwrap_or(theme::TEXT_SIZE_NORMAL),
+        size: text.size.unwrap_or(DEFAULT_TEXT_SIZE),
         text_align: text.text_align.unwrap_or_default(),
     }
 }

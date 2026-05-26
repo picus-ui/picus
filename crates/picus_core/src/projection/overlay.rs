@@ -3,7 +3,7 @@ use crate::{
     ecs::{OverlayStack, OverlayState, UiOverlayRoot},
     styling::{apply_widget_style, resolve_style_for_classes},
 };
-use masonry::layout::{Dim, UnitPoint};
+use masonry_core::layout::{Dim, UnitPoint};
 use std::sync::Arc;
 use xilem_masonry::style::Style;
 use xilem_masonry::view::{label, zstack};

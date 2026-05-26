@@ -1,20 +1,21 @@
 use std::any::TypeId;
 
 use bevy_ecs::entity::Entity;
-use masonry::{
+use masonry_core::{
     accesskit::{Node, Role},
     core::keyboard::{Key, NamedKey},
     core::{
-        AccessCtx, AccessEvent, ChildrenIds, EventCtx, LayoutCtx, MeasureCtx, NewWidget, PaintCtx,
-        PointerButton, PointerButtonEvent, PointerEvent, PropertiesMut, PropertiesRef, Property,
-        RegisterCtx, TextEvent, Update, UpdateCtx, UsesProperty, Widget, WidgetMut, WidgetPod,
+        AccessCtx, AccessEvent, ArcStr, ChildrenIds, EventCtx, LayoutCtx, MeasureCtx, NewWidget,
+        PaintCtx, PointerButton, PointerButtonEvent, PointerEvent, PropertiesMut, PropertiesRef,
+        Property, RegisterCtx, TextEvent, Update, UpdateCtx, UsesProperty, Widget, WidgetMut,
+        WidgetPod,
     },
     imaging::Painter,
-    kurbo::Size,
+    kurbo::{Axis, Size},
     layout::{LayoutSize, LenReq, Length, SizeDef},
-    properties::{Background, BorderColor, BorderWidth, ContentColor, CornerRadius, Padding},
-    widgets::Label,
+    properties::{Background, BorderColor, BorderWidth, CornerRadius, Padding},
 };
+use xilem_masonry::masonry::{properties::ContentColor, widgets::Label};
 
 use crate::{
     events::{UiEvent, push_global_ui_event},
@@ -41,7 +42,7 @@ impl<A> UsesProperty<ContentColor> for EcsButtonWidget<A> where A: Clone + Send 
 
 impl<A> EcsButtonWidget<A> {
     #[must_use]
-    pub fn new(entity: Entity, action: A, label: impl Into<masonry::core::ArcStr>) -> Self {
+    pub fn new(entity: Entity, action: A, label: impl Into<ArcStr>) -> Self {
         Self {
             entity,
             action,
@@ -69,7 +70,7 @@ where
         this.widget.action = action;
     }
 
-    pub fn set_label(this: &mut WidgetMut<'_, Self>, label: impl Into<masonry::core::ArcStr>) {
+    pub fn set_label(this: &mut WidgetMut<'_, Self>, label: impl Into<ArcStr>) {
         let mut wrapper = this.ctx.get_mut(&mut this.widget.label);
         let mut child = HitTransparentWidget::child_mut(&mut wrapper);
         let mut label_widget = child.downcast::<Label>();
@@ -169,7 +170,7 @@ where
         _props: &mut PropertiesMut<'_>,
         event: &AccessEvent,
     ) {
-        if matches!(event.action, masonry::accesskit::Action::Click) {
+        if matches!(event.action, masonry_core::accesskit::Action::Click) {
             self.push_action();
             ctx.submit_action::<Self::Action>(EcsButtonWidgetAction::StateChanged);
             ctx.request_render();
@@ -219,7 +220,7 @@ where
         &mut self,
         ctx: &mut MeasureCtx<'_>,
         _props: &PropertiesRef<'_>,
-        axis: masonry::kurbo::Axis,
+        axis: Axis,
         len_req: LenReq,
         cross_length: Option<Length>,
     ) -> Length {
@@ -262,7 +263,7 @@ where
         _props: &PropertiesRef<'_>,
         node: &mut Node,
     ) {
-        node.add_action(masonry::accesskit::Action::Click);
+        node.add_action(masonry_core::accesskit::Action::Click);
     }
 
     fn children_ids(&self) -> ChildrenIds {

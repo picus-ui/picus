@@ -19,19 +19,17 @@ use bevy_window::{
     CursorLeft, CursorMoved, Ime as BevyIme, PrimaryWindow, RawHandleWrapper, Window,
     WindowFocused, WindowResized, WindowScaleFactorChanged, WindowWrapper,
 };
-use masonry::layout::{Dim, UnitPoint};
-use masonry::{
+use masonry_core::{
     app::{RenderRoot, RenderRootOptions, RenderRootSignal, VisualLayerKind, WindowSizePolicy},
     core::{
-        Handled, PointerButton, PointerButtonEvent, PointerEvent, PointerId, PointerInfo,
-        PointerScrollEvent, PointerState, PointerType, PointerUpdate, ScrollDelta, TextEvent,
-        Widget, WidgetId, WidgetRef, WindowEvent,
+        DefaultProperties, Handled, PointerButton, PointerButtonEvent, PointerEvent, PointerId,
+        PointerInfo, PointerScrollEvent, PointerState, PointerType, PointerUpdate, ScrollDelta,
+        TextEvent, Widget, WidgetId, WidgetRef, WindowEvent,
         keyboard::{Key, KeyState, Modifiers, NamedKey},
     },
     dpi::{PhysicalPosition, PhysicalSize},
+    layout::{Dim, UnitPoint},
     peniko::Color,
-    theme::default_property_set,
-    widgets::Passthrough,
 };
 use masonry_imaging::{Layer as ImagingLayer, PreparedFrame, texture_render::Renderer};
 use picus_surface::{ExistingWindowMetrics, ExternalWindowSurface};
@@ -41,6 +39,7 @@ use xilem::winit::window::Window as XilemWinitWindow;
 use xilem_core::{ProxyError, RawProxy, SendMessage, View, ViewId};
 use xilem_masonry::{
     ViewCtx,
+    masonry::widgets::Passthrough,
     view::{label, zstack},
 };
 
@@ -127,7 +126,7 @@ impl FromWorld for MasonryRuntime {
         );
 
         let options = RenderRootOptions {
-            default_properties: Arc::new(default_property_set()),
+            default_properties: Arc::new(DefaultProperties::new()),
             use_system_fonts: true,
             size_policy: WindowSizePolicy::User,
             size: PhysicalSize::new(1024, 768),
@@ -268,15 +267,15 @@ impl MasonryRuntime {
     #[must_use]
     pub fn get_hit_path(
         &self,
-        physical_pos: masonry::kurbo::Point,
-    ) -> Vec<masonry::core::WidgetId> {
+        physical_pos: masonry_core::kurbo::Point,
+    ) -> Vec<masonry_core::core::WidgetId> {
         let target = self
             .render_root
             .pointer_capture_target()
             .filter(|widget_id| self.render_root.has_widget(*widget_id))
             .or_else(|| {
                 let scale_factor = self.window_scale_factor.max(f64::EPSILON);
-                let logical_pos = masonry::kurbo::Point::new(
+                let logical_pos = masonry_core::kurbo::Point::new(
                     physical_pos.x / scale_factor,
                     physical_pos.y / scale_factor,
                 );
@@ -375,8 +374,8 @@ impl MasonryRuntime {
     #[must_use]
     pub fn get_widget_bounding_box(
         &self,
-        id: masonry::core::WidgetId,
-    ) -> Option<masonry::kurbo::Rect> {
+        id: masonry_core::core::WidgetId,
+    ) -> Option<masonry_core::kurbo::Rect> {
         self.render_root
             .get_widget(id)
             .map(|w| w.ctx().bounding_box())
@@ -387,8 +386,12 @@ impl MasonryRuntime {
     #[must_use]
     pub fn get_overlay_subtree_info(
         &self,
-        overlay_widget_id: masonry::core::WidgetId,
-    ) -> Vec<(masonry::core::WidgetId, masonry::kurbo::Rect, bool)> {
+        overlay_widget_id: masonry_core::core::WidgetId,
+    ) -> Vec<(
+        masonry_core::core::WidgetId,
+        masonry_core::kurbo::Rect,
+        bool,
+    )> {
         let Some(esw) = self.render_root.get_widget(overlay_widget_id) else {
             return vec![];
         };
@@ -936,14 +939,18 @@ pub fn inject_bevy_input_into_masonry(
                 cursor,
             } => (
                 *window,
-                TextEvent::Ime(masonry::core::Ime::Preedit(value.clone(), *cursor)),
+                TextEvent::Ime(masonry_core::core::Ime::Preedit(value.clone(), *cursor)),
             ),
             BevyIme::Commit { window, value } => (
                 *window,
-                TextEvent::Ime(masonry::core::Ime::Commit(value.clone())),
+                TextEvent::Ime(masonry_core::core::Ime::Commit(value.clone())),
             ),
-            BevyIme::Enabled { window } => (*window, TextEvent::Ime(masonry::core::Ime::Enabled)),
-            BevyIme::Disabled { window } => (*window, TextEvent::Ime(masonry::core::Ime::Disabled)),
+            BevyIme::Enabled { window } => {
+                (*window, TextEvent::Ime(masonry_core::core::Ime::Enabled))
+            }
+            BevyIme::Disabled { window } => {
+                (*window, TextEvent::Ime(masonry_core::core::Ime::Disabled))
+            }
         };
 
         if window != primary_window_entity {
@@ -971,7 +978,7 @@ pub fn inject_bevy_input_into_masonry(
             let keyboard_modifiers = runtime.keyboard_modifiers;
             runtime.handle_text_event(
                 primary_window_entity,
-                TextEvent::Keyboard(masonry::core::KeyboardEvent {
+                TextEvent::Keyboard(masonry_core::core::KeyboardEvent {
                     state: map_button_state_to_key_state(event.state),
                     key,
                     repeat: event.repeat,
@@ -988,7 +995,7 @@ pub fn inject_bevy_input_into_masonry(
         {
             runtime.handle_text_event(
                 primary_window_entity,
-                TextEvent::Ime(masonry::core::Ime::Commit(text.to_string())),
+                TextEvent::Ime(masonry_core::core::Ime::Commit(text.to_string())),
             );
         }
     }

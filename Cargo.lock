@@ -2008,7 +2008,6 @@ name = "example_game_2048"
 version = "0.1.0"
 dependencies = [
  "bevy_ecs",
- "masonry",
  "picus_core",
  "shared_utils",
  "tracing-subscriber",
@@ -4288,7 +4287,7 @@ dependencies = [
  "fluent",
  "image",
  "lucide-icons",
- "masonry",
+ "masonry_core",
  "masonry_imaging",
  "num-traits",
  "picus_surface",
@@ -4311,7 +4310,6 @@ name = "picus_surface"
 version = "0.1.0"
 dependencies = [
  "bevy_window",
- "masonry",
  "masonry_imaging",
  "pollster",
  "tracing",

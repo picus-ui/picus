@@ -1,18 +1,23 @@
 use std::borrow::Cow;
 
 use bevy_ecs::entity::Entity;
-use masonry::{
+use masonry_core::{
     core::{ArcStr, NewWidget, PointerButton, PropertySet},
     parley::{Alignment as TextAlign, FontFamily, StyleProperty},
     peniko::Color,
-    properties::{CheckmarkColor, ContentColor, PlaceholderColor},
-    widgets::{self, CheckboxToggled, InsertNewline, RadioButtonSelected, TextAction},
 };
 use xilem_core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 use xilem_masonry::view::{Button, Label, Slider, Switch, slider, switch, text_button};
-use xilem_masonry::{Pod, ViewCtx};
+use xilem_masonry::{
+    Pod, ViewCtx,
+    masonry::{
+        properties::{CheckmarkColor, ContentColor, PlaceholderColor},
+        widgets::{self, CheckboxToggled, InsertNewline, RadioButtonSelected, TextAction},
+    },
+};
 
 use crate::events::emit_ui_action;
+use crate::styling::DEFAULT_TEXT_SIZE;
 
 /// ECS-dispatching variant of `xilem_masonry::view::text_button`.
 pub fn ecs_text_button<A>(
@@ -49,7 +54,7 @@ where
         label: label.into(),
         checked,
         map_action: Box::new(map_action),
-        text_size: masonry::theme::TEXT_SIZE_NORMAL,
+        text_size: DEFAULT_TEXT_SIZE,
         font: FontFamily::List(Cow::Borrowed(&[])),
         text_color: None,
         checkmark_color: None,
@@ -223,7 +228,7 @@ where
         action,
         label: label.into(),
         checked,
-        text_size: masonry::theme::TEXT_SIZE_NORMAL,
+        text_size: DEFAULT_TEXT_SIZE,
         font: FontFamily::List(Cow::Borrowed(&[])),
         text_color: None,
         checkmark_color: None,
@@ -421,7 +426,7 @@ where
         placeholder_color: None,
         placeholder: ArcStr::default(),
         text_alignment: TextAlign::default(),
-        text_size: masonry::theme::TEXT_SIZE_NORMAL,
+        text_size: DEFAULT_TEXT_SIZE,
         font: FontFamily::List(Cow::Borrowed(&[])),
         disabled: false,
         clip: true,
@@ -650,10 +655,10 @@ mod tests {
     use std::sync::Arc;
 
     use bevy_ecs::world::World;
-    use masonry::{
+    use masonry_core::{
         app::{RenderRoot, RenderRootOptions, WindowSizePolicy},
+        core::DefaultProperties,
         dpi::PhysicalSize,
-        theme::default_property_set,
     };
 
     use super::*;
@@ -688,7 +693,7 @@ mod tests {
             widget.new_widget.erased(),
             |_| {},
             RenderRootOptions {
-                default_properties: Arc::new(default_property_set()),
+                default_properties: Arc::new(DefaultProperties::new()),
                 use_system_fonts: true,
                 size_policy: WindowSizePolicy::User,
                 size: PhysicalSize::new(320, 120),

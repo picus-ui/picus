@@ -36,11 +36,12 @@ use picus_core::{
         tween::ComponentTween,
     },
     bevy_window::{PrimaryWindow, Window, WindowResized},
-    button, button_with_child, resolve_style, resolve_style_for_classes,
-    resolve_style_for_entity_classes, run_app_with_window_options, spawn_in_overlay_root,
+    button, button_with_child,
+    masonry_core::layout::Dim,
+    resolve_style, resolve_style_for_classes, resolve_style_for_entity_classes,
+    run_app_with_window_options, spawn_in_overlay_root,
     xilem::{
         Color,
-        masonry::layout::Dim,
         style::Style as _,
         view::{
             CrossAxisAlignment, FlexExt as _, MainAxisAlignment, flex_col, flex_row, image, label,

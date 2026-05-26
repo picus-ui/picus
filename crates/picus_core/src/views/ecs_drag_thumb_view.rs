@@ -1,5 +1,5 @@
 use bevy_ecs::entity::Entity;
-use masonry::core::ArcStr;
+use masonry_core::core::ArcStr;
 use xilem_core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 use xilem_masonry::{Pod, ViewCtx};
 

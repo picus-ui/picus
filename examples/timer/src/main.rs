@@ -10,17 +10,18 @@ use picus_core::{
     UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
-    button, emit_ui_action, resolve_style, resolve_style_for_classes,
-    resolve_style_for_entity_classes, run_app_with_window_options, slider,
+    button, emit_ui_action,
+    masonry_core::{
+        imaging::{Painter, record::Scene},
+        kurbo::{Cap, Circle, Line, Point, Size, Stroke, Vec2},
+        layout::Length,
+        properties::Padding,
+    },
+    resolve_style, resolve_style_for_classes, resolve_style_for_entity_classes,
+    run_app_with_window_options, slider,
     xilem::{
         Color,
         core::fork,
-        masonry::{
-            imaging::{Painter, record::Scene},
-            kurbo::{Cap, Circle, Line, Point, Size, Stroke, Vec2},
-            layout::Length,
-            properties::Padding,
-        },
         style::Style as _,
         view::{
             CrossAxisAlignment, FlexExt as _, canvas, flex_col, flex_row, label, progress_bar,

@@ -1,5 +1,7 @@
 use bevy_ecs::prelude::*;
-use masonry::peniko::{Blob, ImageAlphaType, ImageBrush, ImageData, ImageFormat, ImageQuality};
+use masonry_core::peniko::{
+    Blob, ImageAlphaType, ImageBrush, ImageData, ImageFormat, ImageQuality,
+};
 use std::{path::Path, sync::Arc};
 use xilem::Color;
 use xilem_masonry::view::ObjectFit;

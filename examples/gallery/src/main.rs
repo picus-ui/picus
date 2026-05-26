@@ -18,10 +18,10 @@ use picus_core::{
     apply_widget_style,
     bevy_app::{App, Startup, Update},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
+    masonry_core::layout::{Dim, Length},
     resolve_style, resolve_style_for_classes, run_app_with_window_options, spawn_in_overlay_root,
     xilem::{
         Color,
-        masonry::layout::{Dim, Length},
         style::Style as _,
         view::{FlexExt as _, flex_col, label},
         winit::{dpi::LogicalSize, error::EventLoopError},

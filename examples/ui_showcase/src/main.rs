@@ -15,10 +15,10 @@ use picus_core::{
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_math::Vec2,
     bevy_text::TextPlugin,
+    masonry_core::layout::{Dim, Length},
     resolve_style, resolve_style_for_classes, run_app_with_window_options,
     set_active_style_variant_by_name, spawn_in_overlay_root,
     xilem::{
-        masonry::layout::{Dim, Length},
         style::Style as _,
         view::{FlexExt as _, flex_col, label},
         winit::{dpi::LogicalSize, error::EventLoopError},

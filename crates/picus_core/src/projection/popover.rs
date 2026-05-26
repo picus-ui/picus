@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use bevy_ecs::{entity::Entity, world::World};
-use masonry::layout::{Dim, Length};
+use masonry_core::layout::{Dim, Length};
 use xilem_masonry::style::Style as _;
 use xilem_masonry::view::{
     CrossAxisAlignment, FlexExt as _, flex_col, label, sized_box, transformed,

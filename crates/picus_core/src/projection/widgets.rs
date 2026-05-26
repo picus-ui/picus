@@ -5,9 +5,9 @@ use bevy_ecs::{
     hierarchy::{ChildOf, Children},
     prelude::Component,
 };
-use masonry::imaging::Painter;
-use masonry::kurbo::{Axis, BezPath, Circle, Line, Point, Rect, Stroke};
-use masonry::layout::{Dim, Length};
+use masonry_core::imaging::Painter;
+use masonry_core::kurbo::{Axis, BezPath, Circle, Line, Point, Rect, Stroke};
+use masonry_core::layout::{Dim, Length};
 use xilem::Color;
 use xilem::style::Style as _;
 use xilem_masonry::view::{
@@ -442,8 +442,8 @@ pub(crate) fn project_canvas(canvas_component: &UiCanvas, ctx: ProjectionCtx<'_>
     let commands = canvas_component.commands.clone();
     let mut canvas_view = canvas(
         move |_: &mut (),
-              _: &mut masonry::core::MutateCtx<'_>,
-              scene: &mut masonry::imaging::record::Scene,
+              _: &mut masonry_core::core::MutateCtx<'_>,
+              scene: &mut masonry_core::imaging::record::Scene,
               size| {
             let mut painter = Painter::new(scene);
             for command in &commands {

@@ -16,11 +16,13 @@ use crate::{
     widget_actions::WidgetUiAction,
 };
 use bevy_ecs::prelude::*;
-use masonry::layout::{Dim, Length, UnitPoint};
-use masonry::properties::Padding;
-use masonry::widgets::InsertNewline;
+use masonry_core::{
+    layout::{Dim, Length, UnitPoint},
+    properties::Padding,
+};
 use std::sync::Arc;
 use tracing::trace;
+use xilem_masonry::masonry::widgets::InsertNewline;
 use xilem_masonry::style::Style as _;
 use xilem_masonry::view::{
     CrossAxisAlignment, FlexExt as _, flex_row, image as xilem_image, label, sized_box,
@@ -46,11 +48,11 @@ fn placeholder_color_from_style(style: &crate::styling::ResolvedStyle) -> xilem:
 
 fn map_text_alignment_for_input(
     text_align: crate::styling::TextAlign,
-) -> masonry::parley::Alignment {
+) -> masonry_core::parley::Alignment {
     match text_align {
-        crate::styling::TextAlign::Start => masonry::parley::Alignment::Start,
-        crate::styling::TextAlign::Center => masonry::parley::Alignment::Center,
-        crate::styling::TextAlign::End => masonry::parley::Alignment::End,
+        crate::styling::TextAlign::Start => masonry_core::parley::Alignment::Start,
+        crate::styling::TextAlign::Center => masonry_core::parley::Alignment::Center,
+        crate::styling::TextAlign::End => masonry_core::parley::Alignment::End,
     }
 }
 
