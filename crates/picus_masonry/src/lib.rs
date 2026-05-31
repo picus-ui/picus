@@ -9,4 +9,4 @@
 
 #![forbid(unsafe_code)]
 
-pub use picus_ui_runtime::retained::*;
+pub use picus_widget::retained::*;

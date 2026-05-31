@@ -1,5 +1,5 @@
 [package]
-name = "picus_ui_runtime"
+name = "picus_widget"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

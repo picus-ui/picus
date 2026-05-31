@@ -9,7 +9,7 @@ test = false
 doctest = false
 
 [dependencies]
-masonry = { package = "picus_ui_runtime", path = "../picus_ui_runtime" }
+masonry = { package = "picus_widget", path = "../picus_widget" }
 xilem_core = { git = "https://github.com/linebender/xilem.git", rev = "72c6517ad035f352c70f939f4754a3f79fca23fd" }
 smallvec = "1.15.1"
 tokio = { version = "1.52.3", features = ["rt", "rt-multi-thread", "time", "sync"] }

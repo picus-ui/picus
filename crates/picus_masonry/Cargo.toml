@@ -9,4 +9,4 @@ test = false
 doctest = false
 
 [dependencies]
-picus_ui_runtime.workspace = true
+picus_widget.workspace = true
