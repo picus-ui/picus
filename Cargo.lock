@@ -4249,11 +4249,7 @@ dependencies = [
 name = "picus_masonry"
 version = "0.1.0"
 dependencies = [
- "accesskit",
- "linebender_include_doc_path",
- "masonry_core",
- "smallvec",
- "tracing",
+ "picus_ui_runtime",
 ]
 
 [[package]]
@@ -4265,6 +4261,17 @@ dependencies = [
  "pollster",
  "tracing",
  "wgpu",
+]
+
+[[package]]
+name = "picus_ui_runtime"
+version = "0.1.0"
+dependencies = [
+ "accesskit",
+ "linebender_include_doc_path",
+ "masonry_core",
+ "smallvec",
+ "tracing",
 ]
 
 [[package]]
@@ -7270,7 +7277,7 @@ dependencies = [
 name = "xilem_masonry"
 version = "0.1.0"
 dependencies = [
- "picus_masonry",
+ "picus_ui_runtime",
  "smallvec",
  "tokio",
  "tracing",

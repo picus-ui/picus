@@ -17,7 +17,8 @@ A Bevy-first UI framework that connects ECS state management with a retained Mas
 The workspace currently contains these crates:
 
 - **picus_core** — the main UI framework (this is the crate you depend on)
-- **picus_masonry** — Picus-owned widget/property set retargeted to Masonry Core
+- **picus_ui_runtime** — Picus-owned retained widget/property backend
+- **picus_masonry** — compatibility facade for the retained backend during migration
 - **xilem_masonry** — Picus-owned Xilem-compatible retained view adapter
 - **picus_surface** — Vello rendering bridge for window surfaces
 - **picus_activation** — deep linking and single-instance support
@@ -151,9 +152,13 @@ The main framework crate. It provides:
 
 A low-level bridge that attaches a Vello renderer to an external Bevy window. `picus_core` uses this internally for the `Last` paint pass. You typically won't interact with this crate directly unless you're customizing the rendering pipeline.
 
-### picus_masonry and xilem_masonry
+### picus_ui_runtime, picus_masonry, and xilem_masonry
 
-Local compatibility crates copied from official Linebender sources and retargeted for Picus. They provide the retained widget/view layer without depending on upstream `masonry` or upstream `xilem` directly.
+`picus_ui_runtime` is the Picus-owned retained backend crate. Today it hosts the migrated `picus_masonry` widget/property implementation and is the long-term home for incremental widget rewrites.
+
+`picus_masonry` is now a compatibility facade that re-exports the retained runtime surface for existing imports.
+
+`xilem_masonry` remains the Picus-owned Xilem-compatible view adapter and now targets `picus_ui_runtime` instead of owning the widget implementation boundary itself.
 
 ### picus_activation
 

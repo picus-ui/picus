@@ -18,7 +18,7 @@ const DEFAULT_LENGTH: Length = Length::const_px(100.);
 /// A widget allowing custom drawing.
 ///
 /// A canvas takes a painter callback; every time the canvas is repainted, that callback
-/// is run with an `imaging` [`record::Scene`](Scene).
+/// is run with an imaging [`record::Scene`](Scene).
 /// That recording is then replayed as the canvas contents.
 #[derive(Default)]
 pub struct Canvas {

@@ -4,6 +4,7 @@ members = [
 	"crates/picus_surface",
 	"crates/picus_activation",
 	"crates/picus_core",
+	"crates/picus_ui_runtime",
 	"crates/picus_masonry",
 	"crates/xilem_masonry",
 	"examples/async_downloader",
@@ -77,6 +78,7 @@ sha2 = "0.11"
 webbrowser = "1"
 
 picus_core = { path = "crates/picus_core" }
+picus_ui_runtime = { path = "crates/picus_ui_runtime" }
 picus_activation = { path = "crates/picus_activation" }
 picus_surface = { path = "crates/picus_surface" }
 shared_utils = { path = "examples/shared_utils" }

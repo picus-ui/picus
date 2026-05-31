@@ -4,7 +4,7 @@
 //! Picus-local Xilem view adapter for the Picus Masonry widget set.
 //!
 //! This crate vendors the upstream `xilem_masonry` view layer, retargeted to
-//! [`picus_masonry`].
+//! [`picus_ui_runtime`].
 
 #![forbid(unsafe_code)]
 #![allow(
@@ -17,7 +17,7 @@
 )]
 #![expect(clippy::missing_assert_message, reason = "Vendored upstream behavior.")]
 
-pub extern crate picus_masonry as masonry;
+pub extern crate masonry;
 pub use xilem_core as core;
 
 pub mod style;
