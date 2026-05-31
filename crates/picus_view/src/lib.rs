@@ -1,10 +1,7 @@
-// Copyright 2024 the Xilem Authors
+// Copyright 2026 Summp
 // SPDX-License-Identifier: Apache-2.0
 
-//! Picus-local Xilem view adapter for the Picus Masonry widget set.
-//!
-//! This crate vendors the upstream `xilem_masonry` view layer, retargeted to
-//! [`picus_widget`].
+//! Picus-native Xilem view layer, targeting [`picus_widget`].
 
 #![forbid(unsafe_code)]
 #![allow(
@@ -17,7 +14,8 @@
 )]
 #![expect(clippy::missing_assert_message, reason = "Vendored upstream behavior.")]
 
-pub extern crate masonry;
+pub use masonry as picus_widget;
+pub use masonry_core;
 pub use xilem_core as core;
 
 pub mod style;
