@@ -18,6 +18,35 @@
     "text-sm": Float(15.0),
     "text-md": Float(16.0),
     "text-lg": Float(22.0),
+    // Font sizes matching Fluent v9 type ramp
+    "font-size-caption2": Float(10.0),
+    "font-size-caption1": Float(12.0),
+    "font-size-body1": Float(14.0),
+    "font-size-body2": Float(16.0),
+    "font-size-subtitle2": Float(16.0),
+    "font-size-subtitle1": Float(20.0),
+    "font-size-title3": Float(24.0),
+    "font-size-title2": Float(28.0),
+    "font-size-title1": Float(32.0),
+    "font-size-large-title": Float(40.0),
+    "font-size-display": Float(68.0),
+    // Font weights matching OpenType / Fluent conventions
+    "font-weight-regular": Float(400.0),
+    "font-weight-medium": Float(500.0),
+    "font-weight-semibold": Float(600.0),
+    "font-weight-bold": Float(700.0),
+    // Relative line-height multipliers
+    "line-height-caption2": Float(1.4),
+    "line-height-caption1": Float(1.33),
+    "line-height-body1": Float(1.43),
+    "line-height-body2": Float(1.38),
+    "line-height-subtitle2": Float(1.38),
+    "line-height-subtitle1": Float(1.4),
+    "line-height-title3": Float(1.33),
+    "line-height-title2": Float(1.29),
+    "line-height-title1": Float(1.25),
+    "line-height-large-title": Float(1.3),
+    "line-height-display": Float(1.35),
     "duration-fast": Float(0.10),
   },
   rules: [
@@ -1235,6 +1264,143 @@
       ),
     ),
 
+    // ── Type ramp presets (Fluent v9) ──────────────────────────
+    (
+      selector: Class("type.display"),
+      setter: (
+        text: (
+          size: Var("font-size-display"),
+          weight: Var("font-weight-semibold"),
+          line_height: Var("line-height-display"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("type.large-title"),
+      setter: (
+        text: (
+          size: Var("font-size-large-title"),
+          weight: Var("font-weight-semibold"),
+          line_height: Var("line-height-large-title"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("type.title1"),
+      setter: (
+        text: (
+          size: Var("font-size-title1"),
+          weight: Var("font-weight-semibold"),
+          line_height: Var("line-height-title1"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("type.title2"),
+      setter: (
+        text: (
+          size: Var("font-size-title2"),
+          weight: Var("font-weight-semibold"),
+          line_height: Var("line-height-title2"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("type.title3"),
+      setter: (
+        text: (
+          size: Var("font-size-title3"),
+          weight: Var("font-weight-semibold"),
+          line_height: Var("line-height-title3"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("type.subtitle1"),
+      setter: (
+        text: (
+          size: Var("font-size-subtitle1"),
+          weight: Var("font-weight-semibold"),
+          line_height: Var("line-height-subtitle1"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("type.subtitle2"),
+      setter: (
+        text: (
+          size: Var("font-size-subtitle2"),
+          weight: Var("font-weight-semibold"),
+          line_height: Var("line-height-subtitle2"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("type.body1"),
+      setter: (
+        text: (
+          size: Var("font-size-body1"),
+          weight: Var("font-weight-regular"),
+          line_height: Var("line-height-body1"),
+        ),
+        colors: (
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("type.body2"),
+      setter: (
+        text: (
+          size: Var("font-size-body2"),
+          weight: Var("font-weight-regular"),
+          line_height: Var("line-height-body2"),
+        ),
+        colors: (
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("type.caption1"),
+      setter: (
+        text: (
+          size: Var("font-size-caption1"),
+          weight: Var("font-weight-regular"),
+          line_height: Var("line-height-caption1"),
+        ),
+        colors: (
+          text: Var("text-secondary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("type.caption1-strong"),
+      setter: (
+        text: (
+          size: Var("font-size-caption1"),
+          weight: Var("font-weight-semibold"),
+          line_height: Var("line-height-caption1"),
+        ),
+        colors: (
+          text: Var("text-secondary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("type.caption2"),
+      setter: (
+        text: (
+          size: Var("font-size-caption2"),
+          weight: Var("font-weight-regular"),
+          line_height: Var("line-height-caption2"),
+        ),
+        colors: (
+          text: Var("text-secondary"),
+        ),
+      ),
+    ),
+
     (
       selector: Class("template.checkbox.box"),
       setter: (
@@ -1504,6 +1670,11 @@
         "surface-accent-hover": Color(Hex("#1589E0")),
         "surface-accent-pressed": Color(Hex("#006CBE")),
         "surface-tab-active": Color(Hex("#103754")),
+        "surface-card": Color(Hex("#2D2D2D")),
+        "surface-input": Color(Hex("#1A1A1A")),
+        "surface-disabled": Color(Hex("#1C1C1C")),
+        "surface-hover": Color(Hex("#313131")),
+        "surface-pressed": Color(Hex("#1F1F1F")),
         "status-info-bg": Color(Hex("#17324D")),
         "status-info-border": Color(Hex("#4CA0FF")),
         "status-success-bg": Color(Hex("#173A2A")),
@@ -1513,8 +1684,17 @@
         "status-error-bg": Color(Hex("#4B2424")),
         "status-error-border": Color(Hex("#FF99A4")),
         "overlay-dimmer": Color(Rgba(0.0, 0.0, 0.0, 0.58)),
+        "text-tertiary": Color(Hex("#ADADAD")),
+        "text-disabled": Color(Hex("#5C5C5C")),
+        "text-inverted": Color(Hex("#F3F3F3")),
+        "text-link": Color(Hex("#2899F5")),
         "border-default": Color(Hex("#3F3F3F")),
         "border-muted": Color(Hex("#333333")),
+        "border-subtle": Color(Hex("#2B2B2B")),
+        "focus-stroke": Color(Hex("#0078D4")),
+        "brand-foreground": Color(Hex("#0078D4")),
+        "brand-foreground-hover": Color(Hex("#3AA0F3")),
+        "brand-foreground-pressed": Color(Hex("#006CBE")),
         "text-primary": Color(Hex("#F3F3F3")),
         "text-secondary": Color(Hex("#D0D0D0")),
         "text-on-accent": Color(Hex("#FFFFFF")),
@@ -1554,6 +1734,11 @@
         "surface-accent-hover": Color(Hex("#0F6CBD")),
         "surface-accent-pressed": Color(Hex("#115EA3")),
         "surface-tab-active": Color(Hex("#E8F3FC")),
+        "surface-card": Color(Hex("#FFFFFF")),
+        "surface-input": Color(Hex("#FFFFFF")),
+        "surface-disabled": Color(Hex("#F0F0F0")),
+        "surface-hover": Color(Hex("#EBEBEB")),
+        "surface-pressed": Color(Hex("#E2E2E2")),
         "status-info-bg": Color(Hex("#E6F2FB")),
         "status-info-border": Color(Hex("#0F6CBD")),
         "status-success-bg": Color(Hex("#E7F6E9")),
@@ -1563,8 +1748,17 @@
         "status-error-bg": Color(Hex("#FDE7E9")),
         "status-error-border": Color(Hex("#A4262C")),
         "overlay-dimmer": Color(Rgba(0.0, 0.0, 0.0, 0.25)),
+        "text-tertiary": Color(Hex("#707070")),
+        "text-disabled": Color(Hex("#A0A0A0")),
+        "text-inverted": Color(Hex("#FFFFFF")),
+        "text-link": Color(Hex("#0F6CBD")),
         "border-default": Color(Hex("#D1D1D1")),
         "border-muted": Color(Hex("#E5E5E5")),
+        "border-subtle": Color(Hex("#EDEBE9")),
+        "focus-stroke": Color(Hex("#0F6CBD")),
+        "brand-foreground": Color(Hex("#0F6CBD")),
+        "brand-foreground-hover": Color(Hex("#115EA3")),
+        "brand-foreground-pressed": Color(Hex("#0A4D7A")),
         "text-primary": Color(Hex("#242424")),
         "text-secondary": Color(Hex("#424242")),
         "text-on-accent": Color(Hex("#FFFFFF")),
@@ -1604,6 +1798,11 @@
         "surface-accent-hover": Color(Hex("#5EFAFF")),
         "surface-accent-pressed": Color(Hex("#00C2D1")),
         "surface-tab-active": Color(Hex("#000000")),
+        "surface-card": Color(Hex("#000000")),
+        "surface-input": Color(Hex("#000000")),
+        "surface-disabled": Color(Hex("#1A1A1A")),
+        "surface-hover": Color(Hex("#1C1C1C")),
+        "surface-pressed": Color(Hex("#303030")),
         "status-info-bg": Color(Hex("#000000")),
         "status-info-border": Color(Hex("#1AEBFF")),
         "status-success-bg": Color(Hex("#000000")),
@@ -1613,8 +1812,17 @@
         "status-error-bg": Color(Hex("#000000")),
         "status-error-border": Color(Hex("#FF4D4D")),
         "overlay-dimmer": Color(Rgba(0.0, 0.0, 0.0, 0.82)),
+        "text-tertiary": Color(Hex("#C0C0C0")),
+        "text-disabled": Color(Hex("#808080")),
+        "text-inverted": Color(Hex("#000000")),
+        "text-link": Color(Hex("#1AEBFF")),
         "border-default": Color(Hex("#FFFFFF")),
         "border-muted": Color(Hex("#BFBFBF")),
+        "border-subtle": Color(Hex("#6F6F6F")),
+        "focus-stroke": Color(Hex("#1AEBFF")),
+        "brand-foreground": Color(Hex("#1AEBFF")),
+        "brand-foreground-hover": Color(Hex("#5EFAFF")),
+        "brand-foreground-pressed": Color(Hex("#00C2D1")),
         "text-primary": Color(Hex("#FFFFFF")),
         "text-secondary": Color(Hex("#F0F0F0")),
         "text-on-accent": Color(Hex("#000000")),

@@ -33,6 +33,48 @@ impl UiLabel {
     }
 }
 
+/// Typography preset matching Fluent v9 type ramp.
+///
+/// Attach this component (or the corresponding `StyleClass`) to an entity
+/// to apply a complete set of font-size, font-weight, and line-height values.
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum TypographyPreset {
+    #[default]
+    Body1,
+    Body2,
+    Caption1,
+    Caption1Strong,
+    Caption2,
+    Subtitle1,
+    Subtitle2,
+    Title1,
+    Title2,
+    Title3,
+    LargeTitle,
+    Display,
+}
+
+impl TypographyPreset {
+    /// Return the `StyleClass` class name for this preset.
+    #[must_use]
+    pub fn class_name(self) -> &'static str {
+        match self {
+            Self::Body1 => "type.body1",
+            Self::Body2 => "type.body2",
+            Self::Caption1 => "type.caption1",
+            Self::Caption1Strong => "type.caption1-strong",
+            Self::Caption2 => "type.caption2",
+            Self::Subtitle1 => "type.subtitle1",
+            Self::Subtitle2 => "type.subtitle2",
+            Self::Title1 => "type.title1",
+            Self::Title2 => "type.title2",
+            Self::Title3 => "type.title3",
+            Self::LargeTitle => "type.large-title",
+            Self::Display => "type.display",
+        }
+    }
+}
+
 /// Translation key marker for localized text projection.
 #[derive(Component, Debug, Clone, PartialEq, Eq)]
 pub struct LocalizeText {

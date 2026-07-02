@@ -29,7 +29,10 @@ use bevy_time::Time;
 use masonry_core::core::UsesProperty;
 use masonry_core::{
     layout::Length,
-    parley::{Alignment as ParleyTextAlign, FontFamily, FontFamilyName, GenericFamily},
+    parley::{
+        Alignment as ParleyTextAlign, FontFamily, FontFamilyName, GenericFamily, LineHeight,
+        style::FontWeight,
+    },
     properties::{Background, BorderColor, BorderWidth, BoxShadow, CornerRadius, Padding},
 };
 use picus_view::picus_widget::properties::LineBreaking;
@@ -122,6 +125,11 @@ pub struct ColorStyle {
 pub struct TextStyle {
     pub size: Option<f32>,
     pub text_align: Option<TextAlign>,
+    /// Font weight (100–900). Maps directly to parley `FontWeight`.
+    /// Common values: 400 (Normal/Regular), 500 (Medium), 600 (Semibold), 700 (Bold).
+    pub weight: Option<f32>,
+    /// Relative line height multiplier (e.g., 1.35). None = default.
+    pub line_height: Option<f32>,
 }
 
 /// Main-axis content distribution for flex layouts.
@@ -354,6 +362,10 @@ pub struct ColorStyleValue {
 pub struct TextStyleValue {
     pub size: Option<StyleValue<f32>>,
     pub text_align: Option<StyleValue<TextAlign>>,
+    /// Font weight as a token-value or literal (100–900).
+    pub weight: Option<StyleValue<f32>>,
+    /// Relative line height multiplier as a token-value or literal.
+    pub line_height: Option<StyleValue<f32>>,
 }
 
 /// Token-aware style payload attached to stylesheet rules.
@@ -412,6 +424,8 @@ impl From<TextStyle> for TextStyleValue {
         Self {
             size: value.size.map(StyleValue::value),
             text_align: value.text_align.map(StyleValue::value),
+            weight: value.weight.map(StyleValue::value),
+            line_height: value.line_height.map(StyleValue::value),
         }
     }
 }
@@ -1093,6 +1107,8 @@ pub struct ResolvedColorStyle {
 pub struct ResolvedTextStyle {
     pub size: f32,
     pub text_align: TextAlign,
+    pub weight: f32,
+    pub line_height: f32,
 }
 
 impl Default for ResolvedTextStyle {
@@ -1100,6 +1116,8 @@ impl Default for ResolvedTextStyle {
         Self {
             size: DEFAULT_TEXT_SIZE,
             text_align: TextAlign::Start,
+            weight: 400.0,
+            line_height: 1.35,
         }
     }
 }
@@ -1184,6 +1202,12 @@ fn merge_text_values(dst: &mut TextStyleValue, src: &TextStyleValue) {
     if src.text_align.is_some() {
         dst.text_align = src.text_align.clone();
     }
+    if src.weight.is_some() {
+        dst.weight = src.weight.clone();
+    }
+    if src.line_height.is_some() {
+        dst.line_height = src.line_height.clone();
+    }
 }
 
 fn merge_value_setter(dst: &mut StyleSetterValue, setter: &StyleSetterValue) {
@@ -1261,6 +1285,12 @@ fn merge_inline_text_values(dst: &mut TextStyleValue, src: &TextStyle) {
     }
     if let Some(text_align) = src.text_align {
         dst.text_align = Some(StyleValue::value(text_align));
+    }
+    if let Some(weight) = src.weight {
+        dst.weight = Some(StyleValue::value(weight));
+    }
+    if let Some(line_height) = src.line_height {
+        dst.line_height = Some(StyleValue::value(line_height));
     }
 }
 
@@ -1469,6 +1499,8 @@ fn to_resolved_text(text: &TextStyle) -> ResolvedTextStyle {
     ResolvedTextStyle {
         size: text.size.unwrap_or(DEFAULT_TEXT_SIZE),
         text_align: text.text_align.unwrap_or_default(),
+        weight: text.weight.unwrap_or(400.0),
+        line_height: text.line_height.unwrap_or(1.35),
     }
 }
 
@@ -1693,6 +1725,14 @@ fn resolve_text_style(text: &TextStyleValue, tokens: &HashMap<String, TokenValue
             .text_align
             .as_ref()
             .map(|value| resolve_enum_value(tokens, value, "text.text_align")),
+        weight: text
+            .weight
+            .as_ref()
+            .map(|value| resolve_f32_value(tokens, value, "text.weight")),
+        line_height: text
+            .line_height
+            .as_ref()
+            .map(|value| resolve_f32_value(tokens, value, "text.line_height")),
     }
 }
 
@@ -2478,7 +2518,9 @@ pub fn animate_style_transitions(world: &mut World) {
 pub fn apply_label_style(view: Label, style: &ResolvedStyle) -> impl WidgetView<(), ()> {
     let mut styled = view
         .text_size(style.text.size)
-        .text_alignment(map_text_alignment(style.text.text_align));
+        .text_alignment(map_text_alignment(style.text.text_align))
+        .weight(FontWeight::new(style.text.weight))
+        .line_height(LineHeight::FontSizeRelative(style.text.line_height));
     if let Some(font_stack) = font_stack_from_style(style) {
         styled = styled.font(font_stack);
     }
@@ -2692,6 +2734,10 @@ struct TextStyleDef {
     size: OptionalStyleValueDef<f32>,
     #[serde(default)]
     text_align: OptionalLiteralValueDef<TextAlign>,
+    #[serde(default)]
+    weight: OptionalStyleValueDef<f32>,
+    #[serde(default)]
+    line_height: OptionalStyleValueDef<f32>,
 }
 
 impl TextStyleDef {
@@ -2699,6 +2745,8 @@ impl TextStyleDef {
         Ok(TextStyleValue {
             size: into_style_value(self.size.into_option(), Ok)?,
             text_align: self.text_align.into_option().map(StyleValue::Value),
+            weight: into_style_value(self.weight.into_option(), Ok)?,
+            line_height: into_style_value(self.line_height.into_option(), Ok)?,
         })
     }
 }
