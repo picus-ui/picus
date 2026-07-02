@@ -24,7 +24,8 @@ use crate::{
         UiCanvasPosition, UiColorPicker, UiColorPickerPanel, UiDataTable, UiDatePicker,
         UiDatePickerPanel, UiDivider, UiGroupBox, UiListSelectionMode, UiListView, UiMenuBar,
         UiMenuBarItem, UiMenuItemPanel, UiRadioGroup, UiScrollView, UiSortDirection, UiSpinner,
-        UiSplitPane,
+        UiSearch, UiSplitPane,
+        UiBreadcrumbItem, UiMessageBar, MessageBarKind,
         UiTabBar, UiTable, UiToast, UiTooltip, UiTreeNode,
     },
     overlay::OverlayUiAction,
@@ -1761,4 +1762,169 @@ pub(crate) fn project_divider(div: &UiDivider, ctx: ProjectionCtx<'_>) -> UiView
         Axis::Vertical => Arc::new(divider_v::<(), ()>()),
     };
     Arc::new(apply_widget_style(view, &style))
+}
+
+// ---------------------------------------------------------------------------
+// Toolbar
+// ---------------------------------------------------------------------------
+
+/// Project a `UiToolbar` marker as a horizontal flex row with toolbar styling.
+pub(crate) fn project_toolbar(ctx: ProjectionCtx<'_>) -> UiView {
+    let style = resolve_style(ctx.world, ctx.entity);
+    let children: Vec<_> = ctx.children.into_iter().map(|c| c.into_any_flex()).collect();
+    Arc::new(apply_widget_style(
+        apply_flex_alignment(flex_row(children), &style),
+        &style,
+    ))
+}
+
+// ---------------------------------------------------------------------------
+// Card
+// ---------------------------------------------------------------------------
+
+/// Project a `UiCard` marker as a vertical flex container with card styling.
+pub(crate) fn project_card(ctx: ProjectionCtx<'_>) -> UiView {
+    let style = resolve_style(ctx.world, ctx.entity);
+    let children: Vec<_> = ctx.children.into_iter().map(|c| c.into_any_flex()).collect();
+    Arc::new(apply_widget_style(
+        apply_flex_alignment(flex_col(children), &style),
+        &style,
+    ))
+}
+
+// ---------------------------------------------------------------------------
+// Breadcrumb
+// ---------------------------------------------------------------------------
+
+/// Project a `UiBreadcrumb` container: renders children as a horizontal list
+/// with chevron separators between items. The last item is styled as the
+/// current page (plain text).
+pub(crate) fn project_breadcrumb(ctx: ProjectionCtx<'_>) -> UiView {
+    let style = resolve_style(ctx.world, ctx.entity);
+    let child_views: Vec<UiView> = ctx.children.into_iter().collect();
+
+    if child_views.is_empty() {
+        let empty: UiView = Arc::new(label(""));
+        return Arc::new(apply_widget_style(empty, &style));
+    }
+
+    // Build a row with chevron separators between each breadcrumb item.
+    let mut items: Vec<picus_view::view::AnyFlexChild<(), ()>> = Vec::new();
+    for (i, child) in child_views.iter().enumerate() {
+        if i > 0 {
+            // Chevron separator using a Unicode character
+            let chevron: UiView = Arc::new(
+                label(" \u{203A} ")
+                    .text_size(14.0)
+                    .color(crate::xilem::Color::from_rgb8(0x70, 0x70, 0x70)),
+            );
+            items.push(chevron.into_any_flex());
+        }
+        items.push(child.clone().into_any_flex());
+    }
+
+    Arc::new(apply_widget_style(
+        apply_flex_alignment(flex_row(items), &style),
+        &style,
+    ))
+}
+
+/// Project a `UiBreadcrumbItem` as a clickable/interactive label segment.
+pub(crate) fn project_breadcrumb_item(item: &UiBreadcrumbItem, ctx: ProjectionCtx<'_>) -> UiView {
+    let style = resolve_style(ctx.world, ctx.entity);
+    let label_view = apply_label_style(label(item.label.clone()), &style);
+    Arc::new(apply_widget_style(label_view, &style))
+}
+
+// ---------------------------------------------------------------------------
+// Message Bar
+// ---------------------------------------------------------------------------
+
+/// Project a `UiMessageBar` as a coloured banner with severity-based styling.
+pub(crate) fn project_message_bar(bar: &UiMessageBar, ctx: ProjectionCtx<'_>) -> UiView {
+    let mut style = resolve_style(ctx.world, ctx.entity);
+
+    // Merge in class-based styling for the severity kind.
+    let kind_class = match bar.kind {
+        MessageBarKind::Info => "overlay.toast.info",
+        MessageBarKind::Success => "overlay.toast.success",
+        MessageBarKind::Warning => "overlay.toast.warning",
+        MessageBarKind::Error => "overlay.toast.error",
+    };
+    let kind_style = resolve_style_for_classes(ctx.world, [kind_class]);
+    if let Some(bg) = kind_style.colors.bg {
+        style.colors.bg = Some(bg);
+    }
+    if let Some(border) = kind_style.colors.border {
+        style.colors.border = Some(border);
+    }
+    if let Some(text) = kind_style.colors.text {
+        style.colors.text = Some(text);
+    }
+    if style.layout.padding <= 0.0 {
+        style.layout.padding = 10.0;
+    }
+    if style.layout.gap <= 0.0 {
+        style.layout.gap = 8.0;
+    }
+
+    let message_label: UiView = Arc::new(apply_label_style(label(bar.message.clone()), &style));
+
+    let mut row_children: Vec<UiView> = Vec::new();
+    row_children.push(message_label);
+
+    if bar.dismissible {
+        let dismiss: UiView = Arc::new(
+            label(" \u{00D7} ")
+                .text_size(16.0)
+                .color(crate::xilem::Color::from_rgb8(0x99, 0x99, 0x99)),
+        );
+        row_children.push(dismiss);
+    }
+
+    Arc::new(apply_widget_style(
+        apply_flex_alignment(
+            flex_row(row_children.into_iter().map(|v| v.into_any_flex()).collect::<Vec<_>>()),
+            &style,
+        ),
+        &style,
+    ))
+}
+
+// ---------------------------------------------------------------------------
+// Search
+// ---------------------------------------------------------------------------
+
+/// Project a `UiSearch` as a text input with a leading search icon.
+pub(crate) fn project_search(search: &UiSearch, ctx: ProjectionCtx<'_>) -> UiView {
+    let mut style = resolve_style(ctx.world, ctx.entity);
+    if style.layout.padding <= 0.0 {
+        style.layout.padding = 8.0;
+    }
+    if style.layout.gap <= 0.0 {
+        style.layout.gap = 6.0;
+    }
+
+    // Search icon using a Unicode magnifying glass character
+    let icon: UiView = Arc::new(
+        label(" \u{1F50D} ")
+            .text_size(14.0)
+            .color(crate::xilem::Color::from_rgb8(0x99, 0x99, 0x99)),
+    );
+
+    // Placeholder text shown until the user types
+    let placeholder: UiView = Arc::new(
+        label(search.placeholder.as_str())
+            .text_size(14.0)
+            .color(crate::xilem::Color::from_rgb8(0x99, 0x99, 0x99)),
+    );
+
+    let row: UiView = Arc::new(
+        flex_row(
+            vec![icon.into_any_flex(), placeholder.into_any_flex()]
+        )
+        .gap(masonry_core::layout::Length::px(style.layout.gap)),
+    );
+
+    Arc::new(apply_widget_style(row, &style))
 }

@@ -7,8 +7,10 @@ use crate::{AppPicusExt, ProjectionCtx, StyleTypeRegistry, UiView};
 
 mod avatar;
 mod badge;
+mod breadcrumb;
 mod button;
 mod canvas;
+mod card;
 mod checkbox;
 mod color_picker;
 mod combo_box;
@@ -18,11 +20,13 @@ mod dialog;
 mod divider;
 mod grid;
 mod group_box;
-mod rating;
-mod image;
 mod link;
 mod list_view;
 mod menu;
+mod message_bar;
+mod rating;
+mod image;
+mod search;
 mod multiline_text_input;
 mod password_input;
 mod popover;
@@ -39,13 +43,16 @@ mod table;
 mod text_input;
 mod theme_picker;
 mod toast;
+mod toolbar;
 mod tooltip;
 mod tree_node;
 
-pub use badge::*;
 pub use avatar::*;
+pub use badge::*;
+pub use breadcrumb::*;
 pub use button::*;
 pub use canvas::*;
+pub use card::*;
 pub use checkbox::*;
 pub use color_picker::*;
 pub use combo_box::*;
@@ -59,12 +66,14 @@ pub use image::*;
 pub use link::*;
 pub use list_view::*;
 pub use menu::*;
+pub use message_bar::*;
 pub use multiline_text_input::*;
 pub use password_input::*;
 pub use popover::*;
 pub use progress_bar::*;
 pub use rating::*;
 pub use radio_group::*;
+pub use search::*;
 pub use scroll_view::*;
 pub use slider::*;
 pub use spinner::*;
@@ -76,6 +85,7 @@ pub use table::*;
 pub use text_input::*;
 pub use theme_picker::*;
 pub use toast::*;
+pub use toolbar::*;
 pub use tooltip::*;
 pub use tree_node::*;
 
@@ -159,7 +169,10 @@ pub fn register_builtin_ui_components(app: &mut App) {
     app.register_ui_component::<button::UiButton>()
         .register_ui_component::<avatar::UiAvatar>()
         .register_ui_component::<badge::UiBadge>()
+        .register_ui_component::<breadcrumb::UiBreadcrumb>()
+        .register_ui_component::<breadcrumb::UiBreadcrumbItem>()
         .register_ui_component::<canvas::UiCanvas>()
+        .register_ui_component::<card::UiCard>()
         .register_ui_component::<checkbox::UiCheckbox>()
         .register_ui_component::<rating::UiRating>()
         .register_ui_component::<slider::UiSlider>()
@@ -170,6 +183,7 @@ pub fn register_builtin_ui_components(app: &mut App) {
         .register_ui_component::<multiline_text_input::UiMultilineTextInput>()
         .register_ui_component::<image::UiImage>()
         .register_ui_component::<link::UiLink>()
+        .register_ui_component::<message_bar::UiMessageBar>()
         .register_ui_component::<progress_bar::UiProgressBar>()
         .register_ui_component::<dialog::UiDialog>()
         .register_ui_component::<divider::UiDivider>()
@@ -179,6 +193,7 @@ pub fn register_builtin_ui_components(app: &mut App) {
         .register_ui_component::<combo_box::UiDropdownItem>()
         .register_ui_component::<radio_group::UiRadioGroup>()
         .register_ui_component::<scroll_view::UiScrollView>()
+        .register_ui_component::<search::UiSearch>()
         .register_ui_component::<grid::UiGrid>()
         .register_ui_component::<tab_bar::UiTabBar>()
         .register_ui_component::<list_view::UiListView>()
@@ -194,6 +209,7 @@ pub fn register_builtin_ui_components(app: &mut App) {
         .register_ui_component::<color_picker::UiColorPickerPanel>()
         .register_ui_component::<group_box::UiGroupBox>()
         .register_ui_component::<split_pane::UiSplitPane>()
+        .register_ui_component::<toolbar::UiToolbar>()
         .register_ui_component::<toast::UiToast>()
         .register_ui_component::<date_picker::UiDatePicker>()
         .register_ui_component::<date_picker::UiDatePickerPanel>()

@@ -1401,6 +1401,132 @@
       ),
     ),
 
+    // ── Toolbar ───────────────────────────────────────────────
+    (
+      selector: Type("UiToolbar"),
+      setter: (
+        layout: (
+          padding: 4.0,
+          gap: Var("gap-md"),
+          justify_content: Start,
+          align_items: Center,
+          border_width: Var("border-thin"),
+          corner_radius: Var("radius-md"),
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+
+    // ── Card ──────────────────────────────────────────────────
+    (
+      selector: Type("UiCard"),
+      setter: (
+        layout: (
+          padding: Var("space-xl"),
+          gap: Var("gap-md"),
+          corner_radius: Var("radius-lg"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-card"),
+          border: Var("border-subtle"),
+          text: Var("text-primary"),
+        ),
+        box_shadow: Var("shadow-card"),
+      ),
+    ),
+
+    // ── Breadcrumb ────────────────────────────────────────────
+    (
+      selector: Type("UiBreadcrumb"),
+      setter: (
+        layout: (
+          padding: Var("space-xs"),
+          gap: Var("gap-sm"),
+          justify_content: Start,
+          align_items: Center,
+        ),
+      ),
+    ),
+    (
+      selector: Type("UiBreadcrumbItem"),
+      setter: (
+        layout: (
+          padding: Var("space-xs"),
+          corner_radius: Var("radius-sm"),
+          border_width: 0.0,
+        ),
+        colors: (
+          text: Var("text-link"),
+          bg: Var("transparent"),
+        ),
+        text: (
+          size: Var("font-size-body1"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Type("UiBreadcrumbItem"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-hover"),
+        ),
+      ),
+    ),
+
+    // ── Message Bar ───────────────────────────────────────────
+    (
+      selector: Type("UiMessageBar"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          gap: Var("gap-md"),
+          justify_content: Start,
+          align_items: Center,
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("status-info-bg"),
+          border: Var("status-info-border"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+
+    // ── Search ────────────────────────────────────────────────
+    (
+      selector: Type("UiSearch"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          gap: Var("gap-sm"),
+          justify_content: Start,
+          align_items: Center,
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-elevated"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Type("UiSearch"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          border: Var("border-input"),
+        ),
+      ),
+    ),
+
     // ── Type ramp presets (Fluent v9) ──────────────────────────
     (
       selector: Class("type.display"),
