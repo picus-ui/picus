@@ -15,10 +15,12 @@ mod combo_box;
 mod data_table;
 mod date_picker;
 mod dialog;
+mod divider;
 mod grid;
 mod group_box;
 mod rating;
 mod image;
+mod link;
 mod list_view;
 mod menu;
 mod multiline_text_input;
@@ -31,6 +33,7 @@ mod slider;
 mod spinner;
 mod split_pane;
 mod switch;
+mod text;
 mod tab_bar;
 mod table;
 mod text_input;
@@ -49,9 +52,11 @@ pub use combo_box::*;
 pub use data_table::*;
 pub use date_picker::*;
 pub use dialog::*;
+pub use divider::*;
 pub use grid::*;
 pub use group_box::*;
 pub use image::*;
+pub use link::*;
 pub use list_view::*;
 pub use menu::*;
 pub use multiline_text_input::*;
@@ -65,6 +70,7 @@ pub use slider::*;
 pub use spinner::*;
 pub use split_pane::*;
 pub use switch::*;
+pub use text::*;
 pub use tab_bar::*;
 pub use table::*;
 pub use text_input::*;
@@ -158,12 +164,15 @@ pub fn register_builtin_ui_components(app: &mut App) {
         .register_ui_component::<rating::UiRating>()
         .register_ui_component::<slider::UiSlider>()
         .register_ui_component::<switch::UiSwitch>()
+        .register_ui_component::<text::UiText>()
         .register_ui_component::<text_input::UiTextInput>()
         .register_ui_component::<password_input::UiPasswordInput>()
         .register_ui_component::<multiline_text_input::UiMultilineTextInput>()
         .register_ui_component::<image::UiImage>()
+        .register_ui_component::<link::UiLink>()
         .register_ui_component::<progress_bar::UiProgressBar>()
         .register_ui_component::<dialog::UiDialog>()
+        .register_ui_component::<divider::UiDivider>()
         .register_ui_component::<popover::UiPopover>()
         .register_ui_component::<combo_box::UiComboBox>()
         .register_ui_component::<combo_box::UiDropdownMenu>()

@@ -2,19 +2,38 @@
   default_variant: "dark",
   tokens: {
     "transparent": Color(Rgba(0.0, 0.0, 0.0, 0.0)),
+    // Border radius matching Fluent v9 borderRadii
+    "radius-none": Float(0.0),
+    "radius-xs": Float(2.0),
     "radius-sm": Float(4.0),
     "radius-md": Float(6.0),
     "radius-lg": Float(8.0),
+    "radius-xl": Float(12.0),
+    "radius-2xl": Float(16.0),
+    "radius-3xl": Float(24.0),
+    "radius-4xl": Float(32.0),
+    "radius-5xl": Float(40.0),
     "radius-pill": Float(999.0),
+    // Spacing matching Fluent v9 spacing scale
+    "space-none": Float(0.0),
+    "space-xxs": Float(2.0),
     "space-xs": Float(4.0),
     "space-sm": Float(6.0),
     "space-md": Float(8.0),
     "space-lg": Float(10.0),
+    "space-m": Float(12.0),
     "space-xl": Float(16.0),
+    "space-xxl": Float(24.0),
+    "space-xxxl": Float(32.0),
+    // Gap tokens for flex layouts
     "gap-sm": Float(6.0),
     "gap-md": Float(8.0),
     "gap-lg": Float(10.0),
+    // Stroke width matching Fluent v9 strokeWidths
     "border-thin": Float(1.0),
+    "border-thick": Float(2.0),
+    "border-thicker": Float(3.0),
+    "border-thickest": Float(4.0),
     "text-sm": Float(15.0),
     "text-md": Float(16.0),
     "text-lg": Float(22.0),
@@ -47,7 +66,40 @@
     "line-height-title1": Float(1.25),
     "line-height-large-title": Float(1.3),
     "line-height-display": Float(1.35),
-    "duration-fast": Float(0.10),
+    // Font families matching Fluent v9 fontFamily tokens
+    "font-family-base": FontFamily(["'Segoe UI'", "'Segoe UI Web (West European)'", "-apple-system", "BlinkMacSystemFont", "Roboto", "'Helvetica Neue'", "sans-serif"]),
+    "font-family-monospace": FontFamily(["Consolas", "'Courier New'", "Courier", "monospace"]),
+    "font-family-numeric": FontFamily(["Bahnschrift", "'Segoe UI'", "'Segoe UI Web (West European)'", "-apple-system", "BlinkMacSystemFont", "Roboto", "'Helvetica Neue'", "sans-serif"]),
+    // Duration matching Fluent v9 durations
+    "duration-ultra-fast": Float(0.05),
+    "duration-faster": Float(0.10),
+    "duration-fast": Float(0.15),
+    "duration-normal": Float(0.20),
+    "duration-gentle": Float(0.25),
+    "duration-slow": Float(0.30),
+    "duration-slower": Float(0.40),
+    "duration-ultra-slow": Float(0.50),
+    // Easing curves matching Fluent v9 curve tokens
+    "curve-accelerate-max": Curve(0.9, 0.1, 1.0, 0.2),
+    "curve-accelerate-mid": Curve(1.0, 0.0, 1.0, 1.0),
+    "curve-accelerate-min": Curve(0.8, 0.0, 0.78, 1.0),
+    "curve-decelerate-max": Curve(0.1, 0.9, 0.2, 1.0),
+    "curve-decelerate-mid": Curve(0.0, 0.0, 0.0, 1.0),
+    "curve-decelerate-min": Curve(0.33, 0.0, 0.1, 1.0),
+    "curve-easy-ease-max": Curve(0.8, 0.0, 0.2, 1.0),
+    "curve-easy-ease": Curve(0.33, 0.0, 0.67, 1.0),
+    "curve-linear": Curve(0.0, 0.0, 1.0, 1.0),
+    // Transition presets: duration + easing combinations
+    "transition-fast": Transition(StyleTransition(duration: 0.15, easing: None)),
+    "transition-normal": Transition(StyleTransition(duration: 0.20, easing: None)),
+    "transition-smooth": Transition(StyleTransition(duration: 0.20, easing: Some(EasyEase))),
+    "transition-slow": Transition(StyleTransition(duration: 0.30, easing: Some(DecelerateMax))),
+    // Z-index stack (matching Fluent v9 zIndex tokens)
+    "zindex-base": Float(0.0),
+    "zindex-dropdown": Float(1000.0),
+    "zindex-popover": Float(2000.0),
+    "zindex-dialog": Float(3000.0),
+    "zindex-toast": Float(4000.0),
     // Avatar colour palette tokens (Fluent UI v9 named colours)
     "avatar-bg-dark-red": Color(Hex("#C75050")),
     "avatar-bg-cranberry": Color(Hex("#C75050")),
@@ -1292,6 +1344,63 @@
       ),
     ),
 
+    // ── Divider ───────────────────────────────────────────────
+    (
+      selector: Type("UiDivider"),
+      setter: (
+        layout: (
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("border-default"),
+          border: Var("transparent"),
+        ),
+      ),
+    ),
+
+    // ── Link ──────────────────────────────────────────────────
+    (
+      selector: Type("UiLink"),
+      setter: (
+        layout: (
+          padding: Var("space-xs"),
+          corner_radius: Var("radius-sm"),
+          border_width: 0.0,
+          justify_content: Start,
+          align_items: Center,
+        ),
+        colors: (
+          bg: Var("transparent"),
+          text: Var("text-link"),
+          border: Var("transparent"),
+        ),
+        text: (
+          size: Var("font-size-body1"),
+          text_align: Start,
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Type("UiLink"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          text: Var("brand-foreground-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiLink"), PseudoClass(Pressed)]),
+      setter: (
+        layout: (
+          scale: 0.98,
+        ),
+        colors: (
+          text: Var("brand-foreground-pressed"),
+        ),
+      ),
+    ),
+
     // ── Type ramp presets (Fluent v9) ──────────────────────────
     (
       selector: Class("type.display"),
@@ -1759,6 +1868,87 @@
         "scrollbar-thumb": Color(Hex("#FFFFFF5C")),
         "scrollbar-thumb-hover": Color(Hex("#FFFFFF8C")),
         "scrollbar-thumb-pressed": Color(Hex("#FFFFFFB8")),
+        // Border stroke hierarchy (Fluent v9 colorNeutralStroke*)
+        "border-disabled": Color(Hex("#5C5C5C")),
+        "border-on-accent": Color(Hex("#0078D4")),
+        // Accessible stroke hierarchy (Fluent v9 colorNeutralStrokeAccessible*)
+        "stroke-accessible": Color(Hex("#6E6E6E")),
+        "stroke-accessible-hover": Color(Hex("#0078D4")),
+        "stroke-accessible-pressed": Color(Hex("#006CBE")),
+        "stroke-accessible-selected": Color(Hex("#0078D4")),
+        "surface-elevated-hover": Color(Hex("#2A2A2A")),
+        "surface-elevated-pressed": Color(Hex("#181818")),
+        "accent-secondary": Color(Hex("#1A8EDE")),
+        // Brand background hierarchy (Fluent v9 colorBrandBackground)
+        "brand-bg": Color(Hex("#2899F5")),
+        "brand-bg-hover": Color(Hex("#3AA0F3")),
+        "brand-bg-pressed": Color(Hex("#1890F1")),
+        "brand-bg-selected": Color(Hex("#2899F5")),
+        // Brand stroke hierarchy (Fluent v9 colorBrandStroke)
+        "brand-stroke": Color(Hex("#2899F5")),
+        "brand-stroke-hover": Color(Hex("#3AA0F3")),
+        "brand-stroke-pressed": Color(Hex("#1890F1")),
+        // Compound brand foreground (Fluent v9 colorCompoundBrandForeground1)
+        "compound-brand-fg": Color(Hex("#2899F5")),
+        "compound-brand-fg-hover": Color(Hex("#3AA0F3")),
+        "compound-brand-fg-pressed": Color(Hex("#1890F1")),
+        // Compound brand stroke
+        "compound-brand-stroke": Color(Hex("#2899F5")),
+        "compound-brand-stroke-hover": Color(Hex("#3AA0F3")),
+        "compound-brand-stroke-pressed": Color(Hex("#1890F1")),
+        // Foreground hierarchy levels 4-5 (Fluent v9 colorNeutralForeground4~5)
+        "text-4": Color(Hex("#999999")),
+        "text-5": Color(Hex("#ADADAD")),
+        // Brand foreground secondary (Fluent v9 colorBrandForeground2)
+        "brand-foreground-secondary": Color(Hex("#2899F5")),
+        "brand-foreground-secondary-hover": Color(Hex("#3AA0F3")),
+        "brand-foreground-secondary-pressed": Color(Hex("#1890F1")),
+        // Static/inverted foreground
+        "text-primary-static": Color(Hex("#242424")),
+        "text-inverted-secondary": Color(Hex("#ADADAD")),
+        "text-on-brand": Color(Hex("#FFFFFF")),
+        // Status foreground (Fluent v9 colorStatus* has foreground variants)
+        "status-info-fg": Color(Hex("#2899F5")),
+        "status-success-fg": Color(Hex("#6CCB5F")),
+        "status-warning-fg": Color(Hex("#F7C94B")),
+        "status-error-fg": Color(Hex("#FF99A4")),
+        // Surface hierarchy expansion (Fluent v9 colorNeutralBackground1~6)
+        "surface-card-hover": Color(Hex("#363636")),
+        "surface-card-pressed": Color(Hex("#242424")),
+        "surface-overlay-hover": Color(Hex("#292929")),
+        "surface-overlay-pressed": Color(Hex("#1F1F1F")),
+        "surface-bg-secondary": Color(Hex("#292929")),
+        "surface-bg-tertiary": Color(Hex("#1F1F1F")),
+        "surface-bg-quaternary": Color(Hex("#141414")),
+        "surface-inverted-bg": Color(Hex("#000000")),
+        // Transparent surface interactions (Fluent v9 colorTransparentBackground)
+        "surface-transparent-hover": Color(Rgba(255.0, 255.0, 255.0, 0.05)),
+        "surface-transparent-pressed": Color(Rgba(255.0, 255.0, 255.0, 0.10)),
+        // Input and divider borders
+        "border-input": Color(Hex("#2899F5")),
+        "border-input-hover": Color(Hex("#3AA0F3")),
+        "border-divider": Color(Hex("#3D3D3D")),
+        // Transparent stroke (Fluent v9 colorTransparentStrokeInteractive)
+        "stroke-transparent-interactive": Color(Rgba(0.0, 0.0, 0.0, 0.0)),
+        // Shadow elevation scale (matching Fluent v9 shadow*)
+        "shadow-card": BoxShadow((
+          color: Rgba(0.0, 0.0, 0.0, 0.20),
+          offset_x: 0.0,
+          offset_y: 2.0,
+          blur: 4.0,
+        )),
+        "shadow-elevated": BoxShadow((
+          color: Rgba(0.0, 0.0, 0.0, 0.24),
+          offset_x: 0.0,
+          offset_y: 8.0,
+          blur: 16.0,
+        )),
+        "shadow-dialog": BoxShadow((
+          color: Rgba(0.0, 0.0, 0.0, 0.32),
+          offset_x: 0.0,
+          offset_y: 16.0,
+          blur: 28.0,
+        )),
         "shadow-ui-component": BoxShadow((
           color: Rgba(0.0, 0.0, 0.0, 0.26),
           offset_x: 0.0,
@@ -1823,6 +2013,87 @@
         "scrollbar-thumb": Color(Hex("#0000003D")),
         "scrollbar-thumb-hover": Color(Hex("#00000055")),
         "scrollbar-thumb-pressed": Color(Hex("#00000070")),
+        // Border stroke hierarchy (Fluent v9 colorNeutralStroke*)
+        "border-disabled": Color(Hex("#BDBDBD")),
+        "border-on-accent": Color(Hex("#0F6CBD")),
+        // Accessible stroke hierarchy (Fluent v9 colorNeutralStrokeAccessible*)
+        "stroke-accessible": Color(Hex("#616161")),
+        "stroke-accessible-hover": Color(Hex("#0F6CBD")),
+        "stroke-accessible-pressed": Color(Hex("#115EA3")),
+        "stroke-accessible-selected": Color(Hex("#0F6CBD")),
+        "surface-elevated-hover": Color(Hex("#F0F0F0")),
+        "surface-elevated-pressed": Color(Hex("#E8E8E8")),
+        "accent-secondary": Color(Hex("#2B88D8")),
+        // Brand background hierarchy (Fluent v9 colorBrandBackground)
+        "brand-bg": Color(Hex("#0078D4")),
+        "brand-bg-hover": Color(Hex("#106EBE")),
+        "brand-bg-pressed": Color(Hex("#005A9E")),
+        "brand-bg-selected": Color(Hex("#0078D4")),
+        // Brand stroke hierarchy (Fluent v9 colorBrandStroke)
+        "brand-stroke": Color(Hex("#0078D4")),
+        "brand-stroke-hover": Color(Hex("#106EBE")),
+        "brand-stroke-pressed": Color(Hex("#005A9E")),
+        // Compound brand foreground (Fluent v9 colorCompoundBrandForeground1)
+        "compound-brand-fg": Color(Hex("#0078D4")),
+        "compound-brand-fg-hover": Color(Hex("#106EBE")),
+        "compound-brand-fg-pressed": Color(Hex("#005A9E")),
+        // Compound brand stroke
+        "compound-brand-stroke": Color(Hex("#0078D4")),
+        "compound-brand-stroke-hover": Color(Hex("#106EBE")),
+        "compound-brand-stroke-pressed": Color(Hex("#005A9E")),
+        // Foreground hierarchy levels 4-5 (Fluent v9 colorNeutralForeground4~5)
+        "text-4": Color(Hex("#707070")),
+        "text-5": Color(Hex("#616161")),
+        // Brand foreground secondary (Fluent v9 colorBrandForeground2)
+        "brand-foreground-secondary": Color(Hex("#0078D4")),
+        "brand-foreground-secondary-hover": Color(Hex("#106EBE")),
+        "brand-foreground-secondary-pressed": Color(Hex("#005A9E")),
+        // Static/inverted foreground
+        "text-primary-static": Color(Hex("#242424")),
+        "text-inverted-secondary": Color(Hex("#ADADAD")),
+        "text-on-brand": Color(Hex("#FFFFFF")),
+        // Status foreground (Fluent v9 colorStatus* foreground variants)
+        "status-info-fg": Color(Hex("#0F6CBD")),
+        "status-success-fg": Color(Hex("#0B6A2B")),
+        "status-warning-fg": Color(Hex("#9A6700")),
+        "status-error-fg": Color(Hex("#A4262C")),
+        // Surface hierarchy expansion (Fluent v9 colorNeutralBackground1~6)
+        "surface-card-hover": Color(Hex("#F0F0F0")),
+        "surface-card-pressed": Color(Hex("#E8E8E8")),
+        "surface-overlay-hover": Color(Hex("#F3F2F1")),
+        "surface-overlay-pressed": Color(Hex("#EDEBE9")),
+        "surface-bg-secondary": Color(Hex("#FAFAFA")),
+        "surface-bg-tertiary": Color(Hex("#F5F5F5")),
+        "surface-bg-quaternary": Color(Hex("#F0F0F0")),
+        "surface-inverted-bg": Color(Hex("#000000")),
+        // Transparent surface interactions (Fluent v9 colorTransparentBackground)
+        "surface-transparent-hover": Color(Rgba(0.0, 0.0, 0.0, 0.05)),
+        "surface-transparent-pressed": Color(Rgba(0.0, 0.0, 0.0, 0.10)),
+        // Input and divider borders
+        "border-input": Color(Hex("#0078D4")),
+        "border-input-hover": Color(Hex("#106EBE")),
+        "border-divider": Color(Hex("#E6E6E6")),
+        // Transparent stroke (Fluent v9 colorTransparentStrokeInteractive)
+        "stroke-transparent-interactive": Color(Rgba(0.0, 0.0, 0.0, 0.0)),
+        // Shadow elevation scale (matching Fluent v9 shadow*)
+        "shadow-card": BoxShadow((
+          color: Rgba(0.0, 0.0, 0.0, 0.10),
+          offset_x: 0.0,
+          offset_y: 2.0,
+          blur: 4.0,
+        )),
+        "shadow-elevated": BoxShadow((
+          color: Rgba(0.0, 0.0, 0.0, 0.14),
+          offset_x: 0.0,
+          offset_y: 8.0,
+          blur: 16.0,
+        )),
+        "shadow-dialog": BoxShadow((
+          color: Rgba(0.0, 0.0, 0.0, 0.20),
+          offset_x: 0.0,
+          offset_y: 16.0,
+          blur: 28.0,
+        )),
         "shadow-ui-component": BoxShadow((
           color: Rgba(0.0, 0.0, 0.0, 0.12),
           offset_x: 0.0,
@@ -1887,6 +2158,87 @@
         "scrollbar-thumb": Color(Hex("#FFFFFFFF")),
         "scrollbar-thumb-hover": Color(Hex("#FFFFFFFF")),
         "scrollbar-thumb-pressed": Color(Hex("#FFFFFFFF")),
+        // Border stroke hierarchy (Fluent v9 colorNeutralStroke*)
+        "border-disabled": Color(Hex("#808080")),
+        "border-on-accent": Color(Hex("#1AEBFF")),
+        // Accessible stroke hierarchy (Fluent v9 colorNeutralStrokeAccessible*)
+        "stroke-accessible": Color(Hex("#FFFFFF")),
+        "stroke-accessible-hover": Color(Hex("#1AEBFF")),
+        "stroke-accessible-pressed": Color(Hex("#00C2D1")),
+        "stroke-accessible-selected": Color(Hex("#1AEBFF")),
+        "surface-elevated-hover": Color(Hex("#1C1C1C")),
+        "surface-elevated-pressed": Color(Hex("#303030")),
+        "accent-secondary": Color(Hex("#5EFAFF")),
+        // Brand background hierarchy (in HC, brand uses cyan accent)
+        "brand-bg": Color(Hex("#1AEBFF")),
+        "brand-bg-hover": Color(Hex("#5EFAFF")),
+        "brand-bg-pressed": Color(Hex("#00C2D1")),
+        "brand-bg-selected": Color(Hex("#1AEBFF")),
+        // Brand stroke hierarchy
+        "brand-stroke": Color(Hex("#1AEBFF")),
+        "brand-stroke-hover": Color(Hex("#5EFAFF")),
+        "brand-stroke-pressed": Color(Hex("#00C2D1")),
+        // Compound brand foreground
+        "compound-brand-fg": Color(Hex("#1AEBFF")),
+        "compound-brand-fg-hover": Color(Hex("#5EFAFF")),
+        "compound-brand-fg-pressed": Color(Hex("#00C2D1")),
+        // Compound brand stroke
+        "compound-brand-stroke": Color(Hex("#1AEBFF")),
+        "compound-brand-stroke-hover": Color(Hex("#5EFAFF")),
+        "compound-brand-stroke-pressed": Color(Hex("#00C2D1")),
+        // Foreground hierarchy levels 4-5 (HC uses lighter grays)
+        "text-4": Color(Hex("#C0C0C0")),
+        "text-5": Color(Hex("#A0A0A0")),
+        // Brand foreground secondary
+        "brand-foreground-secondary": Color(Hex("#1AEBFF")),
+        "brand-foreground-secondary-hover": Color(Hex("#5EFAFF")),
+        "brand-foreground-secondary-pressed": Color(Hex("#00C2D1")),
+        // Static/inverted foreground
+        "text-primary-static": Color(Hex("#FFFFFF")),
+        "text-inverted-secondary": Color(Hex("#C0C0C0")),
+        "text-on-brand": Color(Hex("#000000")),
+        // Status foreground (HC uses high-contrast status colors)
+        "status-info-fg": Color(Hex("#1AEBFF")),
+        "status-success-fg": Color(Hex("#00FF00")),
+        "status-warning-fg": Color(Hex("#FFFF00")),
+        "status-error-fg": Color(Hex("#FF4D4D")),
+        // Surface hierarchy expansion (HC uses black/white extremes)
+        "surface-card-hover": Color(Hex("#1C1C1C")),
+        "surface-card-pressed": Color(Hex("#303030")),
+        "surface-overlay-hover": Color(Hex("#1C1C1C")),
+        "surface-overlay-pressed": Color(Hex("#303030")),
+        "surface-bg-secondary": Color(Hex("#0A0A0A")),
+        "surface-bg-tertiary": Color(Hex("#000000")),
+        "surface-bg-quaternary": Color(Hex("#000000")),
+        "surface-inverted-bg": Color(Hex("#FFFFFF")),
+        // Transparent surface interactions (HC: transparent backgrounds)
+        "surface-transparent-hover": Color(Rgba(255.0, 255.0, 255.0, 0.10)),
+        "surface-transparent-pressed": Color(Rgba(255.0, 255.0, 255.0, 0.20)),
+        // Input and divider borders (HC uses white for all borders)
+        "border-input": Color(Hex("#1AEBFF")),
+        "border-input-hover": Color(Hex("#5EFAFF")),
+        "border-divider": Color(Hex("#BFBFBF")),
+        // Transparent stroke
+        "stroke-transparent-interactive": Color(Rgba(0.0, 0.0, 0.0, 0.0)),
+        // Shadow elevation scale (shadows disabled in high-contrast mode)
+        "shadow-card": BoxShadow((
+          color: Rgba(0.0, 0.0, 0.0, 0.0),
+          offset_x: 0.0,
+          offset_y: 0.0,
+          blur: 0.0,
+        )),
+        "shadow-elevated": BoxShadow((
+          color: Rgba(0.0, 0.0, 0.0, 0.0),
+          offset_x: 0.0,
+          offset_y: 0.0,
+          blur: 0.0,
+        )),
+        "shadow-dialog": BoxShadow((
+          color: Rgba(0.0, 0.0, 0.0, 0.0),
+          offset_x: 0.0,
+          offset_y: 0.0,
+          blur: 0.0,
+        )),
         "shadow-ui-component": BoxShadow((
           color: Rgba(0.0, 0.0, 0.0, 0.0),
           offset_x: 0.0,

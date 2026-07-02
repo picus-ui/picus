@@ -5,8 +5,8 @@ use super::{
 use crate::{
     ecs::{
         LocalizeText, UiAvatar, UiBadge, UiButton, UiCheckbox, UiImage, UiLabel,
-        UiMultilineTextInput, UiPasswordInput, UiProgressBar, UiRating, UiRatingChanged, UiSlider,
-        UiSwitch, UiTextInput,
+        UiLink, UiMultilineTextInput, UiPasswordInput, UiProgressBar, UiRating, UiSlider,
+        UiSwitch, UiText, UiTextInput, TypographyPreset,
     },
     i18n::resolve_localized_text,
     styling::{
@@ -14,7 +14,7 @@ use crate::{
         resolve_style, resolve_style_for_entity_classes,
     },
     views::{
-        ecs_button, ecs_button_with_child, ecs_slider, ecs_text_input, ecs_text_button,
+        ecs_button, ecs_button_with_child, ecs_slider, ecs_text_input,
     },
     widget_actions::WidgetUiAction,
 };
@@ -313,11 +313,11 @@ const RATING_OUTLINE_STAR: &str = "\u{2606}"; // ☆
 
 pub(crate) fn project_rating(rating: &UiRating, ctx: ProjectionCtx<'_>) -> UiView {
     let entity = ctx.entity;
-    let font_size = rating.size.star_font_size();
+    let _font_size = rating.size.star_font_size();
     let max_stars = rating.max.max(1);
     let current_value = rating.value;
 
-    let star_color = crate::xilem::Color::from_rgb8(0xE3, 0xA9, 0x5C);
+    let _star_color = crate::xilem::Color::from_rgb8(0xE3, 0xA9, 0x5C);
 
     let mut star_views: Vec<UiView> = Vec::with_capacity(max_stars as usize);
 
@@ -503,7 +503,7 @@ pub(crate) fn project_avatar(avatar: &UiAvatar, ctx: ProjectionCtx<'_>) -> UiVie
         resolve_style_for_entity_classes(ctx.world, ctx.entity, [color_class]);
 
     // Get an appropriate font size: ~40% of avatar size, clamped.
-    let font_size = (size_f64 as f32 * 0.40).max(8.0).min(AVATAR_DEFAULT_FONT_SIZE * 2.0);
+    let font_size = (size_f64 as f32 * 0.40).clamp(8.0, AVATAR_DEFAULT_FONT_SIZE * 2.0);
 
     // Background colour from the avatar colour class, or fallback to accent.
     let bg_color = color_style
@@ -534,4 +534,57 @@ pub(crate) fn project_avatar(avatar: &UiAvatar, ctx: ProjectionCtx<'_>) -> UiVie
     );
 
     avatar_view
+}
+
+/// Project a `UiLink` component as interactive link text.
+///
+/// The link emits a `UiLinkAction` on click. Styling (color, underline) is
+/// controlled by the theme engine through the `UiLink` selector rules.
+pub(crate) fn project_link(link_component: &UiLink, ctx: ProjectionCtx<'_>) -> UiView {
+    let mut style = resolve_style(ctx.world, ctx.entity);
+    let text = resolve_localized_text(ctx.world, ctx.entity, &link_component.text);
+    if let Some(stack) = localized_font_stack(ctx.world, ctx.entity) {
+        style.font_family = Some(stack);
+    }
+
+    let label_child = apply_label_style(label(text), &style);
+
+    Arc::new(apply_direct_widget_style(
+        ecs_button_with_child(ctx.entity, crate::UiLinkAction::new(ctx.entity), label_child),
+        &style,
+    ))
+}
+
+/// Project a `UiText` component into a label with a typography preset.
+///
+/// The entity can carry a standalone `TypographyPreset` component; if present,
+/// its class name is added to the entity's `StyleClass` list so the theme
+/// engine applies the correct font-size / weight / line-height.
+pub(crate) fn project_text(text_component: &UiText, ctx: ProjectionCtx<'_>) -> UiView {
+    let mut style = resolve_style(ctx.world, ctx.entity);
+    let display_text =
+        resolve_localized_text(ctx.world, ctx.entity, &text_component.text);
+
+    // Determine the typography preset: prefer an explicit one on the component,
+    // then check for a separate TypographyPreset component, finally default.
+    let preset = text_component
+        .preset
+        .or_else(|| ctx.world.get::<TypographyPreset>(ctx.entity).copied())
+        .unwrap_or(TypographyPreset::Body1);
+
+    // Resolve style for the type.* class and merge into the entity style.
+    let class_name = preset.class_name();
+    let resolved = resolve_style_for_entity_classes(ctx.world, ctx.entity, [class_name]);
+    if let Some(color) = resolved.colors.text {
+        style.colors.text = Some(color);
+    }
+    style.text.size = resolved.text.size;
+    style.text.weight = resolved.text.weight;
+    style.text.line_height = resolved.text.line_height;
+
+    if let Some(stack) = localized_font_stack(ctx.world, ctx.entity) {
+        style.font_family = Some(stack);
+    }
+
+    Arc::new(apply_label_style(label(display_text), &style))
 }

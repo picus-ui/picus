@@ -11,8 +11,9 @@ use masonry_core::imaging::Painter;
 use masonry_core::kurbo::{Axis, BezPath, Circle, Line, Point, Rect, Stroke};
 use masonry_core::layout::{Dim, Length};
 use picus_view::view::{
-    CrossAxisAlignment, FlexExt as _, MainAxisAlignment, canvas, flex_col, flex_row, label,
-    radio_group as xilem_radio_group, sized_box, spinner, split, transformed, zstack,
+    CrossAxisAlignment, FlexExt as _, MainAxisAlignment, canvas, divider_h, divider_v, flex_col,
+    flex_row, label, radio_group as xilem_radio_group, sized_box, spinner, split, transformed,
+    zstack,
 };
 
 use crate::{
@@ -21,8 +22,9 @@ use crate::{
         PartScrollThumbHorizontal, PartScrollThumbVertical, PartScrollViewport, ScrollAxis,
         SplitDirection, ToastKind, UiCanvas, UiCanvasCommand, UiCanvasPathCommand,
         UiCanvasPosition, UiColorPicker, UiColorPickerPanel, UiDataTable, UiDatePicker,
-        UiDatePickerPanel, UiGroupBox, UiListSelectionMode, UiListView, UiMenuBar, UiMenuBarItem,
-        UiMenuItemPanel, UiRadioGroup, UiScrollView, UiSortDirection, UiSpinner, UiSplitPane,
+        UiDatePickerPanel, UiDivider, UiGroupBox, UiListSelectionMode, UiListView, UiMenuBar,
+        UiMenuBarItem, UiMenuItemPanel, UiRadioGroup, UiScrollView, UiSortDirection, UiSpinner,
+        UiSplitPane,
         UiTabBar, UiTable, UiToast, UiTooltip, UiTreeNode,
     },
     overlay::OverlayUiAction,
@@ -722,7 +724,7 @@ pub(crate) fn project_tab_bar(tab_bar: &UiTabBar, ctx: ProjectionCtx<'_>) -> UiV
             );
 
             let mut indicator_style = pipe_style.clone();
-            indicator_style.transition = Some(crate::StyleTransition { duration: 0.12 });
+            indicator_style.transition = Some(crate::StyleTransition { duration: 0.12, easing: None });
             indicator_style.layout.scale = if is_active { 1.0 } else { 0.45 };
             indicator_style.colors.bg = Some(if is_active {
                 pipe_color
@@ -1745,4 +1747,18 @@ pub(crate) fn project_date_picker_panel(
         ))
         .translate(pos),
     )
+}
+
+// ---------------------------------------------------------------------------
+// Divider
+// ---------------------------------------------------------------------------
+
+/// Project a `UiDivider` component into a rendered divider line.
+pub(crate) fn project_divider(div: &UiDivider, ctx: ProjectionCtx<'_>) -> UiView {
+    let style = resolve_style(ctx.world, ctx.entity);
+    let view: UiView = match div.axis {
+        Axis::Horizontal => Arc::new(divider_h::<(), ()>()),
+        Axis::Vertical => Arc::new(divider_v::<(), ()>()),
+    };
+    Arc::new(apply_widget_style(view, &style))
 }
