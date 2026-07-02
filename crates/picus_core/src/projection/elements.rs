@@ -4,8 +4,8 @@ use super::{
 };
 use crate::{
     ecs::{
-        LocalizeText, UiBadge, UiButton, UiCheckbox, UiImage, UiLabel, UiMultilineTextInput,
-        UiPasswordInput, UiProgressBar, UiSlider, UiSwitch, UiTextInput,
+        LocalizeText, UiAvatar, UiBadge, UiButton, UiCheckbox, UiImage, UiLabel,
+        UiMultilineTextInput, UiPasswordInput, UiProgressBar, UiSlider, UiSwitch, UiTextInput,
     },
     i18n::resolve_localized_text,
     styling::{
@@ -439,4 +439,55 @@ pub(crate) fn project_image(image_component: &UiImage, ctx: ProjectionCtx<'_>) -
         image_view.fit(image_component.fit),
         &style,
     ))
+}
+
+const AVATAR_DEFAULT_FONT_SIZE: f32 = 14.0;
+
+pub(crate) fn project_avatar(avatar: &UiAvatar, ctx: ProjectionCtx<'_>) -> UiView {
+    let style = resolve_style(ctx.world, ctx.entity);
+    let size_f64 = f64::from(avatar.size);
+    let corner_radius = avatar.shape.corner_radius_for_size(avatar.size);
+
+    // Resolve colour classes: if a named colour is given, use it;
+    // otherwise derive from name hash.
+    let color_class = avatar.color.as_deref().unwrap_or_else(|| {
+        let idx = crate::pick_avatar_color_index(&avatar.name);
+        crate::AVATAR_COLOR_CLASSES[idx]
+    });
+
+    let color_style =
+        resolve_style_for_entity_classes(ctx.world, ctx.entity, [color_class]);
+
+    // Get an appropriate font size: ~40% of avatar size, clamped.
+    let font_size = (size_f64 as f32 * 0.40).max(8.0).min(AVATAR_DEFAULT_FONT_SIZE * 2.0);
+
+    // Background colour from the avatar colour class, or fallback to accent.
+    let bg_color = color_style
+        .colors
+        .bg
+        .unwrap_or(style.colors.bg.unwrap_or(crate::xilem::Color::from_rgb8(0x00, 0x78, 0xD4)));
+    let text_color = color_style
+        .colors
+        .text
+        .unwrap_or(crate::xilem::Color::WHITE);
+
+    let initials = crate::get_initials(&avatar.name);
+
+    let avatar_view: UiView = Arc::new(
+        zstack(vec![Arc::new(
+            sized_box(
+                label(initials)
+                    .text_size(font_size)
+                    .weight(masonry_core::parley::style::FontWeight::SEMI_BOLD)
+                    .color(text_color),
+            )
+            .width(Dim::Fixed(Length::px(size_f64)))
+            .height(Dim::Fixed(Length::px(size_f64)))
+            .corner_radius(Length::px(corner_radius))
+            .background(bg_color),
+        )])
+        .alignment(masonry_core::layout::UnitPoint::CENTER),
+    );
+
+    avatar_view
 }

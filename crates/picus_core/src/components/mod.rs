@@ -5,6 +5,7 @@ use bevy_ecs::prelude::*;
 
 use crate::{AppPicusExt, ProjectionCtx, StyleTypeRegistry, UiView};
 
+mod avatar;
 mod badge;
 mod button;
 mod canvas;
@@ -38,6 +39,7 @@ mod tooltip;
 mod tree_node;
 
 pub use badge::*;
+pub use avatar::*;
 pub use button::*;
 pub use canvas::*;
 pub use checkbox::*;
@@ -147,6 +149,7 @@ pub fn expand_all_ui_component_templates<T: UiComponentTemplate>(world: &mut Wor
 /// Register all built-in UI components with the unified UI component API.
 pub fn register_builtin_ui_components(app: &mut App) {
     app.register_ui_component::<button::UiButton>()
+        .register_ui_component::<avatar::UiAvatar>()
         .register_ui_component::<badge::UiBadge>()
         .register_ui_component::<canvas::UiCanvas>()
         .register_ui_component::<checkbox::UiCheckbox>()
