@@ -6,7 +6,7 @@ use crate::{
 };
 
 /// Built-in checkbox UI component with ECS-native state.
-#[derive(Component, Debug, Clone, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Default, PartialEq, Eq)]
 pub struct UiCheckbox {
     pub label: String,
     pub checked: bool,

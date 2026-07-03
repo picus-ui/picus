@@ -3,6 +3,7 @@
 //! `picus_core` lets you:
 //! - register ECS UI components through [`UiComponentTemplate`],
 //! - collect typed UI actions through [`UiEventQueue`],
+//! - describe ECS UI trees with Bevy Scene Notation (`bsn!`),
 //! - synthesize and rebuild a retained Masonry tree every frame.
 //!
 //! # Minimal setup
@@ -67,6 +68,7 @@ pub mod projection;
 pub mod resize;
 pub mod runner;
 pub mod runtime;
+pub mod scene;
 pub mod styling;
 pub mod synthesize;
 pub mod templates;
@@ -82,6 +84,7 @@ pub use bevy_asset;
 pub use bevy_ecs;
 pub use bevy_input;
 pub use bevy_math;
+pub use bevy_scene;
 pub use bevy_tasks;
 pub use bevy_text;
 pub use bevy_window;
@@ -108,6 +111,7 @@ pub use projection::*;
 pub use resize::*;
 pub use runner::*;
 pub use runtime::*;
+pub use scene::*;
 pub use styling::*;
 pub use synthesize::*;
 pub use templates::*;
@@ -120,6 +124,7 @@ pub mod prelude {
     //! Convenience exports for building `picus_core` apps.
 
     pub use bevy_ecs::hierarchy::{ChildOf, Children};
+    pub use crate::scene::*;
 
     pub use crate::{
         AppBreakpoints, AppI18n, AppPicusExt, AutoDismiss, BevyWindowOptions, BuiltinUiAction,
@@ -170,8 +175,8 @@ pub mod prelude {
     };
 
     pub use crate::{
-        bevy_app, bevy_asset, bevy_ecs, bevy_input, bevy_math, bevy_tasks, bevy_text, bevy_tween,
-        bevy_window, picus_view, rfd, xilem,
+        bevy_app, bevy_asset, bevy_ecs, bevy_input, bevy_math, bevy_scene, bevy_tasks, bevy_text,
+        bevy_tween, bevy_window, picus_view, rfd, xilem,
     };
 }
 

@@ -9,7 +9,7 @@ use crate::{ProjectionCtx, TypographyPreset, UiView, components::UiComponentTemp
 ///
 /// The text content is resolved through the i18n system when `LocalizeText` is
 /// also present on the entity.
-#[derive(Component, Debug, Clone, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Default, PartialEq, Eq)]
 pub struct UiText {
     /// The text content to display.
     pub text: String,

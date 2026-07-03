@@ -67,6 +67,51 @@ fn project_toast_probe(_: &ToastProbe, ctx: ProjectionCtx<'_>) -> UiView {
     )
 }
 
+#[test]
+fn picus_plugin_enables_bsn_ui_tree_spawning() {
+    use crate::WorldSceneExt as _;
+
+    let mut app = App::new();
+    app.add_plugins(PicusPlugin);
+
+    let root = app
+        .world_mut()
+        .spawn_scene(crate::bsn! {
+            crate::UiRoot
+            crate::UiFlexColumn
+            Children [
+                crate::UiLabel {
+                    text: { "Hello from BSN".to_string() },
+                },
+                crate::UiButton {
+                    label: { "Click".to_string() },
+                },
+            ]
+        })
+        .expect("PicusPlugin should install Bevy scene spawning")
+        .id();
+
+    let children = app
+        .world()
+        .get::<Children>(root)
+        .expect("BSN Children should spawn related child entities");
+    assert_eq!(children.len(), 2);
+
+    let label = children[0];
+    let button = children[1];
+
+    assert_eq!(
+        app.world().get::<crate::UiLabel>(label).map(|label| label.text.as_str()),
+        Some("Hello from BSN")
+    );
+    assert_eq!(
+        app.world()
+            .get::<crate::UiButton>(button)
+            .map(|button| button.label.as_str()),
+        Some("Click")
+    );
+}
+
 fn init_test_tracing() {
     static INIT: Once = Once::new();
     INIT.call_once(|| {

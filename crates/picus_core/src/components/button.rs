@@ -52,7 +52,7 @@ pub enum ButtonIconPosition {
 }
 
 /// Built-in button component.
-#[derive(Component, Debug, Clone, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Default, PartialEq, Eq)]
 pub struct UiButton {
     pub label: String,
     pub appearance: ButtonAppearance,

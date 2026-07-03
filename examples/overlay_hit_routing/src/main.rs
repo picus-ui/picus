@@ -4,8 +4,10 @@ use picus_core::{
     AppPicusExt, BuiltinUiAction, PicusPlugin, ProjectionCtx, UiButton, UiComboBox, UiComboOption,
     UiEventQueue, UiFlexColumn, UiLabel, UiRoot, UiThemePicker, UiView,
     bevy_app::{App, PreUpdate, Startup},
-    bevy_ecs::{hierarchy::ChildOf, prelude::*},
-    run_app_with_window_options, spawn_in_overlay_root,
+    bevy_ecs::prelude::*,
+    run_app_with_window_options,
+    scene::{CommandsSceneExt, bsn},
+    spawn_in_overlay_root,
     xilem::{
         view::{label, transformed},
         winit::{dpi::LogicalSize, error::EventLoopError},
@@ -18,7 +20,7 @@ struct UiToast {
     message: String,
 }
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct SpawnToastButton;
 
 fn project_ui_toast(toast: &UiToast, _ctx: ProjectionCtx<'_>) -> UiView {
@@ -28,33 +30,36 @@ fn project_ui_toast(toast: &UiToast, _ctx: ProjectionCtx<'_>) -> UiView {
 picus_core::impl_ui_component_template!(UiToast, project_ui_toast);
 
 fn setup_overlay_hit_routing_world(mut commands: Commands) {
-    let root = commands.spawn((UiRoot, UiFlexColumn)).id();
-
-    commands.spawn((UiThemePicker::fluent(), ChildOf(root)));
-
-    commands.spawn((
-        UiLabel::new(
-            "Open the dropdown, spawn a toast, then click the toast.\n\
-             Expected: dropdown closes immediately; toast stays visible.",
-        ),
-        ChildOf(root),
-    ));
-
-    commands.spawn((
-        UiComboBox::new(vec![
-            UiComboOption::new("alpha", "Alpha"),
-            UiComboOption::new("beta", "Beta"),
-            UiComboOption::new("gamma", "Gamma"),
-        ])
-        .with_placeholder("Open dropdown"),
-        ChildOf(root),
-    ));
-
-    commands.spawn((
-        UiButton::new("Spawn Toast"),
-        SpawnToastButton,
-        ChildOf(root),
-    ));
+    commands.spawn_scene(bsn! {
+        UiRoot
+        UiFlexColumn
+        Children [
+            UiThemePicker,
+            UiLabel {
+                text: {
+                    "Open the dropdown, spawn a toast, then click the toast.\n\
+                     Expected: dropdown closes immediately; toast stays visible."
+                        .to_string()
+                },
+            },
+            UiComboBox {
+                options: {
+                    vec![
+                        UiComboOption::new("alpha", "Alpha"),
+                        UiComboOption::new("beta", "Beta"),
+                        UiComboOption::new("gamma", "Gamma"),
+                    ]
+                },
+                placeholder: { "Open dropdown".to_string() },
+            },
+            (
+                UiButton {
+                    label: { "Spawn Toast".to_string() },
+                }
+                SpawnToastButton
+            ),
+        ]
+    });
 }
 
 fn drain_overlay_hit_routing_events(world: &mut World) {

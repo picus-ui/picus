@@ -6,7 +6,7 @@ use crate::{
 };
 
 /// Built-in text input UI component with ECS-owned content.
-#[derive(Component, Debug, Clone, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Default, PartialEq, Eq)]
 pub struct UiTextInput {
     pub value: String,
     pub placeholder: String,

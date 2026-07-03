@@ -117,10 +117,59 @@ The pattern is straightforward:
 
 ---
 
+## BSN UI description
+
+Picus supports Bevy Scene Notation as a Rust-embedded UI description language.
+`PicusPlugin` installs Bevy's `ScenePlugin`, and `picus_core::prelude::*`
+re-exports `bsn!`, `bsn_list!`, `Scene`, `SceneList`, and the scene spawning
+extension traits.
+
+Use BSN when the shape of a UI tree is mostly static and you want to avoid
+manual `commands.spawn((..., ChildOf(parent)))` wiring:
+
+```rust,no_run
+use picus_core::{
+    bevy_ecs::prelude::*,
+    prelude::*,
+};
+
+fn setup(mut commands: Commands) {
+    commands.spawn_scene(bsn! {
+        UiRoot
+        UiFlexColumn
+        StyleClass(vec!["counter.root".to_string()])
+        Children [
+            UiThemePicker,
+            UiLabel {
+                text: { "Counter".to_string() },
+            },
+            (
+                UiButton {
+                    label: { "Increment".to_string() },
+                }
+                StyleClass(vec!["counter.primary".to_string()])
+            ),
+        ]
+    });
+}
+```
+
+The spawned entities are ordinary Picus ECS components. `UiComponentTemplate`
+expansion, style resolution, event routing, synthesis, and retained Masonry
+projection all run through the same pipeline as hand-written spawns. Picus treats
+BSN as an in-code UI DSL; external `.bsn` files are not the recommended workflow.
+
+For custom components used in `bsn!`, derive `Default + Clone` when possible, or
+derive/implement Bevy's `FromTemplate` when a field needs spawn-time context such
+as named entity references or asset handle templates.
+
+---
+
 ## Features
 
 - **Bevy-native scheduling** — runs entirely within Bevy's update loop, no separate event loop
 - **ECS-driven projection** — map components to widget views via `UiComponentTemplate`
+- **BSN authoring** — describe static Picus UI trees with Rust-embedded Bevy Scene Notation
 - **Typed action queue** — `UiEventQueue` provides type-safe event handling without closures
 - **Explicit rendering pass** — Vello paint in `Last` stage, no Bevy render graph needed
 - **Built-in components** — buttons, checkboxes, sliders, text inputs, dialogs, scroll views, and more
@@ -190,7 +239,7 @@ cargo run -p example_gallery
 - Resolve styles in projectors using helper functions
 - Support for hover/pressed states and smooth color transitions
 
-See [AGENTS.md](./AGENTS.md#8-styling-system-reference) for the full guide on selectors, cascade rules, and transition configuration.
+See [AGENTS.md](./AGENTS.md#8-styling-contract) for the full guide on selectors, cascade rules, and transition configuration.
 
 ---
 

@@ -21,7 +21,7 @@ pub struct UiFlexColumn;
 pub struct UiFlexRow;
 
 /// Built-in text label component.
-#[derive(Component, Debug, Clone, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Default, PartialEq, Eq)]
 pub struct UiLabel {
     pub text: String,
 }
@@ -76,7 +76,7 @@ impl TypographyPreset {
 }
 
 /// Translation key marker for localized text projection.
-#[derive(Component, Debug, Clone, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Default, PartialEq, Eq)]
 pub struct LocalizeText {
     pub key: String,
 }

@@ -14,6 +14,7 @@ use bevy_asset::{AssetApp, AssetEvent, AssetPlugin};
 use bevy_ecs::schedule::IntoScheduleConfigs;
 use bevy_input::keyboard::KeyboardInput;
 use bevy_input::mouse::{MouseButtonInput, MouseWheel};
+use bevy_scene::ScenePlugin;
 use bevy_text::Font;
 use bevy_time::TimePlugin;
 use bevy_window::{
@@ -80,6 +81,9 @@ impl Plugin for PicusPlugin {
         }
         if !app.is_plugin_added::<AssetPlugin>() {
             app.add_plugins(AssetPlugin::default());
+        }
+        if !app.is_plugin_added::<ScenePlugin>() {
+            app.add_plugins(ScenePlugin);
         }
         if !app.is_plugin_added::<TweenCorePlugin<()>>() {
             app.add_plugins(DefaultTweenPlugins::<()>::in_schedule(Update));

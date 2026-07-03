@@ -3,7 +3,7 @@ use bevy_ecs::{entity::Entity, prelude::*};
 use crate::{OverlayPlacement, ProjectionCtx, UiView, components::UiComponentTemplate};
 
 /// A selectable theme variant entry shown by [`UiThemePicker`].
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct UiThemePickerOption {
     pub variant: String,
     pub label: String,
@@ -35,6 +35,12 @@ pub struct UiThemePicker {
     pub is_open: bool,
     pub dropdown_placement: OverlayPlacement,
     pub auto_flip_placement: bool,
+}
+
+impl Default for UiThemePicker {
+    fn default() -> Self {
+        Self::fluent()
+    }
 }
 
 impl UiThemePicker {

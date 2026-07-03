@@ -6,7 +6,7 @@ use crate::{
 };
 
 /// Single combo option entry.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct UiComboOption {
     pub value: String,
     pub label: String,
@@ -43,6 +43,12 @@ pub struct UiComboBox {
     pub placeholder_key: Option<String>,
     pub dropdown_placement: OverlayPlacement,
     pub auto_flip_placement: bool,
+}
+
+impl Default for UiComboBox {
+    fn default() -> Self {
+        Self::new(Vec::new())
+    }
 }
 
 impl UiComboBox {

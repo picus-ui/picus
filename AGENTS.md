@@ -145,7 +145,43 @@ Priority built-ins (`UiButton`, `UiBadge`, `UiProgressBar`, `UiSwitch`, and
 `UiCheckbox`) own their Picus-composed visual structure instead of exposing raw
 compatibility widget appearance.
 
-## 6. Synthesis and Events
+## 6. BSN UI Authoring and Migration
+
+Picus supports Bevy Scene Notation as the preferred Rust-embedded description
+language for static or mostly static ECS UI trees. `PicusPlugin` installs
+Bevy's `ScenePlugin`, and `picus_core::prelude::*` re-exports `bsn!`,
+`bsn_list!`, `Scene`, `SceneList`, and scene spawning extension traits.
+
+Use BSN to describe entity hierarchy and component bundles. Do not treat `.bsn`
+files as the default workflow; Picus currently prefers `bsn!`/`bsn_list!` in
+Rust so UI descriptions can use local helper functions, typed constructors,
+and normal Rust expressions.
+
+Migration rules from old spawn code:
+
+1. Replace a root spawn plus child `ChildOf(root)` calls with one
+   `commands.spawn_scene(bsn! { ... Children [ ... ] })` block.
+2. Components on the same entity are whitespace-separated in BSN. Sibling
+   entities inside `Children [...]` are comma-separated.
+3. Move `ChildOf(parent)` structure into nested `Children [...]`; do not keep
+   explicit parent entity plumbing unless later systems need the entity ID.
+4. Prefer field patch syntax for components that implement `Default + Clone`,
+   such as `UiButton { label: { "Save".to_string() } }`.
+5. For components that do not or should not expose a default template, wrap the
+   existing constructor with `template_value(...)`, for example
+   `template_value(MyWidget::new(args))`.
+6. Extract repeated fragments into Rust functions returning `impl Scene` or
+   `impl SceneList`; keep dynamic data flow and event handling in ordinary ECS
+   systems.
+7. `UiComponentTemplate::expand` remains authoritative for Picus-owned template
+   parts. BSN creates the logical ECS tree; Picus still expands logical controls
+   and projects them into the retained Masonry runtime.
+8. When adding a new Picus component intended for BSN authoring, derive
+   `Default + Clone` where the default is meaningful. Use Bevy `FromTemplate`
+   only when fields need spawn-time context such as named entity references or
+   asset handle templates.
+
+## 7. Synthesis and Events
 
 UI synthesis is driven by `UiProjectorRegistry` in `PostUpdate`. It gathers
 `UiRoot` and `UiOverlayRoot` entities, projects ECS trees recursively, stores
@@ -163,7 +199,7 @@ Interactive controls use the ECS event route:
 - `OverlayPointerRoutingState` suppresses consumed overlay click paths so trigger
   controls do not remain pressed.
 
-## 7. Styling Contract
+## 8. Styling Contract
 
 The styling system is CSS-like, ECS-driven, and centered in
 `crates/picus_core/src/styling.rs`.
@@ -207,7 +243,7 @@ Projectors should resolve style through the styling helpers, then apply it with 
 widget, label, or text-input style helpers. Use
 `resolve_style_for_entity_classes(...)` for pseudo-state-sensitive class styling.
 
-## 8. Scroll Views and Overlays
+## 9. Scroll Views and Overlays
 
 `UiScrollView` is a logical ECS component projected through a Masonry Core portal view.
 It stores scroll offset, viewport/content geometry, and optional external scrollbar
@@ -237,7 +273,7 @@ Overlay invariants:
 - Overlay entities reparent under `UiOverlayRoot` to avoid normal layout clipping.
 - `UiToast` uses configurable placement and defaults to bottom-end behavior.
 
-## 9. Assets, Fonts, Icons, and I18n
+## 10. Assets, Fonts, Icons, and I18n
 
 `picus_core::icons` uses bundled Lucide icon/font data. Icon text styling uses the
 upstream Lucide family name, `"lucide"`.
@@ -249,17 +285,17 @@ paths through `AppPicusExt`.
 `AppI18n` is the synchronous i18n registry. `LocalizeText` resolves through the
 active bundle and falls back to the key or explicit fallback text.
 
-## 10. Surface
+## 11. Surface
 
 `picus_surface` owns wgpu instance/device/queue state, surface configuration,
 DPI-aware scene rendering, swapchain presentation, and the Windows AMD premultiplied
 alpha compatibility path. It attaches through raw window handles and tracks physical
 size, logical size, and scale factor.
 
-## 11. Plugin and App Helpers
+## 12. Plugin and App Helpers
 
 `PicusPlugin` installs the framework resources, built-in message types, schedule
-systems, `DefaultTweenPlugins`, embedded Fluent variants, and core projectors.
+systems, Bevy `ScenePlugin`, `DefaultTweenPlugins`, embedded Fluent variants, and core projectors.
 `PicusBuiltinsPlugin` registers built-in UI components.
 
 `run_app()` and `run_app_with_window_options()` bootstrap desktop apps with Bevy
@@ -271,7 +307,7 @@ Use two UI composition layers:
 - ECS components registered through `register_ui_component::<T>()` for reusable UI
   regions.
 
-## 12. Reference Files
+## 13. Reference Files
 
 - Styling: `crates/picus_core/src/styling.rs`
 - Plugin wiring: `crates/picus_core/src/plugin.rs`
@@ -281,10 +317,11 @@ Use two UI composition layers:
 - Theme bundle: `crates/picus_core/src/theme/fluent_theme.ron`
 - Surface bridge: `crates/picus_surface/`
 
-## 13. Non-Goals
+## 14. Non-Goals
 
 - Retained UI rendering does not use Bevy render-graph integration.
 - Built-in interactive controls do not use user-facing closure event handlers.
 - Styling does not implement full CSS cascade semantics.
 - Inherited style contexts are unsupported; styles are per-entity with selector
   matching.
+- External `.bsn` files are not the primary Picus UI authoring path.
