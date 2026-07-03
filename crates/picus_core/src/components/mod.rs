@@ -43,6 +43,7 @@ mod table;
 mod text;
 mod text_input;
 mod theme_picker;
+mod titlebar;
 mod toast;
 mod toolbar;
 mod tooltip;
@@ -86,6 +87,7 @@ pub use table::*;
 pub use text::*;
 pub use text_input::*;
 pub use theme_picker::*;
+pub use titlebar::*;
 pub use toast::*;
 pub use toolbar::*;
 pub use tooltip::*;
@@ -216,5 +218,12 @@ pub fn register_builtin_ui_components(app: &mut App) {
         .register_ui_component::<date_picker::UiDatePickerPanel>()
         .register_ui_component::<theme_picker::UiThemePicker>()
         .register_ui_component::<theme_picker::UiThemePickerMenu>()
-        .register_ui_component::<navigation_view::UiNavigationView>();
+        .register_ui_component::<navigation_view::UiNavigationView>()
+        .register_ui_component::<titlebar::UiTitleBar>();
 }
+
+
+
+
+
+

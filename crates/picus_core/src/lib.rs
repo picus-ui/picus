@@ -48,9 +48,14 @@
 //! ```
 #![forbid(unsafe_code)]
 
+pub mod accelerator;
+pub mod accessibility;
 pub mod app_ext;
 pub mod bevy_tween;
+pub mod clipboard;
 pub mod components;
+pub mod composition;
+pub mod drag_drop;
 pub mod ecs;
 pub mod events;
 pub mod fonts;
@@ -65,6 +70,8 @@ pub mod runtime;
 pub mod styling;
 pub mod synthesize;
 pub mod templates;
+pub mod titlebar_system;
+pub mod validation;
 pub mod views;
 pub mod widget_actions;
 pub mod widgets;
@@ -82,7 +89,13 @@ pub use masonry_core;
 pub use picus_view;
 pub use rfd;
 
+pub use accelerator::*;
+pub use accessibility::*;
 pub use app_ext::*;
+
+pub use clipboard::*;
+pub use composition::*;
+pub use drag_drop::*;
 pub use components::*;
 pub use ecs::*;
 pub use events::*;
@@ -98,6 +111,8 @@ pub use runtime::*;
 pub use styling::*;
 pub use synthesize::*;
 pub use templates::*;
+pub use titlebar_system::*;
+pub use validation::*;
 pub use views::*;
 pub use widget_actions::*;
 
@@ -162,3 +177,5 @@ pub mod prelude {
 
 #[cfg(test)]
 mod tests;
+
+

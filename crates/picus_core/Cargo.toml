@@ -7,6 +7,8 @@ readme = "../../README.md"
 autoexamples = false
 
 [dependencies]
+accesskit.workspace = true
+arboard.workspace = true
 bevy_a11y.workspace = true
 bevy_app.workspace = true
 bevy_asset.workspace = true
@@ -41,3 +43,4 @@ image.workspace = true
 num-traits.workspace = true
 reqwest.workspace = true
 tracing-subscriber.workspace = true
+

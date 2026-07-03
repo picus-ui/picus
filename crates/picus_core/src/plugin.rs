@@ -1,7 +1,14 @@
+use crate::accelerator::{process_keyboard_accelerators, CurrentAcceleratorModifiers};
+use crate::accessibility::{handle_accessibility_actions, sync_accessibility_tree, AccessibilityTree};
 use crate::bevy_tween::{
     component_tween_system, BevyTweenRegisterSystems, DefaultTweenPlugins, TweenCorePlugin,
     TweenSystemSet,
 };
+use crate::clipboard::{Clipboard, handle_clipboard_events};
+use crate::composition::{apply_composition_effects, sync_composition_visuals, CompositionState};
+use crate::drag_drop::{dispatch_drag_events, track_drag_state, DragState};
+use crate::titlebar_system::{handle_titlebar_actions, sync_titlebar_state};
+use crate::validation::{run_validation, ValidationRegistry};
 use bevy_app::{App, Last, Plugin, PostUpdate, PreUpdate, TaskPoolPlugin, Update};
 use bevy_asset::{AssetApp, AssetEvent, AssetPlugin};
 use bevy_ecs::schedule::IntoScheduleConfigs;
@@ -107,6 +114,12 @@ impl Plugin for PicusPlugin {
             .init_resource::<OverlayStack>()
             .init_resource::<OverlayPointerRoutingState>()
             .init_resource::<ReducedMotion>()
+            .init_resource::<Clipboard>()
+            .init_resource::<CurrentAcceleratorModifiers>()
+            .init_resource::<AccessibilityTree>()
+            .init_resource::<CompositionState>()
+            .init_resource::<DragState>()
+            .init_resource::<ValidationRegistry>()
             .init_non_send::<MasonryRuntime>()
             .add_message::<CursorMoved>()
             .add_message::<CursorLeft>()
@@ -125,16 +138,23 @@ impl Plugin for PicusPlugin {
                     collect_bevy_font_assets,
                     sync_fonts_to_xilem,
                     initialize_masonry_runtime_from_primary_window,
+                    track_drag_state,
+                    dispatch_drag_events,
                     bubble_ui_pointer_events,
                     handle_global_overlay_clicks,
                     sync_scroll_view_layout_geometry,
                     handle_scroll_view_wheel,
+                    handle_clipboard_events,
                     inject_bevy_input_into_masonry,
                     sync_masonry_ime_state_to_bevy_window,
                     handle_widget_actions,
                     sync_ui_interaction_markers,
                 )
                     .chain(),
+            )
+            .add_systems(
+                PreUpdate,
+                process_keyboard_accelerators.after(inject_bevy_input_into_masonry),
             )
             .add_systems(
                 Update,
@@ -163,12 +183,32 @@ impl Plugin for PicusPlugin {
             )
             .add_systems(
                 Update,
+                handle_titlebar_actions,
+            )
+            .add_systems(
+                Update,
                 animate_style_transitions.after(TweenSystemSet::ApplyTween),
+            )
+            .add_systems(
+                Update,
+                (sync_composition_visuals, apply_composition_effects)
+                    .chain()
+                    .before(TweenSystemSet::UpdateInterpolationValue),
+            )
+            .add_systems(
+                Update,
+                run_validation,
+            )
+            .add_systems(
+                Update,
+                handle_accessibility_actions,
             )
             .add_systems(
                 PostUpdate,
                 (
                     synthesize_ui,
+                    sync_titlebar_state,
+                    sync_accessibility_tree,
                     rebuild_masonry_runtime,
                     sync_masonry_ime_state_to_bevy_window,
                 )
