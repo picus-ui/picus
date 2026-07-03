@@ -2042,20 +2042,28 @@ pub(crate) fn project_navigation_view(
         &sidebar_style,
     ));
 
-    // --- Content area: show only the selected child ---
+    // --- Content area: show only the selected child, flex-grow to fill space ---
     let content: UiView = ctx
         .children
         .get(nav.selected)
         .cloned()
         .unwrap_or_else(|| Arc::new(label("")));
 
-    let content_area = flex_col(vec![content.into_any_flex()])
-        .width(Dim::Stretch)
-        .height(Dim::Stretch);
+    let content_area = flex_col(vec![
+        flex_item(content, 1.0).into_any_flex(),
+    ])
+    .width(Dim::Stretch)
+    .height(Dim::Stretch);
 
-    // --- Layout: sidebar (fixed width) | content (flex-grow: 1) ---
+    // --- Sidebar needs its own scroll portal to avoid clipping on small windows ---
+    let sidebar_portal = scroll_portal(sidebar, Point::ORIGIN)
+        .constrain_horizontal(true)
+        .constrain_vertical(false)
+        .content_must_fill(true);
+
+    // --- Layout: sidebar (scrollable) | content (flex-grow: 1) ---
     let row = flex_row(vec![
-        sidebar.into_any_flex(),
+        sidebar_portal.into_any_flex(),
         flex_item(content_area, 1.0).into_any_flex(),
     ])
     .width(Dim::Stretch)
