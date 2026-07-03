@@ -6,8 +6,8 @@
 use crate::helpers::{card, class, grid, note};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 use picus_core::{
-    UiButton, UiComboBox, UiComboOption, UiFlexColumn, UiFlexRow, UiLabel, UiMultilineTextInput,
-    LocalizeText,
+    LocalizeText, UiButton, UiComboBox, UiComboOption, UiFlexColumn, UiFlexRow, UiLabel,
+    UiMultilineTextInput,
 };
 
 /// Locale combo and CJK font fallback component examples.
@@ -64,15 +64,11 @@ pub fn spawn_i18n_page(commands: &mut Commands, parent: Entity) -> Entity {
         class("gallery.typo.title"),
         ChildOf(cjk_card),
     ));
-    commands.spawn((
-        LocalizeText::new("gallery-cjk-note"),
-        ChildOf(cjk_card),
-    ));
+    commands.spawn((LocalizeText::new("gallery-cjk-note"), ChildOf(cjk_card)));
 
     // Han unification test string (same glyphs in all locales)
     commands.spawn((
-        UiMultilineTextInput::new("Han unification test\n骨 门 关 直")
-            .read_only(true),
+        UiMultilineTextInput::new("Han unification test\n骨 门 关 直").read_only(true),
         ChildOf(cjk_card),
     ));
 

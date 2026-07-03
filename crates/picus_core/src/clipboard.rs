@@ -83,11 +83,7 @@ impl Clipboard {
 
     /// Returns `true` if the system clipboard is accessible.
     pub fn is_available(&self) -> bool {
-        self.inner
-            .lock()
-            .ok()
-            .map(|g| g.is_some())
-            .unwrap_or(false)
+        self.inner.lock().ok().map(|g| g.is_some()).unwrap_or(false)
     }
 }
 

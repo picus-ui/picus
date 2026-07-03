@@ -23,13 +23,17 @@ fn matches_pattern(value: &str, pattern: &str) -> bool {
         }
         "^[a-zA-Z0-9_-]+$" => {
             !value.is_empty()
-                && value.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+                && value
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
         }
         "^[a-z]+$" => !value.is_empty() && value.chars().all(|c| c.is_ascii_lowercase()),
         "^[A-Z]+$" => !value.is_empty() && value.chars().all(|c| c.is_ascii_uppercase()),
         "^[a-zA-Z0-9\\s]+$" => {
             !value.is_empty()
-                && value.chars().all(|c| c.is_ascii_alphanumeric() || c.is_ascii_whitespace())
+                && value
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c.is_ascii_whitespace())
         }
         "^[\\w.@+-]+$" => {
             !value.is_empty()
@@ -214,9 +218,7 @@ pub fn run_validation(
 
         // --- Required check ---
         if rules.required {
-            let is_empty = field_value
-                .map(|v| v.trim().is_empty())
-                .unwrap_or(true);
+            let is_empty = field_value.map(|v| v.trim().is_empty()).unwrap_or(true);
             if is_empty {
                 new_state.errors.push(ValidationError {
                     message: "This field is required".to_string(),
@@ -309,4 +311,3 @@ mod tests {
         assert!(!matches_pattern("user name", "^[\\w.@+-]+$"));
     }
 }
-

@@ -1,9 +1,7 @@
 use bevy_app::AppExit;
 use bevy_ecs::message::MessageWriter;
 use bevy_ecs::prelude::*;
-use bevy_window::{
-    MonitorSelection, PrimaryWindow, Window, WindowMode,
-};
+use bevy_window::{MonitorSelection, PrimaryWindow, Window, WindowMode};
 
 use crate::events::UiEventQueue;
 use crate::{TitleBarAction, TitleBarState};

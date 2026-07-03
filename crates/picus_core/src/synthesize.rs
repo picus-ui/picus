@@ -154,7 +154,7 @@ pub fn sync_focus_state(world: &mut World) {
         let mut query = world.query_filtered::<Entity, With<InteractionState>>();
         query.iter(world).collect()
     };
-    
+
     // Clear focus on all entities that had it, set on the correct one
     for entity in entity_ids {
         if let Some(mut state) = world.get_mut::<InteractionState>(entity) {

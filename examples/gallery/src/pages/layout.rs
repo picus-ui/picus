@@ -49,9 +49,7 @@ pub fn spawn_layout_page(commands: &mut Commands, parent: Entity) -> Entity {
         ChildOf(collapsing),
     ));
     commands.spawn((
-        UiLabel::new(
-            "Resize the window narrower to see these items stack vertically.",
-        ),
+        UiLabel::new("Resize the window narrower to see these items stack vertically."),
         class("gallery.note"),
         ChildOf(collapsing),
     ));
@@ -69,10 +67,7 @@ pub fn spawn_layout_page(commands: &mut Commands, parent: Entity) -> Entity {
 
     // Only visible on md and larger (≥640px)
     let show_md_up = commands
-        .spawn((
-            UiVisibleResponsive::show_from("md"),
-            ChildOf(visibility),
-        ))
+        .spawn((UiVisibleResponsive::show_from("md"), ChildOf(visibility)))
         .id();
     commands.spawn((
         UiLabel::new("👁 Visible at md+ (≥640px)"),
@@ -82,10 +77,7 @@ pub fn spawn_layout_page(commands: &mut Commands, parent: Entity) -> Entity {
 
     // Only visible below lg (<1024px)
     let show_below_lg = commands
-        .spawn((
-            UiVisibleResponsive::show_until("lg"),
-            ChildOf(visibility),
-        ))
+        .spawn((UiVisibleResponsive::show_until("lg"), ChildOf(visibility)))
         .id();
     commands.spawn((
         UiLabel::new("👁 Hidden at lg+ (disappears ≥1024px)"),
@@ -95,10 +87,7 @@ pub fn spawn_layout_page(commands: &mut Commands, parent: Entity) -> Entity {
 
     // Only visible on small screens (≥sm but <md = 480px–639px)
     let show_sm_only = commands
-        .spawn((
-            UiVisibleResponsive::range("sm", "md"),
-            ChildOf(visibility),
-        ))
+        .spawn((UiVisibleResponsive::range("sm", "md"), ChildOf(visibility)))
         .id();
     commands.spawn((
         UiLabel::new("👁 Small screens only (480–639px)"),
@@ -154,8 +143,8 @@ pub fn spawn_layout_page(commands: &mut Commands, parent: Entity) -> Entity {
         .spawn((
             UiResponsiveGrid::new(
                 vec![
-                    ("sm", 1),  // <480px  → 1 column
-                    ("md", 2),  // 480-639 → 2 columns (note: sm is 480, md is 640)
+                    ("sm", 1), // <480px  → 1 column
+                    ("md", 2), // 480-639 → 2 columns (note: sm is 480, md is 640)
                     ("lg", 4), // 640+    → 4 columns
                 ],
                 1,
@@ -196,9 +185,7 @@ pub fn spawn_layout_page(commands: &mut Commands, parent: Entity) -> Entity {
         ChildOf(resp_grid),
     ));
     commands.spawn((
-        UiLabel::new(
-            "Resize window: 1 col <480px, 2 cols ≥480, 4 cols ≥640",
-        ),
+        UiLabel::new("Resize window: 1 col <480px, 2 cols ≥480, 4 cols ≥640"),
         class("gallery.note"),
         ChildOf(resp_grid),
     ));

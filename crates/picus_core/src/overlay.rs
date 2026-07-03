@@ -1302,7 +1302,9 @@ pub fn handle_overlay_actions(world: &mut World) {
                         expander: event.entity,
                         is_expanded: expander.is_expanded,
                     };
-                    world.resource::<UiEventQueue>().push_typed(event.entity, changed);
+                    world
+                        .resource::<UiEventQueue>()
+                        .push_typed(event.entity, changed);
                 }
             }
 
@@ -1319,7 +1321,9 @@ pub fn handle_overlay_actions(world: &mut World) {
                         index,
                         label,
                     };
-                    world.resource::<UiEventQueue>().push_typed(trigger, selected);
+                    world
+                        .resource::<UiEventQueue>()
+                        .push_typed(trigger, selected);
                 }
                 if world.get_entity(event.entity).is_ok() {
                     close_context_menu(world, event.entity);
@@ -1637,12 +1641,8 @@ fn overlay_size_for_entity(
         let text_size = item_style.text.size.max(15.0);
         let padding = item_style.layout.padding.max(6.0);
         let labels: Vec<&str> = ctx_menu.items.iter().map(|i| i.label.as_str()).collect();
-        let width = estimate_dropdown_surface_width_px(
-            160.0,
-            labels,
-            text_size,
-            padding * 2.0 + 16.0,
-        );
+        let width =
+            estimate_dropdown_surface_width_px(160.0, labels, text_size, padding * 2.0 + 16.0);
         let height = estimate_dropdown_viewport_height_px(
             ctx_menu.items.len(),
             text_size,
@@ -2005,8 +2005,7 @@ fn spawn_context_menu_at_cursor(
     items: Vec<UiContextMenuItem>,
 ) -> Option<Entity> {
     let cursor_pos = {
-        let mut primary_window_query =
-            world.query_filtered::<&Window, With<PrimaryWindow>>();
+        let mut primary_window_query = world.query_filtered::<&Window, With<PrimaryWindow>>();
         let window = primary_window_query.iter(world).next()?;
         let logical_pos = window.cursor_position()?;
         (logical_pos.x as f64, logical_pos.y as f64)
@@ -2015,10 +2014,7 @@ fn spawn_context_menu_at_cursor(
     let overlay_root = ensure_overlay_root_entity(world);
     let entity = world
         .spawn((
-            UiContextMenu {
-                items,
-                trigger,
-            },
+            UiContextMenu { items, trigger },
             ChildOf(overlay_root),
             OverlayState {
                 is_modal: false,
@@ -2398,15 +2394,13 @@ pub fn handle_context_menu_right_clicks(world: &mut World) {
     };
 
     // Now find the trigger entity from the collected bits
-    let hit_entity = hit_widget_ids
-        .iter()
-        .find_map(|bits| {
-            let entity = Entity::try_from_bits(*bits)?;
-            world
-                .get::<UiContextMenuTrigger>(entity)
-                .is_some()
-                .then_some(entity)
-        });
+    let hit_entity = hit_widget_ids.iter().find_map(|bits| {
+        let entity = Entity::try_from_bits(*bits)?;
+        world
+            .get::<UiContextMenuTrigger>(entity)
+            .is_some()
+            .then_some(entity)
+    });
 
     let Some(trigger_entity) = hit_entity else {
         return;

@@ -2139,11 +2139,7 @@ pub(crate) fn project_time_picker(picker: &UiTimePicker, ctx: ProjectionCtx<'_>)
     .cross_axis_alignment(CrossAxisAlignment::Center)
     .gap(Length::px(6.0));
     Arc::new(apply_direct_widget_style(
-        ecs_button_with_child(
-            ctx.entity,
-            OverlayUiAction::ToggleTimePicker,
-            content,
-        ),
+        ecs_button_with_child(ctx.entity, OverlayUiAction::ToggleTimePicker, content),
         &style,
     ))
 }
@@ -2158,18 +2154,14 @@ pub(crate) fn project_time_picker_panel(
     };
 
     let panel_style = default_panel_style(ctx.world, "overlay.time_picker.panel");
-    let mut cell_style =
-        resolve_style_for_classes(ctx.world, ["overlay.time_picker.cell"]);
+    let mut cell_style = resolve_style_for_classes(ctx.world, ["overlay.time_picker.cell"]);
     if cell_style.layout.padding <= 0.0 {
         cell_style.layout.padding = 4.0;
     }
     let mut selected_style = cell_style.clone();
     selected_style.colors.bg = Some(Color::from_rgb8(0x00, 0x78, 0xD4));
 
-    let anchor_entity = ctx
-        .world
-        .get::<AnchoredTo>(ctx.entity)
-        .map(|a| a.0);
+    let anchor_entity = ctx.world.get::<AnchoredTo>(ctx.entity).map(|a| a.0);
 
     let use_24h = panel_comp.use_24h;
 
@@ -2206,8 +2198,7 @@ pub(crate) fn project_time_picker_panel(
             OverlayUiAction::SelectTimeHour { hour: hour_val },
             label_text,
         );
-        hour_buttons
-            .push(apply_direct_widget_style(btn, s).flex(1.0).into_any_flex());
+        hour_buttons.push(apply_direct_widget_style(btn, s).flex(1.0).into_any_flex());
     }
     let hour_col = flex_col(hour_buttons).gap(Length::px(2.0));
 
@@ -2222,8 +2213,7 @@ pub(crate) fn project_time_picker_panel(
             OverlayUiAction::SelectTimeMinute { minute: m },
             label_text,
         );
-        minute_buttons
-            .push(apply_direct_widget_style(btn, s).flex(1.0).into_any_flex());
+        minute_buttons.push(apply_direct_widget_style(btn, s).flex(1.0).into_any_flex());
     }
     let min_col = flex_col(minute_buttons).gap(Length::px(2.0));
 
@@ -2236,8 +2226,16 @@ pub(crate) fn project_time_picker_panel(
 
     // --- AM/PM selector (12h mode) ---
     if !use_24h {
-        let am_style = if cur_is_pm { &cell_style } else { &selected_style };
-        let pm_style = if cur_is_pm { &selected_style } else { &cell_style };
+        let am_style = if cur_is_pm {
+            &cell_style
+        } else {
+            &selected_style
+        };
+        let pm_style = if cur_is_pm {
+            &selected_style
+        } else {
+            &cell_style
+        };
         let am_btn = ecs_button(
             ctx.entity,
             OverlayUiAction::SelectTimePeriod { is_pm: false },
@@ -2296,8 +2294,7 @@ pub(crate) fn project_time_picker_panel(
 
     Arc::new(
         transformed(crate::views::opaque_hitbox_for_entity(
-            ctx.entity,
-            panel_view,
+            ctx.entity, panel_view,
         ))
         .translate(pos),
     )

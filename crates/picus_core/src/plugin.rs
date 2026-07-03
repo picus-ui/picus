@@ -1,14 +1,16 @@
-use crate::accelerator::{process_keyboard_accelerators, CurrentAcceleratorModifiers};
-use crate::accessibility::{handle_accessibility_actions, sync_accessibility_tree, AccessibilityTree};
+use crate::accelerator::{CurrentAcceleratorModifiers, process_keyboard_accelerators};
+use crate::accessibility::{
+    AccessibilityTree, handle_accessibility_actions, sync_accessibility_tree,
+};
 use crate::bevy_tween::{
-    component_tween_system, BevyTweenRegisterSystems, DefaultTweenPlugins, TweenCorePlugin,
-    TweenSystemSet,
+    BevyTweenRegisterSystems, DefaultTweenPlugins, TweenCorePlugin, TweenSystemSet,
+    component_tween_system,
 };
 use crate::clipboard::{Clipboard, handle_clipboard_events};
-use crate::composition::{apply_composition_effects, sync_composition_visuals, CompositionState};
-use crate::drag_drop::{dispatch_drag_events, track_drag_state, DragState};
+use crate::composition::{CompositionState, apply_composition_effects, sync_composition_visuals};
+use crate::drag_drop::{DragState, dispatch_drag_events, track_drag_state};
 use crate::titlebar_system::{handle_titlebar_actions, sync_titlebar_state};
-use crate::validation::{run_validation, ValidationRegistry};
+use crate::validation::{ValidationRegistry, run_validation};
 use bevy_app::{App, Last, Plugin, PostUpdate, PreUpdate, TaskPoolPlugin, Update};
 use bevy_asset::{AssetApp, AssetEvent, AssetPlugin};
 use bevy_ecs::schedule::IntoScheduleConfigs;
@@ -22,39 +24,39 @@ use bevy_window::{
 };
 
 use crate::{
+    AppBreakpoints, AppPicusExt, OverlayStack, WindowSize,
     components::register_builtin_ui_components,
     events::UiEventQueue,
-    fonts::{collect_bevy_font_assets, sync_fonts_to_xilem, XilemFontBridge},
+    fonts::{XilemFontBridge, collect_bevy_font_assets, sync_fonts_to_xilem},
     i18n::AppI18n,
     overlay::{
-        bubble_ui_pointer_events, ensure_overlay_defaults, ensure_overlay_root,
-        handle_context_menu_right_clicks, handle_global_overlay_clicks, handle_overlay_actions, reparent_overlay_entities,
-        sync_overlay_positions, sync_overlay_stack_lifecycle, OverlayPointerRoutingState,
+        OverlayPointerRoutingState, bubble_ui_pointer_events, ensure_overlay_defaults,
+        ensure_overlay_root, handle_context_menu_right_clicks, handle_global_overlay_clicks,
+        handle_overlay_actions, reparent_overlay_entities, sync_overlay_positions,
+        sync_overlay_stack_lifecycle,
     },
-    projection::{register_core_projectors, UiProjectorRegistry},
+    projection::{UiProjectorRegistry, register_core_projectors},
     runtime::{
-        initialize_masonry_runtime_from_primary_window, inject_bevy_input_into_masonry,
-        paint_masonry_ui, rebuild_masonry_runtime, sync_masonry_ime_state_to_bevy_window,
-        MasonryRuntime,
+        MasonryRuntime, initialize_masonry_runtime_from_primary_window,
+        inject_bevy_input_into_masonry, paint_masonry_ui, rebuild_masonry_runtime,
+        sync_masonry_ime_state_to_bevy_window,
     },
     styling::{
-        activate_debounced_hovers, animate_style_transitions,
+        ActiveStyleSheet, ActiveStyleSheetAsset, ActiveStyleSheetSelectors,
+        ActiveStyleSheetTokenNames, ActiveStyleVariant, AppliedStyleVariant, BaseStyleSheet,
+        ReducedMotion, RegisteredStyleVariants, StyleAssetEventCursor, StyleSheet,
+        StyleSheetRonLoader, activate_debounced_hovers, animate_style_transitions,
         ensure_active_stylesheet_asset_handle, mark_style_dirty,
         register_builtin_style_type_aliases, register_embedded_fluent_theme_variants,
         set_active_style_variant_to_registered_default, sync_active_style_variant,
         sync_style_targets, sync_stylesheet_asset_events, sync_ui_interaction_markers,
-        ActiveStyleSheet, ActiveStyleSheetAsset, ActiveStyleSheetSelectors,
-        ActiveStyleSheetTokenNames, ActiveStyleVariant, AppliedStyleVariant, BaseStyleSheet,
-        ReducedMotion, RegisteredStyleVariants, StyleAssetEventCursor, StyleSheet,
-        StyleSheetRonLoader,
     },
-    synthesize::{sync_focus_state, synthesize_ui, SynthesizedUiViews, UiSynthesisStats},
+    synthesize::{SynthesizedUiViews, UiSynthesisStats, sync_focus_state, synthesize_ui},
     track_window_size,
     widget_actions::{
         handle_scroll_view_wheel, handle_tooltip_hovers, handle_widget_actions,
         sync_scroll_view_layout_geometry, tick_auto_dismiss,
     },
-    AppBreakpoints, AppPicusExt, OverlayStack, WindowSize,
 };
 
 /// Bevy plugin for headless Masonry runtime + ECS projection synthesis.
@@ -186,10 +188,7 @@ impl Plugin for PicusPlugin {
                 Update,
                 sync_focus_state.after(inject_bevy_input_into_masonry),
             )
-            .add_systems(
-                Update,
-                handle_titlebar_actions,
-            )
+            .add_systems(Update, handle_titlebar_actions)
             .add_systems(
                 Update,
                 animate_style_transitions.after(TweenSystemSet::ApplyTween),
@@ -200,14 +199,8 @@ impl Plugin for PicusPlugin {
                     .chain()
                     .before(TweenSystemSet::UpdateInterpolationValue),
             )
-            .add_systems(
-                Update,
-                run_validation,
-            )
-            .add_systems(
-                Update,
-                handle_accessibility_actions,
-            )
+            .add_systems(Update, run_validation)
+            .add_systems(Update, handle_accessibility_actions)
             .add_systems(
                 PostUpdate,
                 (

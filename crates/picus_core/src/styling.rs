@@ -2362,9 +2362,7 @@ pub fn sync_style_targets(world: &mut World) {
                         let end = to_current_component(target);
 
                         if transition.duration <= f32::EPSILON
-                            || world
-                                .get_resource::<ReducedMotion>()
-                                .is_some_and(|r| r.0)
+                            || world.get_resource::<ReducedMotion>().is_some_and(|r| r.0)
                         {
                             ensure_current(world, entity, end);
                             clear_style_managed_tween(world, entity);

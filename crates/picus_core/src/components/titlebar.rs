@@ -1,11 +1,9 @@
 use std::sync::Arc;
 
 use bevy_ecs::prelude::*;
-use picus_view::view::{flex_row, label, AnyFlexChild, FlexExt as _, FlexSpacer};
+use picus_view::view::{AnyFlexChild, FlexExt as _, FlexSpacer, flex_row, label};
 
-use crate::{
-    components::UiComponentTemplate, text_button, ProjectionCtx, UiView,
-};
+use crate::{ProjectionCtx, UiView, components::UiComponentTemplate, text_button};
 
 /// Title bar icon type.
 #[derive(Debug, Clone)]

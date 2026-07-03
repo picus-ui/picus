@@ -27,9 +27,8 @@
 
 use picus_core::{
     AppI18n, AppPicusExt, InlineStyle, LayoutStyle, NavigationViewItem, PicusPlugin,
-    SyncAssetSource, SyncTextSource, UiAvatar, UiBadge,
-    UiFlexColumn, UiFlexRow, UiLabel, UiNavigationView, UiRoot, UiScrollView, UiSearch,
-    UiThemePicker, avatar_sizes,
+    SyncAssetSource, SyncTextSource, UiAvatar, UiBadge, UiFlexColumn, UiFlexRow, UiLabel,
+    UiNavigationView, UiRoot, UiScrollView, UiSearch, UiThemePicker, avatar_sizes,
     bevy_app::{App, Startup, Update},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     run_app_with_window_options,
@@ -478,7 +477,8 @@ mod tests {
             .get_widget(widget_id)
             .expect("widget id should resolve in render tree")
             .ctx()
-            .border_box().size()
+            .border_box()
+            .size()
             .height
     }
 }
