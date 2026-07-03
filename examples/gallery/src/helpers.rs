@@ -16,6 +16,7 @@ pub fn class(name: &str) -> StyleClass {
 }
 
 /// Create multiple class names for an entity.
+#[allow(dead_code)]
 pub fn classes(names: &[&str]) -> StyleClass {
     StyleClass(names.iter().map(|name| (*name).to_string()).collect())
 }
@@ -63,6 +64,7 @@ pub fn placeholder(commands: &mut Commands, parent: Entity, title: &str, reason:
 }
 
 /// Add a category section header with divider in the sidebar.
+#[allow(dead_code)]
 pub fn sidebar_category_header(commands: &mut Commands, parent: Entity, label: &str) {
     commands.spawn((
         UiLabel::new(label),

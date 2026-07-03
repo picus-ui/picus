@@ -26,8 +26,9 @@
 //! | `gallery.ron` theme    | Fluent UI `makeStyles` tokens      |
 
 use picus_core::{
-    AppPicusExt, InlineStyle, LayoutStyle, PicusPlugin, UiAvatar, UiBadge, UiButton, UiFlexColumn,
-    UiFlexRow, UiLabel, UiRoot, UiScrollView, UiSearch, UiTabBar, UiThemePicker, avatar_sizes,
+    AppPicusExt, InlineStyle, LayoutStyle, NavigationViewItem, PicusPlugin, UiAvatar, UiBadge,
+    UiFlexColumn, UiFlexRow, UiLabel, UiNavigationView, UiRoot, UiScrollView, UiSearch,
+    UiThemePicker, avatar_sizes,
     bevy_app::{App, Startup, Update},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     run_app_with_window_options,
@@ -42,7 +43,7 @@ mod state;
 mod views;
 
 use events::drain_gallery_events;
-use helpers::{PAGE_CONTENT, PAGE_VIEWPORT, class, classes, sidebar_category_header};
+use helpers::{PAGE_CONTENT, PAGE_VIEWPORT, class};
 use state::{GalleryPage, GalleryRuntime, GalleryState};
 use views::{GalleryRoot, GalleryStatus};
 
@@ -59,9 +60,10 @@ fn setup_gallery(mut commands: Commands) {
 
     commands.spawn((GalleryStatus, class("gallery.status"), ChildOf(root)));
 
+    // --- Body: UiNavigationView handles sidebar + content area layout ---
     let body = commands
         .spawn((
-            UiFlexRow,
+            UiFlexColumn,
             class("gallery.body"),
             InlineStyle {
                 layout: LayoutStyle {
@@ -74,121 +76,79 @@ fn setup_gallery(mut commands: Commands) {
         ))
         .id();
 
-    // --- Sidebar with Fluent UI-style category navigation ---
-    let sidebar = commands
-        .spawn((UiFlexColumn, class("gallery.sidebar"), ChildOf(body)))
-        .id();
+    // Build navigation items from all gallery pages (with Lucide icon glyphs)
+    let nav_items: Vec<NavigationViewItem> = GalleryPage::ALL
+        .iter()
+        .map(|page| {
+            NavigationViewItem::new(page.label())
+                .with_icon(page.icon().chars().next().unwrap_or('?'))
+        })
+        .collect();
 
-    let mut nav_buttons = Vec::new();
-
-    for (i, page) in GalleryPage::ALL.iter().enumerate() {
-        // Check if we need to insert a category header
-        if let Some(cat) = GalleryPage::CATEGORIES
-            .iter()
-            .find(|cat| cat.first_page_index == i)
-        {
-            sidebar_category_header(&mut commands, sidebar, cat.label);
-        }
-
-        let names = if *page == GalleryPage::Buttons {
-            vec!["gallery.sidebar_button", "gallery.sidebar_button.active"]
-        } else {
-            vec!["gallery.sidebar_button"]
-        };
-
-        let button_text = format!("{}  {}", page.icon(), page.label());
-        let button = commands
-            .spawn((
-                UiButton::new(button_text),
-                classes(&names),
-                ChildOf(sidebar),
-            ))
-            .id();
-        nav_buttons.push(button);
-    }
-
-    // --- Main content area (flex_grow:1 to fill remaining row width) ---
-    let content_area = commands
+    let nav_view = commands
         .spawn((
-            UiFlexColumn,
-            class("gallery.content_area"),
-            InlineStyle {
-                layout: LayoutStyle {
-                    flex_grow: Some(1.0),
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
+            UiNavigationView::new(nav_items),
+            class("gallery.nav_view"),
             ChildOf(body),
         ))
         .id();
 
-    // Page tab bar (hidden headers) for content switching
-    let pages_tab_bar = commands
-        .spawn((
-            UiTabBar::new(GalleryPage::ALL.map(GalleryPage::label)).with_hidden_headers(),
-            class("gallery.content_scroll"),
-            ChildOf(content_area),
-        ))
-        .id();
-
-    // Spawn all pages
+    // Spawn all pages as children of the navigation view
     let open_dialog_btn = spawn_page(
         &mut commands,
-        pages_tab_bar,
+        nav_view,
         GalleryPage::Buttons,
         pages::buttons::spawn_buttons_page,
     );
     let runtime_refs = GalleryRuntime {
-        pages_tab_bar,
-        nav_buttons,
+        nav_view,
         search_input: Entity::PLACEHOLDER,
         open_dialog_btn,
         persistent_toast_btn: spawn_page(
             &mut commands,
-            pages_tab_bar,
+            nav_view,
             GalleryPage::Inputs,
             pages::inputs::spawn_inputs_page,
         ),
         success_toast_btn: spawn_page(
             &mut commands,
-            pages_tab_bar,
+            nav_view,
             GalleryPage::Selection,
             pages::selection::spawn_selection_page,
         ),
         warning_toast_btn: spawn_page(
             &mut commands,
-            pages_tab_bar,
+            nav_view,
             GalleryPage::WindowMenu,
             pages::window_menu::spawn_window_menu_page,
         ),
         error_toast_btn: spawn_page(
             &mut commands,
-            pages_tab_bar,
+            nav_view,
             GalleryPage::MessageBox,
             pages::message_box::spawn_message_box_page,
         ),
         prompt_dialog_btn: spawn_page(
             &mut commands,
-            pages_tab_bar,
+            nav_view,
             GalleryPage::Lists,
             pages::lists::spawn_lists_page,
         ),
         native_message_btn: spawn_page(
             &mut commands,
-            pages_tab_bar,
+            nav_view,
             GalleryPage::GridView,
             pages::grid_view::spawn_grid_view_page,
         ),
         popover_dialog_btn: spawn_page(
             &mut commands,
-            pages_tab_bar,
+            nav_view,
             GalleryPage::Panels,
             pages::panels::spawn_panels_page,
         ),
         burst_placeholder_btn: spawn_page(
             &mut commands,
-            pages_tab_bar,
+            nav_view,
             GalleryPage::Layout,
             pages::layout::spawn_layout_page,
         ),
@@ -196,37 +156,37 @@ fn setup_gallery(mut commands: Commands) {
 
     spawn_page(
         &mut commands,
-        pages_tab_bar,
+        nav_view,
         GalleryPage::Typography,
         pages::typography::spawn_typography_page,
     );
     spawn_page(
         &mut commands,
-        pages_tab_bar,
+        nav_view,
         GalleryPage::Media,
         pages::media::spawn_media_page,
     );
     spawn_page(
         &mut commands,
-        pages_tab_bar,
+        nav_view,
         GalleryPage::Shapes,
         pages::shapes::spawn_shapes_page,
     );
     spawn_page(
         &mut commands,
-        pages_tab_bar,
+        nav_view,
         GalleryPage::Icons,
         pages::icons::spawn_icons_page,
     );
     spawn_page(
         &mut commands,
-        pages_tab_bar,
+        nav_view,
         GalleryPage::Transitions,
         pages::transitions::spawn_transitions_page,
     );
     spawn_page(
         &mut commands,
-        pages_tab_bar,
+        nav_view,
         GalleryPage::Overlay,
         pages::overlay::spawn_overlay_page,
     );
@@ -267,7 +227,7 @@ fn spawn_top_bar(commands: &mut Commands, root: Entity) {
         .spawn((UiFlexRow, class("gallery.search_row"), ChildOf(top)))
         .id();
     commands.spawn((
-        UiSearch::new("Find a component…"),
+        UiSearch::new("Find a component\u{2026}"),
         class("gallery.search"),
         ChildOf(search_row),
     ));
@@ -280,10 +240,10 @@ fn spawn_top_bar(commands: &mut Commands, root: Entity) {
     commands.spawn((UiBadge::new("FBA parity"), ChildOf(tools)));
 }
 
-/// Spawn a single gallery page inside the pages tab bar.
+/// Spawn a single gallery page inside the navigation view.
 fn spawn_page(
     commands: &mut Commands,
-    pages_tab_bar: Entity,
+    nav_view: Entity,
     page: GalleryPage,
     build: fn(&mut Commands, Entity) -> Entity,
 ) -> Entity {
@@ -293,7 +253,7 @@ fn spawn_page(
                 .with_vertical_scrollbar(true)
                 .with_horizontal_scrollbar(false),
             class("gallery.content_scroll"),
-            ChildOf(pages_tab_bar),
+            ChildOf(nav_view),
         ))
         .id();
     let page_col = commands

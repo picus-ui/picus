@@ -13,9 +13,10 @@ use crate::{
     UiCheckboxChanged, UiDataTable, UiDataTableSelectionChanged, UiDataTableSortChanged,
     UiListSelectionMode, UiListView, UiListViewSelectionChanged, UiMultilineTextInput,
     UiMultilineTextInputChanged, UiOverlayRoot, UiPasswordInput, UiPasswordInputChanged,
-    UiRadioGroup, UiRadioGroupChanged, UiRating, UiRatingChanged, UiScrollView,
-    UiScrollViewChanged, UiSlider, UiSliderChanged, UiSwitch, UiSwitchChanged, UiTabBar,
-    UiTabChanged, UiTextInput, UiTextInputChanged, UiTooltip, UiTreeNode, UiTreeNodeToggled,
+    UiNavigationSelectionChanged, UiNavigationView, UiRadioGroup, UiRadioGroupChanged, UiRating,
+    UiRatingChanged, UiScrollView, UiScrollViewChanged, UiSlider, UiSliderChanged, UiSwitch,
+    UiSwitchChanged, UiTabBar, UiTabChanged, UiTextInput, UiTextInputChanged, UiTooltip,
+    UiTreeNode, UiTreeNodeToggled,
     events::UiEventQueue,
 };
 
@@ -29,6 +30,11 @@ pub enum WidgetUiAction {
     SelectRadioItem { group: Entity, index: usize },
     /// Switch the active tab in a tab bar.
     SelectTab { bar: Entity, index: usize },
+    /// Select a navigation item in a [`UiNavigationView`].
+    SelectNavigationItem {
+        nav: Entity,
+        index: usize,
+    },
     /// Expand or collapse a tree node.
     ToggleTreeNode { node: Entity },
     /// Toggle a checkbox.
@@ -323,6 +329,24 @@ pub fn handle_widget_actions(world: &mut World) {
 
                 if let Some(ev) = changed {
                     world.resource::<UiEventQueue>().push_typed(bar, ev);
+                }
+            }
+
+            WidgetUiAction::SelectNavigationItem { nav, index } => {
+                if world.get_entity(nav).is_err() {
+                    continue;
+                }
+
+                let changed =
+                    if let Some(mut nav_view) = world.get_mut::<UiNavigationView>(nav) {
+                        nav_view.selected = index;
+                        Some(UiNavigationSelectionChanged { nav, selected: index })
+                    } else {
+                        None
+                    };
+
+                if let Some(ev) = changed {
+                    world.resource::<UiEventQueue>().push_typed(nav, ev);
                 }
             }
 

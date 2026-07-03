@@ -26,6 +26,7 @@ mod list_view;
 mod menu;
 mod message_bar;
 mod multiline_text_input;
+mod navigation_view;
 mod password_input;
 mod popover;
 mod progress_bar;
@@ -68,6 +69,7 @@ pub use list_view::*;
 pub use menu::*;
 pub use message_bar::*;
 pub use multiline_text_input::*;
+pub use navigation_view::*;
 pub use password_input::*;
 pub use popover::*;
 pub use progress_bar::*;
@@ -198,47 +200,21 @@ pub fn register_builtin_ui_components(app: &mut App) {
         .register_ui_component::<tab_bar::UiTabBar>()
         .register_ui_component::<list_view::UiListView>()
         .register_ui_component::<tree_node::UiTreeNode>()
+        .register_ui_component::<split_pane::UiSplitPane>()
+        .register_ui_component::<group_box::UiGroupBox>()
+        .register_ui_component::<spinner::UiSpinner>()
         .register_ui_component::<table::UiTable>()
         .register_ui_component::<data_table::UiDataTable>()
         .register_ui_component::<menu::UiMenuBar>()
         .register_ui_component::<menu::UiMenuBarItem>()
         .register_ui_component::<menu::UiMenuItemPanel>()
         .register_ui_component::<tooltip::UiTooltip>()
-        .register_ui_component::<spinner::UiSpinner>()
+        .register_ui_component::<toast::UiToast>()
         .register_ui_component::<color_picker::UiColorPicker>()
         .register_ui_component::<color_picker::UiColorPickerPanel>()
-        .register_ui_component::<group_box::UiGroupBox>()
-        .register_ui_component::<split_pane::UiSplitPane>()
-        .register_ui_component::<toolbar::UiToolbar>()
-        .register_ui_component::<toast::UiToast>()
         .register_ui_component::<date_picker::UiDatePicker>()
         .register_ui_component::<date_picker::UiDatePickerPanel>()
         .register_ui_component::<theme_picker::UiThemePicker>()
         .register_ui_component::<theme_picker::UiThemePickerMenu>()
-        // Responsive layout components
-        .register_ui_component::<crate::UiResponsiveRow>()
-        .register_ui_component::<crate::UiVisibleResponsive>()
-        .register_ui_component::<crate::UiResponsiveGrid>();
-}
-
-// ---------------------------------------------------------------------------
-// UiComponentTemplate implementations for responsive layout types
-// ---------------------------------------------------------------------------
-
-impl UiComponentTemplate for crate::UiResponsiveRow {
-    fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-        crate::projection::layout::project_responsive_row(component, ctx)
-    }
-}
-
-impl UiComponentTemplate for crate::UiVisibleResponsive {
-    fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-        crate::projection::layout::project_visible_responsive(component, ctx)
-    }
-}
-
-impl UiComponentTemplate for crate::UiResponsiveGrid {
-    fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-        crate::projection::layout::project_responsive_grid(component, ctx)
-    }
+        .register_ui_component::<navigation_view::UiNavigationView>();
 }

@@ -9,9 +9,10 @@ use picus_core::{
     BuiltinUiAction, OverlayPlacement, ToastKind, UiCheckboxChanged, UiColorPickerChanged,
     UiComboBoxChanged, UiDataTableSelectionChanged, UiDataTableSortChanged, UiDatePickerChanged,
     UiDialog, UiEventQueue, UiListViewSelectionChanged, UiMenuItemSelected,
-    UiMultilineTextInputChanged, UiPasswordInputChanged, UiRadioGroupChanged, UiScrollViewChanged,
-    UiSliderChanged, UiSwitchChanged, UiTabBar, UiTabChanged, UiTextInputChanged,
-    UiThemePickerChanged, UiToast, UiTreeNodeToggled, spawn_in_overlay_root,
+    UiMultilineTextInputChanged, UiNavigationSelectionChanged, UiNavigationView,
+    UiPasswordInputChanged, UiRadioGroupChanged, UiScrollViewChanged, UiSliderChanged,
+    UiSwitchChanged, UiTabChanged, UiTextInputChanged, UiThemePickerChanged,
+    UiToast, UiTreeNodeToggled, spawn_in_overlay_root,
 };
 
 use crate::state::{GalleryPage, GalleryRuntime, GalleryState};
@@ -25,6 +26,22 @@ pub fn drain_gallery_events(world: &mut World) {
         return;
     };
 
+    // --- Navigation selection (handled by UiNavigationView) ---
+    for event in world
+        .resource_mut::<UiEventQueue>()
+        .drain_actions::<UiNavigationSelectionChanged>()
+    {
+        set_gallery_page(world, &rt, event.action.selected);
+        update_status(
+            world,
+            format!(
+                "Navigation: switched to {}",
+                GalleryPage::ALL[event.action.selected].label()
+            ),
+        );
+    }
+
+    // --- Button actions (dialog triggers, toast triggers, etc.) ---
     let builtin_events = world
         .resource_mut::<UiEventQueue>()
         .drain_actions::<BuiltinUiAction>();
@@ -33,20 +50,7 @@ pub fn drain_gallery_events(world: &mut World) {
             continue;
         }
 
-        if let Some(index) = rt
-            .nav_buttons
-            .iter()
-            .position(|button| *button == event.entity)
-        {
-            set_gallery_page(world, &rt, index);
-            update_status(
-                world,
-                format!(
-                    "Navigation: switched to {}",
-                    GalleryPage::ALL[index].label()
-                ),
-            );
-        } else if event.entity == rt.open_dialog_btn {
+        if event.entity == rt.open_dialog_btn {
             spawn_dialog(
                 world,
                 "Button Dialog",
@@ -327,7 +331,7 @@ pub fn drain_gallery_events(world: &mut World) {
         .resource_mut::<UiEventQueue>()
         .drain_actions::<UiTabChanged>()
     {
-        if event.action.bar != rt.pages_tab_bar {
+        if event.action.bar != rt.nav_view {
             update_status(
                 world,
                 format!(
@@ -354,21 +358,10 @@ pub fn drain_gallery_events(world: &mut World) {
     }
 }
 
-/// Switch the active gallery page programmatically (by sidebar navigation).
+/// Switch the active gallery page programmatically (by navigation selection).
 fn set_gallery_page(world: &mut World, rt: &GalleryRuntime, page: usize) {
-    if let Some(mut tab_bar) = world.get_mut::<UiTabBar>(rt.pages_tab_bar) {
-        tab_bar.active = page.min(tab_bar.tabs.len().saturating_sub(1));
-    }
-
-    for (index, button) in rt.nav_buttons.iter().copied().enumerate() {
-        let class_list = if index == page {
-            crate::helpers::classes(&["gallery.sidebar_button", "gallery.sidebar_button.active"])
-        } else {
-            crate::helpers::class("gallery.sidebar_button")
-        };
-        if world.get_entity(button).is_ok() {
-            world.entity_mut(button).insert(class_list);
-        }
+    if let Some(mut nav_view) = world.get_mut::<UiNavigationView>(rt.nav_view) {
+        nav_view.selected = page.min(nav_view.items.len().saturating_sub(1));
     }
 
     if let Some(mut state) = world.get_resource_mut::<GalleryState>() {

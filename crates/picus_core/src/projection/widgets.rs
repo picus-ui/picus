@@ -12,8 +12,8 @@ use masonry_core::kurbo::{Axis, BezPath, Circle, Line, Point, Rect, Stroke};
 use masonry_core::layout::{Dim, Length};
 use picus_view::view::{
     CrossAxisAlignment, FlexExt as _, MainAxisAlignment, canvas, divider_h, divider_v, flex_col,
-    flex_row, label, radio_group as xilem_radio_group, sized_box, spinner, split, transformed,
-    zstack,
+    flex_item, flex_row, label, radio_group as xilem_radio_group, sized_box, spinner, split,
+    transformed, zstack,
 };
 
 use crate::{
@@ -23,10 +23,11 @@ use crate::{
         PartScrollViewport, ScrollAxis, SplitDirection, ToastKind, UiBreadcrumbItem, UiCanvas,
         UiCanvasCommand, UiCanvasPathCommand, UiCanvasPosition, UiColorPicker, UiColorPickerPanel,
         UiDataTable, UiDatePicker, UiDatePickerPanel, UiDivider, UiGroupBox, UiListSelectionMode,
-        UiListView, UiMenuBar, UiMenuBarItem, UiMenuItemPanel, UiMessageBar, UiRadioGroup,
-        UiScrollView, UiSearch, UiSortDirection, UiSpinner, UiSplitPane, UiTabBar, UiTable,
-        UiToast, UiTooltip, UiTreeNode,
+        UiListView, UiMenuBar, UiMenuBarItem, UiMenuItemPanel, UiMessageBar, UiNavigationView,
+        UiRadioGroup, UiScrollView, UiSearch, UiSortDirection, UiSpinner, UiSplitPane, UiTabBar,
+        UiTable, UiToast, UiTooltip, UiTreeNode,
     },
+    icons::LUCIDE_FONT_FAMILY,
     overlay::OverlayUiAction,
     styling::{
         ResolvedStyle, apply_direct_widget_style, apply_flex_alignment, apply_label_style,
@@ -1938,6 +1939,127 @@ pub(crate) fn project_search(search: &UiSearch, ctx: ProjectionCtx<'_>) -> UiVie
         flex_row(vec![icon.into_any_flex(), placeholder.into_any_flex()])
             .gap(masonry_core::layout::Length::px(style.layout.gap)),
     );
+
+    Arc::new(apply_widget_style(row, &style))
+}
+
+// ---------------------------------------------------------------------------
+// Navigation View
+// ---------------------------------------------------------------------------
+
+/// Project a [`UiNavigationView`] into a sidebar + content layout.
+pub(crate) fn project_navigation_view(
+    nav: &UiNavigationView,
+    ctx: ProjectionCtx<'_>,
+) -> UiView {
+    let style = resolve_style(ctx.world, ctx.entity);
+    let sidebar_style = resolve_style_for_classes(ctx.world, ["nav.sidebar"]);
+    let mut base_item_style = resolve_style_for_classes(ctx.world, ["nav.item"]);
+    let mut active_item_style =
+        resolve_style_for_classes(ctx.world, ["nav.item", "nav.item.active"]);
+
+    // Default padding / spacing if the stylesheet didn't set any.
+    if base_item_style.layout.padding <= 0.0 {
+        base_item_style.layout.padding = 10.0;
+    }
+    if base_item_style.layout.gap <= 0.0 {
+        base_item_style.layout.gap = 6.0;
+    }
+    if active_item_style.layout.padding <= 0.0 {
+        active_item_style.layout.padding = 10.0;
+    }
+    if active_item_style.colors.bg.is_none() {
+        active_item_style.colors.bg = Some(Color::from_rgb8(0x33, 0x33, 0x33));
+    }
+    // Smooth background transition for active item switching.
+    if active_item_style.transition.is_none() {
+        active_item_style.transition = Some(crate::styling::StyleTransition {
+            duration: 0.15,
+            easing: None,
+        });
+    }
+
+    // --- Build sidebar items ---
+    let item_views: Vec<_> = nav
+        .items
+        .iter()
+        .enumerate()
+        .map(|(i, item)| {
+            let is_active = i == nav.selected;
+            let item_style = if is_active {
+                &active_item_style
+            } else {
+                &base_item_style
+            };
+
+            // Optional icon glyph (Lucide font)
+            let icon_view: Option<UiView> = item.icon.map(|glyph| -> UiView {
+                let mut icon_style = ResolvedStyle::default();
+                icon_style.colors.text = item_style.colors.text;
+                icon_style.text.size = item_style.text.size.max(14.0);
+                icon_style.font_family = Some(vec![LUCIDE_FONT_FAMILY.to_string()]);
+                Arc::new(
+                    sized_box(apply_label_style(label(glyph.to_string()), &icon_style))
+                        .width(Dim::Fixed(Length::px(20.0)))
+                        .height(Dim::Fixed(Length::px(20.0))),
+                ) as UiView
+            });
+
+            // Label text
+            let label_view: UiView =
+                Arc::new(apply_label_style(label(item.label.clone()), item_style));
+
+            // Combine icon + label into a row
+            let content: UiView = if let Some(icon) = icon_view {
+                Arc::new(
+                    flex_row(vec![icon.into_any_flex(), label_view.into_any_flex()])
+                        .cross_axis_alignment(CrossAxisAlignment::Center)
+                        .gap(Length::px(8.0)),
+                )
+            } else {
+                label_view
+            };
+
+            // Wrap in a clickable button that emits SelectNavigationItem
+            let button = apply_direct_widget_style(
+                ecs_button_with_child(
+                    ctx.entity,
+                    WidgetUiAction::SelectNavigationItem {
+                        nav: ctx.entity,
+                        index: i,
+                    },
+                    content,
+                ),
+                item_style,
+            );
+            button.into_any_flex()
+        })
+        .collect();
+
+    // --- Sidebar column ---
+    let sidebar: UiView = Arc::new(apply_widget_style(
+        flex_col(item_views).gap(Length::px(0.0)),
+        &sidebar_style,
+    ));
+
+    // --- Content area: show only the selected child ---
+    let content: UiView = ctx
+        .children
+        .get(nav.selected)
+        .cloned()
+        .unwrap_or_else(|| Arc::new(label("")));
+
+    let content_area = flex_col(vec![content.into_any_flex()])
+        .width(Dim::Stretch)
+        .height(Dim::Stretch);
+
+    // --- Layout: sidebar (fixed width) | content (flex-grow: 1) ---
+    let row = flex_row(vec![
+        sidebar.into_any_flex(),
+        flex_item(content_area, 1.0).into_any_flex(),
+    ])
+    .width(Dim::Stretch)
+    .height(Dim::Stretch);
 
     Arc::new(apply_widget_style(row, &style))
 }

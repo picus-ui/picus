@@ -10,6 +10,7 @@
 use bevy_ecs::prelude::*;
 
 /// A sidebar category heading that groups related pages.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NavCategory {
     pub label: &'static str,
@@ -59,6 +60,7 @@ impl GalleryPage {
 
     /// Sidebar category groups — matches the Fluent UI pattern of
     /// grouping related docs under a section heading.
+    #[allow(dead_code)]
     pub const CATEGORIES: &'static [NavCategory] = &[
         NavCategory {
             label: "Input",
@@ -190,8 +192,7 @@ impl Default for GalleryState {
 /// Runtime entity references for interactive controls across all pages.
 #[derive(Resource, Debug, Clone)]
 pub struct GalleryRuntime {
-    pub pages_tab_bar: Entity,
-    pub nav_buttons: Vec<Entity>,
+    pub nav_view: Entity,
     #[allow(dead_code)]
     pub search_input: Entity,
     pub open_dialog_btn: Entity,

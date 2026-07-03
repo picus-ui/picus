@@ -15,10 +15,10 @@ use crate::ecs::{
     UiBadge, UiButton, UiCanvas, UiCheckbox, UiColorPicker, UiColorPickerPanel, UiComboBox,
     UiDataTable, UiDatePicker, UiDatePickerPanel, UiDialog, UiDropdownMenu, UiFlexColumn,
     UiFlexRow, UiGrid, UiGroupBox, UiImage, UiLabel, UiListView, UiMenuBar, UiMenuBarItem,
-    UiMenuItemPanel, UiMultilineTextInput, UiOverlayRoot, UiPasswordInput, UiPopover,
-    UiProgressBar, UiRadioGroup, UiResponsiveGrid, UiResponsiveRow, UiRoot, UiScrollView, UiSlider,
-    UiSpinner, UiSplitPane, UiSwitch, UiTabBar, UiTable, UiTextInput, UiThemePicker,
-    UiThemePickerMenu, UiToast, UiTooltip, UiTreeNode, UiVisibleResponsive,
+    UiMenuItemPanel, UiMultilineTextInput, UiNavigationView, UiOverlayRoot, UiPasswordInput,
+    UiPopover, UiProgressBar, UiRadioGroup, UiResponsiveGrid, UiResponsiveRow, UiRoot,
+    UiScrollView, UiSlider, UiSpinner, UiSplitPane, UiSwitch, UiTabBar, UiTable, UiTextInput,
+    UiThemePicker, UiThemePickerMenu, UiToast, UiTooltip, UiTreeNode, UiVisibleResponsive,
 };
 
 /// Register non-UI-component foundational projectors.
@@ -78,5 +78,6 @@ pub fn register_builtin_projectors(registry: &mut UiProjectorRegistry) {
         .register_component::<UiDatePicker>(widgets::project_date_picker)
         .register_component::<UiDatePickerPanel>(widgets::project_date_picker_panel)
         .register_component::<UiThemePicker>(theme_picker::project_theme_picker)
-        .register_component::<UiThemePickerMenu>(theme_picker::project_theme_picker_menu);
+        .register_component::<UiThemePickerMenu>(theme_picker::project_theme_picker_menu)
+        .register_component::<UiNavigationView>(widgets::project_navigation_view);
 }
