@@ -69,6 +69,7 @@ pub struct StyleDirty;
 pub struct InteractionState {
     pub hovered: bool,
     pub pressed: bool,
+    pub focused: bool,
 }
 
 /// Delays entry into the hovered pseudo-class to reduce hover flicker.
@@ -176,6 +177,14 @@ pub struct StyleTransition {
     pub easing: Option<EaseKind>,
 }
 
+/// System accessibility preference: has the user requested reduced motion?
+///
+/// When set to `true`, all UI transitions are skipped (colors jump to their
+/// target values instantly).  This mirrors the CSS
+/// `@media (prefers-reduced-motion: reduce)` behaviour.
+#[derive(Resource, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ReducedMotion(pub bool);
+
 /// Cached resolved style used by projectors.
 #[derive(Component, Debug, Clone, Default, PartialEq)]
 pub struct ComputedStyle {
@@ -236,6 +245,7 @@ struct StyleManagedTween;
 pub enum PseudoClass {
     Hovered,
     Pressed,
+    Focused,
 }
 
 /// CSS-like selector AST for style rules.
@@ -1357,6 +1367,9 @@ fn selector_matches_entity(world: &World, entity: Entity, selector: &Selector) -
         Selector::PseudoClass(PseudoClass::Pressed) => world
             .get::<InteractionState>(entity)
             .is_some_and(|state| state.pressed),
+        Selector::PseudoClass(PseudoClass::Focused) => world
+            .get::<InteractionState>(entity)
+            .is_some_and(|state| state.focused),
         Selector::And(selectors) => selectors
             .iter()
             .all(|selector| selector_matches_entity(world, entity, selector)),
@@ -1385,6 +1398,9 @@ fn selector_matches_class_context(
         Selector::PseudoClass(PseudoClass::Pressed) => entity
             .and_then(|entity| world.get::<InteractionState>(entity))
             .is_some_and(|state| state.pressed),
+        Selector::PseudoClass(PseudoClass::Focused) => entity
+            .and_then(|entity| world.get::<InteractionState>(entity))
+            .is_some_and(|state| state.focused),
         Selector::And(selectors) => selectors
             .iter()
             .all(|selector| selector_matches_class_context(world, entity, selector, has_class)),
@@ -2333,7 +2349,11 @@ pub fn sync_style_targets(world: &mut World) {
 
                         let end = to_current_component(target);
 
-                        if transition.duration <= f32::EPSILON {
+                        if transition.duration <= f32::EPSILON
+                            || world
+                                .get_resource::<ReducedMotion>()
+                                .is_some_and(|r| r.0)
+                        {
                             ensure_current(world, entity, end);
                             clear_style_managed_tween(world, entity);
                         } else {

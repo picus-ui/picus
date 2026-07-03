@@ -183,7 +183,7 @@ fn active_style_variant_switches_automatically_without_install_calls() {
 
     assert_eq!(
         light_surface,
-        crate::TokenValue::Color(crate::xilem::Color::from_rgb8(0xFA, 0xF9, 0xF8))
+        crate::TokenValue::Color(crate::xilem::Color::from_rgb8(0xFF, 0xFF, 0xFF))
     );
 
     let applied_variant = app.world().resource::<crate::AppliedStyleVariant>();
@@ -207,7 +207,7 @@ fn active_style_variant_light_overrides_surface_bg_token() {
     assert!(matches!(
         token,
         crate::TokenValue::Color(color)
-            if *color == crate::xilem::Color::from_rgb8(0xFA, 0xF9, 0xF8)
+            if *color == crate::xilem::Color::from_rgb8(0xFF, 0xFF, 0xFF)
     ));
 }
 
@@ -249,7 +249,7 @@ fn active_style_variant_api_switches_between_dark_light_and_high_contrast() {
         .expect("surface-bg should exist after light activation");
     assert_eq!(
         light_surface,
-        crate::TokenValue::Color(crate::xilem::Color::from_rgb8(0xFA, 0xF9, 0xF8))
+        crate::TokenValue::Color(crate::xilem::Color::from_rgb8(0xFF, 0xFF, 0xFF))
     );
 
     crate::set_active_style_variant_by_name(app.world_mut(), "dark");
@@ -841,10 +841,7 @@ fn resolve_style_for_entity_classes_applies_hover_pseudo_state() {
     world.insert_resource(sheet);
 
     let entity = world
-        .spawn((InteractionState {
-            hovered: true,
-            pressed: false,
-        },))
+        .spawn((InteractionState { hovered: true, pressed: false, focused: false },))
         .id();
     let resolved = resolve_style_for_entity_classes(&world, entity, ["test.button"]);
 
@@ -912,10 +909,7 @@ fn selector_and_rule_applies_hover_and_pressed_states() {
     let entity = world
         .spawn((
             crate::StyleClass(vec!["test.button".to_string()]),
-            InteractionState {
-                hovered: true,
-                pressed: true,
-            },
+            InteractionState { hovered: true, pressed: true, focused: false },
         ))
         .id();
 
@@ -1133,10 +1127,7 @@ fn pointer_left_does_not_clear_pressed_marker() {
     world.insert_resource(bevy_time::Time::<()>::default());
 
     let entity = world
-        .spawn((crate::InteractionState {
-            hovered: true,
-            pressed: true,
-        },))
+        .spawn((crate::InteractionState { hovered: true, pressed: true, focused: false },))
         .id();
 
     world
@@ -3980,10 +3971,7 @@ fn tooltip_hover_spawns_and_despawns_overlay_entity() {
         .spawn((
             crate::UiButton::new("Hover me"),
             crate::HasTooltip::new("Tooltip text"),
-            crate::InteractionState {
-                hovered: true,
-                pressed: false,
-            },
+            crate::InteractionState { hovered: true, pressed: false, focused: false },
             ChildOf(root),
         ))
         .id();
@@ -4011,10 +3999,7 @@ fn tooltip_hover_spawns_and_despawns_overlay_entity() {
 
     app.world_mut()
         .entity_mut(source)
-        .insert(crate::InteractionState {
-            hovered: false,
-            pressed: false,
-        });
+        .insert(crate::InteractionState { hovered: false, pressed: false, focused: false });
     app.update();
 
     let mut tooltip_query = app.world_mut().query::<&crate::UiTooltip>();

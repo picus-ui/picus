@@ -19,6 +19,13 @@ pub enum PicusIcon {
     CircleDot,
     X,
     SunMoon,
+    Plus,
+    Search,
+    Edit,
+    Delete,
+    Settings,
+    ArrowLeft,
+    ArrowRight,
 }
 
 impl PicusIcon {
@@ -33,6 +40,13 @@ impl PicusIcon {
             Self::CircleDot => lucide_icons::Icon::CircleDot,
             Self::X => lucide_icons::Icon::X,
             Self::SunMoon => lucide_icons::Icon::SunMoon,
+            Self::Plus => lucide_icons::Icon::Plus,
+            Self::Search => lucide_icons::Icon::Search,
+            Self::Edit => lucide_icons::Icon::Edit,
+            Self::Delete => lucide_icons::Icon::Trash2,
+            Self::Settings => lucide_icons::Icon::Settings,
+            Self::ArrowLeft => lucide_icons::Icon::ArrowLeft,
+            Self::ArrowRight => lucide_icons::Icon::ArrowRight,
         }
     }
 

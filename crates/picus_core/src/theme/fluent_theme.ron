@@ -1,3 +1,5 @@
+// Border hover/pressed tokens (matching Fluent v9 colorNeutralStroke1Hover/Pressed)
+
 (
   default_variant: "dark",
   tokens: {
@@ -179,11 +181,12 @@
       selector: Type("UiButton"),
       setter: (
         layout: (
-          padding: Var("space-md"),
+          padding: Var("space-sm"),
           corner_radius: Var("radius-md"),
           border_width: Var("border-thin"),
           justify_content: Center,
           align_items: Center,
+          min_width: 96.0,
         ),
         colors: (
           bg: Var("surface-subtle"),
@@ -192,6 +195,7 @@
         ),
         text: (
           text_align: Center,
+          weight: 600.0,
         ),
         box_shadow: Var("shadow-ui-component"),
         transition: Var("duration-fast"),
@@ -202,17 +206,196 @@
       setter: (
         colors: (
           bg: Var("surface-subtle-hover"),
+          border: Var("border-default-hover"),
+          text: Var("text-primary"),
         ),
       ),
     ),
     (
       selector: And([Type("UiButton"), PseudoClass(Pressed)]),
       setter: (
-        layout: (
-          scale: 0.98,
-        ),
         colors: (
           bg: Var("surface-subtle-pressed"),
+          border: Var("border-default-pressed"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    // ===== Button focus indicator =====
+    (
+      selector: And([Type("UiButton"), PseudoClass(Focused)]),
+      setter: (
+        colors: (
+          border: Var("focus-stroke"),
+        ),
+      ),
+    ),
+
+    // ===== Button appearance: primary =====
+    (
+      selector: And([Type("UiButton"), Class("button.appearance.primary")]),
+      setter: (
+        colors: (
+          bg: Var("surface-accent"),
+          border: Var("surface-accent"),
+          text: Var("text-on-accent"),
+        ),
+        box_shadow: Var("shadow-ui-component"),
+      ),
+    ),
+    (
+      selector: And([Type("UiButton"), Class("button.appearance.primary"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-accent-hover"),
+          border: Var("surface-accent-hover"),
+          text: Var("text-on-accent"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiButton"), Class("button.appearance.primary"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-accent-pressed"),
+          border: Var("surface-accent-pressed"),
+          text: Var("text-on-accent"),
+        ),
+      ),
+    ),
+
+    // ===== Button appearance: outline =====
+    (
+      selector: And([Type("UiButton"), Class("button.appearance.outline")]),
+      setter: (
+        colors: (
+          bg: Var("transparent"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiButton"), Class("button.appearance.outline"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-hover"),
+          border: Var("border-default-hover"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiButton"), Class("button.appearance.outline"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-pressed"),
+          border: Var("border-default-pressed"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+
+    // ===== Button appearance: subtle =====
+    (
+      selector: And([Type("UiButton"), Class("button.appearance.subtle")]),
+      setter: (
+        colors: (
+          bg: Var("transparent"),
+          border: Var("transparent"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiButton"), Class("button.appearance.subtle"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-hover"),
+          border: Var("transparent"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiButton"), Class("button.appearance.subtle"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-pressed"),
+          border: Var("transparent"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+
+    // ===== Button appearance: transparent =====
+    (
+      selector: And([Type("UiButton"), Class("button.appearance.transparent")]),
+      setter: (
+        colors: (
+          bg: Var("transparent"),
+          border: Var("transparent"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiButton"), Class("button.appearance.transparent"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-hover"),
+          border: Var("transparent"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiButton"), Class("button.appearance.transparent"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-pressed"),
+          border: Var("transparent"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+
+    // ===== Button size: small =====
+    (
+      selector: And([Type("UiButton"), Class("button.size.small")]),
+      setter: (
+        layout: (
+          padding: 3.0,
+          min_width: 64.0,
+        ),
+      ),
+    ),
+    // ===== Button size: large =====
+    (
+      selector: And([Type("UiButton"), Class("button.size.large")]),
+      setter: (
+        layout: (
+          padding: 8.0,
+          min_width: 96.0,
+        ),
+      ),
+    ),
+
+    // ===== Button shape: circular =====
+    (
+      selector: And([Type("UiButton"), Class("button.shape.circular")]),
+      setter: (
+        layout: (
+          corner_radius: Var("radius-pill"),
+        ),
+      ),
+    ),
+    // ===== Button shape: square =====
+    (
+      selector: And([Type("UiButton"), Class("button.shape.square")]),
+      setter: (
+        layout: (
+          corner_radius: 0.0,
         ),
       ),
     ),
@@ -1948,18 +2131,18 @@
     "dark": (
       tokens: {
         "surface-bg": Color(Hex("#1F1F1F")),
-        "surface-panel": Color(Hex("#242424")),
+        "surface-panel": Color(Hex("#292929")),
         "surface-elevated": Color(Hex("#1F1F1F")),
-        "surface-subtle": Color(Hex("#272727")),
-        "surface-subtle-hover": Color(Hex("#313131")),
+        "surface-subtle": Color(Hex("#292929")),
+        "surface-subtle-hover": Color(Hex("#3D3D3D")),
         "surface-subtle-pressed": Color(Hex("#1F1F1F")),
-        "surface-overlay": Color(Hex("#232323")),
+        "surface-overlay": Color(Hex("#292929")),
         "surface-overlay-item-hover": Color(Hex("#323232")),
         "surface-overlay-item-pressed": Color(Hex("#272727")),
         "surface-accent": Color(Hex("#0078D4")),
-        "surface-accent-hover": Color(Hex("#1589E0")),
-        "surface-accent-pressed": Color(Hex("#006CBE")),
-        "surface-tab-active": Color(Hex("#103754")),
+        "surface-accent-hover": Color(Hex("#106EBE")),
+        "surface-accent-pressed": Color(Hex("#005A9E")),
+        "surface-tab-active": Color(Hex("#383838")),
         "surface-card": Color(Hex("#2D2D2D")),
         "surface-input": Color(Hex("#1A1A1A")),
         "surface-disabled": Color(Hex("#1C1C1C")),
@@ -1978,17 +2161,19 @@
         "text-disabled": Color(Hex("#5C5C5C")),
         "text-inverted": Color(Hex("#F3F3F3")),
         "text-link": Color(Hex("#2899F5")),
-        "border-default": Color(Hex("#3F3F3F")),
-        "border-muted": Color(Hex("#333333")),
-        "border-subtle": Color(Hex("#2B2B2B")),
+        "border-default": Color(Hex("#666666")),
+        "border-muted": Color(Hex("#525252")),
+        "border-subtle": Color(Hex("#3D3D3D")),
+        "border-default-hover": Color(Hex("#757575")),
+        "border-default-pressed": Color(Hex("#6B6B6B")),
         "focus-stroke": Color(Hex("#0078D4")),
-        "brand-foreground": Color(Hex("#0078D4")),
+        "brand-foreground": Color(Hex("#2899F5")),
         "brand-foreground-hover": Color(Hex("#3AA0F3")),
-        "brand-foreground-pressed": Color(Hex("#006CBE")),
-        "text-primary": Color(Hex("#F3F3F3")),
-        "text-secondary": Color(Hex("#D0D0D0")),
+        "brand-foreground-pressed": Color(Hex("#1890F1")),
+        "text-primary": Color(Hex("#FFFFFF")),
+        "text-secondary": Color(Hex("#D6D6D6")),
         "text-on-accent": Color(Hex("#FFFFFF")),
-        "text-heading": Color(Hex("#F9F9F9")),
+        "text-heading": Color(Hex("#FFFFFF")),
         "accent-primary": Color(Hex("#0078D4")),
         "scrollbar-track": Color(Hex("#FFFFFF14")),
         "scrollbar-thumb": Color(Hex("#FFFFFF5C")),
@@ -1998,7 +2183,7 @@
         "border-disabled": Color(Hex("#5C5C5C")),
         "border-on-accent": Color(Hex("#0078D4")),
         // Accessible stroke hierarchy (Fluent v9 colorNeutralStrokeAccessible*)
-        "stroke-accessible": Color(Hex("#6E6E6E")),
+        "stroke-accessible": Color(Hex("#ADADAD")),
         "stroke-accessible-hover": Color(Hex("#0078D4")),
         "stroke-accessible-pressed": Color(Hex("#006CBE")),
         "stroke-accessible-selected": Color(Hex("#0078D4")),
@@ -2092,18 +2277,18 @@
 
     "light": (
       tokens: {
-        "surface-bg": Color(Hex("#FAF9F8")),
+        "surface-bg": Color(Hex("#FFFFFF")),
         "surface-panel": Color(Hex("#FFFFFF")),
         "surface-elevated": Color(Hex("#FFFFFF")),
         "surface-subtle": Color(Hex("#F5F5F5")),
-        "surface-subtle-hover": Color(Hex("#EBEBEB")),
-        "surface-subtle-pressed": Color(Hex("#E2E2E2")),
+        "surface-subtle-hover": Color(Hex("#F5F5F5")),
+        "surface-subtle-pressed": Color(Hex("#E0E0E0")),
         "surface-overlay": Color(Hex("#FFFFFF")),
         "surface-overlay-item-hover": Color(Hex("#F3F2F1")),
         "surface-overlay-item-pressed": Color(Hex("#EDEBE9")),
-        "surface-accent": Color(Hex("#0F6CBD")),
-        "surface-accent-hover": Color(Hex("#0F6CBD")),
-        "surface-accent-pressed": Color(Hex("#115EA3")),
+        "surface-accent": Color(Hex("#0078D4")),
+        "surface-accent-hover": Color(Hex("#106EBE")),
+        "surface-accent-pressed": Color(Hex("#005A9E")),
         "surface-tab-active": Color(Hex("#E8F3FC")),
         "surface-card": Color(Hex("#FFFFFF")),
         "surface-input": Color(Hex("#FFFFFF")),
@@ -2122,19 +2307,21 @@
         "text-tertiary": Color(Hex("#707070")),
         "text-disabled": Color(Hex("#A0A0A0")),
         "text-inverted": Color(Hex("#FFFFFF")),
-        "text-link": Color(Hex("#0F6CBD")),
+        "text-link": Color(Hex("#106EBE")),
         "border-default": Color(Hex("#D1D1D1")),
+        "border-default-hover": Color(Hex("#C7C7C7")),
+        "border-default-pressed": Color(Hex("#B3B3B3")),
         "border-muted": Color(Hex("#E5E5E5")),
         "border-subtle": Color(Hex("#EDEBE9")),
-        "focus-stroke": Color(Hex("#0F6CBD")),
-        "brand-foreground": Color(Hex("#0F6CBD")),
+        "focus-stroke": Color(Hex("#0078D4")),
+        "brand-foreground": Color(Hex("#0078D4")),
         "brand-foreground-hover": Color(Hex("#115EA3")),
         "brand-foreground-pressed": Color(Hex("#0A4D7A")),
         "text-primary": Color(Hex("#242424")),
         "text-secondary": Color(Hex("#424242")),
         "text-on-accent": Color(Hex("#FFFFFF")),
         "text-heading": Color(Hex("#1B1B1B")),
-        "accent-primary": Color(Hex("#0F6CBD")),
+        "accent-primary": Color(Hex("#0078D4")),
         "scrollbar-track": Color(Hex("#00000014")),
         "scrollbar-thumb": Color(Hex("#0000003D")),
         "scrollbar-thumb-hover": Color(Hex("#00000055")),
@@ -2269,6 +2456,8 @@
         "text-inverted": Color(Hex("#000000")),
         "text-link": Color(Hex("#1AEBFF")),
         "border-default": Color(Hex("#FFFFFF")),
+        "border-default-hover": Color(Hex("#FFFFFF")),
+        "border-default-pressed": Color(Hex("#FFFFFF")),
         "border-muted": Color(Hex("#BFBFBF")),
         "border-subtle": Color(Hex("#6F6F6F")),
         "focus-stroke": Color(Hex("#1AEBFF")),

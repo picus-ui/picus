@@ -6,6 +6,8 @@ use picus_view::view::{FlexExt as _, flex_col, label};
 use crate::{
     ecs::{UiOverlayRoot, UiRoot},
     projection::{UiProjectorRegistry, UiView},
+    runtime::MasonryRuntime,
+    styling::InteractionState,
     views::entity_scope,
 };
 
@@ -135,7 +137,37 @@ fn synthesize_entity(
     view
 }
 
-/// Bevy system that synthesizes all roots and updates [`SynthesizedUiViews`] + [`UiSynthesisStats`].
+/// Sync focused widget from Masonry runtime back to ECS InteractionState.
+pub fn sync_focus_state(world: &mut World) {
+    // Step 1: Get focused entity bits from runtime in a scope that drops the borrow.
+    let focused_entity_bits = {
+        let Some(mut runtime) = world.get_non_send_mut::<MasonryRuntime>() else {
+            return;
+        };
+        let focused_id = runtime.render_root.focused_widget();
+        runtime.populate_entity_map();
+        focused_id.and_then(|id| runtime.widget_id_to_entity.get(&id).copied())
+    };
+
+    // Step 2: Update ECS InteractionState for all entities (runtime borrow is released).
+    let entity_ids: Vec<Entity> = {
+        let mut query = world.query_filtered::<Entity, With<InteractionState>>();
+        query.iter(world).collect()
+    };
+    
+    // Clear focus on all entities that had it, set on the correct one
+    for entity in entity_ids {
+        if let Some(mut state) = world.get_mut::<InteractionState>(entity) {
+            let should_be_focused = focused_entity_bits
+                .map(|bits| entity.to_bits() == bits)
+                .unwrap_or(false);
+            if state.focused != should_be_focused {
+                state.focused = should_be_focused;
+            }
+        }
+    }
+}
+
 pub fn synthesize_ui(world: &mut World) {
     if !world.contains_non_send::<crate::runtime::MasonryRuntime>()
         || !world.contains_resource::<UiProjectorRegistry>()

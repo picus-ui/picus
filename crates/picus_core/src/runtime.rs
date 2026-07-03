@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     fmt::Debug,
     sync::{Arc, mpsc},
 };
@@ -90,6 +91,7 @@ pub struct MasonryRuntime {
     pub root_widget_id: WidgetId,
     pub render_root: RenderRoot,
     view_ctx: ViewCtx,
+    pub widget_id_to_entity: HashMap<WidgetId, u64>,
     view_state: RuntimeViewState,
     current_view: UiView,
     active_window: Option<Entity>,
@@ -165,6 +167,7 @@ impl FromWorld for MasonryRuntime {
             root_widget_id,
             render_root,
             view_ctx,
+            widget_id_to_entity: HashMap::new(),
             view_state,
             current_view: initial_view,
             active_window: None,
@@ -368,6 +371,24 @@ impl MasonryRuntime {
     #[must_use]
     pub fn masonry_scale_factors(&self) -> (f64, f64) {
         (self.window_scale_factor, self.window_scale_factor)
+    }
+
+    /// Walk the widget tree and rebuild the WidgetId → entity_bits reverse map.
+    pub fn populate_entity_map(&mut self) {
+        self.widget_id_to_entity.clear();
+        fn walk(widget: WidgetRef<'_, dyn Widget>, map: &mut HashMap<WidgetId, u64>) {
+            if widget.ctx().is_stashed() {
+                return;
+            }
+            let _ = widget.get_debug_text()
+                .and_then(|d| parse_entity_debug_binding(&d))
+                .map(|(bits, _)| map.insert(widget.id(), bits));
+            for child in widget.children() {
+                walk(child, map);
+            }
+        }
+        let root = self.render_root.get_layer_root(0);
+        walk(root, &mut self.widget_id_to_entity);
     }
 
     /// Returns the bounding box of a widget by its id, for diagnostics.

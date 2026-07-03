@@ -1,6 +1,6 @@
 use crate::bevy_tween::{
-    BevyTweenRegisterSystems, DefaultTweenPlugins, TweenCorePlugin, TweenSystemSet,
-    component_tween_system,
+    component_tween_system, BevyTweenRegisterSystems, DefaultTweenPlugins, TweenCorePlugin,
+    TweenSystemSet,
 };
 use bevy_app::{App, Last, Plugin, PostUpdate, PreUpdate, TaskPoolPlugin, Update};
 use bevy_asset::{AssetApp, AssetEvent, AssetPlugin};
@@ -14,38 +14,39 @@ use bevy_window::{
 };
 
 use crate::{
-    AppBreakpoints, AppPicusExt, OverlayStack, WindowSize,
     components::register_builtin_ui_components,
     events::UiEventQueue,
-    fonts::{XilemFontBridge, collect_bevy_font_assets, sync_fonts_to_xilem},
+    fonts::{collect_bevy_font_assets, sync_fonts_to_xilem, XilemFontBridge},
     i18n::AppI18n,
     overlay::{
-        OverlayPointerRoutingState, bubble_ui_pointer_events, ensure_overlay_defaults,
-        ensure_overlay_root, handle_global_overlay_clicks, handle_overlay_actions,
-        reparent_overlay_entities, sync_overlay_positions, sync_overlay_stack_lifecycle,
+        bubble_ui_pointer_events, ensure_overlay_defaults, ensure_overlay_root,
+        handle_global_overlay_clicks, handle_overlay_actions, reparent_overlay_entities,
+        sync_overlay_positions, sync_overlay_stack_lifecycle, OverlayPointerRoutingState,
     },
-    projection::{UiProjectorRegistry, register_core_projectors},
+    projection::{register_core_projectors, UiProjectorRegistry},
     runtime::{
-        MasonryRuntime, initialize_masonry_runtime_from_primary_window,
-        inject_bevy_input_into_masonry, paint_masonry_ui, rebuild_masonry_runtime,
-        sync_masonry_ime_state_to_bevy_window,
+        initialize_masonry_runtime_from_primary_window, inject_bevy_input_into_masonry,
+        paint_masonry_ui, rebuild_masonry_runtime, sync_masonry_ime_state_to_bevy_window,
+        MasonryRuntime,
     },
     styling::{
-        ActiveStyleSheet, ActiveStyleSheetAsset, ActiveStyleSheetSelectors,
-        ActiveStyleSheetTokenNames, ActiveStyleVariant, AppliedStyleVariant, BaseStyleSheet,
-        RegisteredStyleVariants, StyleAssetEventCursor, StyleSheet, StyleSheetRonLoader,
         activate_debounced_hovers, animate_style_transitions,
         ensure_active_stylesheet_asset_handle, mark_style_dirty,
         register_builtin_style_type_aliases, register_embedded_fluent_theme_variants,
         set_active_style_variant_to_registered_default, sync_active_style_variant,
         sync_style_targets, sync_stylesheet_asset_events, sync_ui_interaction_markers,
+        ActiveStyleSheet, ActiveStyleSheetAsset, ActiveStyleSheetSelectors,
+        ActiveStyleSheetTokenNames, ActiveStyleVariant, AppliedStyleVariant, BaseStyleSheet,
+        ReducedMotion, RegisteredStyleVariants, StyleAssetEventCursor, StyleSheet,
+        StyleSheetRonLoader,
     },
-    synthesize::{SynthesizedUiViews, UiSynthesisStats, synthesize_ui},
+    synthesize::{sync_focus_state, synthesize_ui, SynthesizedUiViews, UiSynthesisStats},
     track_window_size,
     widget_actions::{
         handle_scroll_view_wheel, handle_tooltip_hovers, handle_widget_actions,
         sync_scroll_view_layout_geometry, tick_auto_dismiss,
     },
+    AppBreakpoints, AppPicusExt, OverlayStack, WindowSize,
 };
 
 /// Bevy plugin for headless Masonry runtime + ECS projection synthesis.
@@ -105,6 +106,7 @@ impl Plugin for PicusPlugin {
             .init_resource::<WindowSize>()
             .init_resource::<OverlayStack>()
             .init_resource::<OverlayPointerRoutingState>()
+            .init_resource::<ReducedMotion>()
             .init_non_send::<MasonryRuntime>()
             .add_message::<CursorMoved>()
             .add_message::<CursorLeft>()
@@ -154,6 +156,10 @@ impl Plugin for PicusPlugin {
                 )
                     .chain()
                     .before(TweenSystemSet::UpdateInterpolationValue),
+            )
+            .add_systems(
+                Update,
+                sync_focus_state.after(inject_bevy_input_into_masonry),
             )
             .add_systems(
                 Update,

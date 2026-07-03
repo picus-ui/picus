@@ -4,14 +4,16 @@ use super::{
 };
 use crate::{
     ecs::{
-        LocalizeText, TypographyPreset, UiAvatar, UiBadge, UiButton, UiCheckbox, UiImage, UiLabel,
-        UiLink, UiMultilineTextInput, UiPasswordInput, UiProgressBar, UiRating, UiSlider, UiSwitch,
+        ButtonAppearance, ButtonIconPosition, ButtonShape, ButtonSize, LocalizeText,
+        TypographyPreset, UiAvatar, UiBadge, UiButton, UiCheckbox, UiImage, UiLabel, UiLink,
+        UiMultilineTextInput, UiPasswordInput, UiProgressBar, UiRating, UiSlider, UiSwitch,
         UiText, UiTextInput,
     },
     i18n::resolve_localized_text,
+    icons::{PicusIcon, LUCIDE_FONT_FAMILY},
     styling::{
         apply_direct_widget_style, apply_label_style, apply_widget_style, font_stack_from_style,
-        resolve_style, resolve_style_for_entity_classes,
+        resolve_style, resolve_style_for_entity_classes, ResolvedStyle,
     },
     views::{ecs_button, ecs_button_with_child, ecs_slider, ecs_text_input},
     widget_actions::WidgetUiAction,
@@ -85,8 +87,49 @@ pub(crate) fn project_label(label_component: &UiLabel, ctx: ProjectionCtx<'_>) -
     Arc::new(apply_label_style(label(text), &style))
 }
 
+/// Render a [`PicusIcon`] as a Lucide glyph in a fixed-size box.
+fn create_icon_view(icon: PicusIcon, size_px: f64, color: Option<crate::xilem::Color>) -> UiView {
+    let mut icon_style = ResolvedStyle::default();
+    icon_style.colors.text = color;
+    icon_style.text.size = (size_px * 0.90) as f32;
+    icon_style.font_family = Some(vec![LUCIDE_FONT_FAMILY.to_string()]);
+
+    Arc::new(
+        sized_box(apply_label_style(
+            label(icon.glyph().to_string()),
+            &icon_style,
+        ))
+        .width(Dim::Fixed(Length::px(size_px)))
+        .height(Dim::Fixed(Length::px(size_px))),
+    )
+}
+
 pub(crate) fn project_button(button_component: &UiButton, ctx: ProjectionCtx<'_>) -> UiView {
-    let mut style = resolve_style(ctx.world, ctx.entity);
+    // Build variant-specific class names from the button's appearance/size/shape.
+    let appearance_class = match button_component.appearance {
+        ButtonAppearance::Default => "button.appearance.default",
+        ButtonAppearance::Primary => "button.appearance.primary",
+        ButtonAppearance::Outline => "button.appearance.outline",
+        ButtonAppearance::Subtle => "button.appearance.subtle",
+        ButtonAppearance::Transparent => "button.appearance.transparent",
+    };
+    let size_class = match button_component.size {
+        ButtonSize::Small => "button.size.small",
+        ButtonSize::Medium => "button.size.medium",
+        ButtonSize::Large => "button.size.large",
+    };
+    let shape_class = match button_component.shape {
+        ButtonShape::Rounded => "button.shape.rounded",
+        ButtonShape::Circular => "button.shape.circular",
+        ButtonShape::Square => "button.shape.square",
+    };
+
+    // Resolve style including the variant classes so theme selectors match.
+    let mut style = resolve_style_for_entity_classes(
+        ctx.world,
+        ctx.entity,
+        [appearance_class, size_class, shape_class],
+    );
     let button_label_text = resolve_localized_text(ctx.world, ctx.entity, &button_component.label);
     if let Some(stack) = localized_font_stack(ctx.world, ctx.entity) {
         style.font_family = Some(stack);
@@ -103,10 +146,34 @@ pub(crate) fn project_button(button_component: &UiButton, ctx: ProjectionCtx<'_>
         "projected UiButton label"
     );
 
-    let label_child = apply_label_style(label(button_label_text), &style);
+    let label_child: UiView = Arc::new(apply_label_style(label(button_label_text), &style));
+
+    let content = if let Some(icon) = button_component.icon {
+        let icon_size = match button_component.size {
+            ButtonSize::Small => 16.0,
+            ButtonSize::Medium => 20.0,
+            ButtonSize::Large => 24.0,
+        };
+        let icon_view = create_icon_view(icon, icon_size, style.colors.text);
+        match button_component.icon_position {
+            ButtonIconPosition::Before => Arc::new(
+                flex_row(vec![icon_view.into_any_flex(), label_child.into_any_flex()])
+                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                    .gap(Length::px(8.0)),
+            ) as UiView,
+            ButtonIconPosition::After => Arc::new(
+                flex_row(vec![label_child.into_any_flex(), icon_view.into_any_flex()])
+                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                    .gap(Length::px(8.0)),
+            ) as UiView,
+            ButtonIconPosition::IconOnly => icon_view,
+        }
+    } else {
+        label_child
+    };
 
     Arc::new(apply_direct_widget_style(
-        ecs_button_with_child(ctx.entity, BuiltinUiAction::Clicked, label_child),
+        ecs_button_with_child(ctx.entity, BuiltinUiAction::Clicked, content),
         &style,
     ))
 }
