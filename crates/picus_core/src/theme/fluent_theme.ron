@@ -2281,7 +2281,7 @@
         "surface-panel": Color(Hex("#FFFFFF")),
         "surface-elevated": Color(Hex("#FFFFFF")),
         "surface-subtle": Color(Hex("#F5F5F5")),
-        "surface-subtle-hover": Color(Hex("#F5F5F5")),
+        "surface-subtle-hover": Color(Hex("#EBEBEB")),
         "surface-subtle-pressed": Color(Hex("#E0E0E0")),
         "surface-overlay": Color(Hex("#FFFFFF")),
         "surface-overlay-item-hover": Color(Hex("#F3F2F1")),

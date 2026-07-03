@@ -1390,7 +1390,19 @@ fn selector_matches_class_context(
     has_class: &impl Fn(&str) -> bool,
 ) -> bool {
     match selector {
-        Selector::Type(_) | Selector::TypeName(_) => false,
+        Selector::Type(type_id) => entity.is_some_and(|entity| {
+            world
+                .components()
+                .get_id(*type_id)
+                .is_some_and(|component_id| component_matches_type(world, entity, component_id))
+        }),
+        Selector::TypeName(name) => entity.is_some_and(|entity| {
+            world
+                .get_resource::<StyleTypeRegistry>()
+                .and_then(|registry| registry.resolve(name))
+                .and_then(|type_id| world.components().get_id(type_id))
+                .is_some_and(|component_id| component_matches_type(world, entity, component_id))
+        }),
         Selector::Class(name) => has_class(name),
         Selector::PseudoClass(PseudoClass::Hovered) => entity
             .and_then(|entity| world.get::<InteractionState>(entity))
