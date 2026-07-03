@@ -23,11 +23,13 @@ use crate::projection::dialog::{
 use crate::{
     AnchoredTo, AppI18n, AutoDismiss, OverlayAnchorRect, OverlayComputedPosition, OverlayConfig,
     OverlayPlacement, OverlayStack, OverlayState, StopUiPointerPropagation, UiColorPicker,
-    UiColorPickerChanged, UiColorPickerPanel, UiComboBox, UiComboBoxChanged, UiDatePicker,
+    UiColorPickerChanged, UiColorPickerPanel, UiComboBox, UiComboBoxChanged, UiContextMenu,
+    UiContextMenuItem, UiContextMenuItemSelected, UiContextMenuTrigger, UiDatePicker,
     UiDatePickerChanged, UiDatePickerPanel, UiDialog, UiDropdownItem, UiDropdownMenu, UiEventQueue,
-    UiInteractionEvent, UiMenuBarItem, UiMenuItemPanel, UiMenuItemSelected, UiOverlayRoot,
-    UiPointerEvent, UiPointerHitEvent, UiPopover, UiRoot, UiThemePicker, UiThemePickerChanged,
-    UiThemePickerMenu, UiToast, UiTooltip,
+    UiExpander, UiExpanderChanged, UiInteractionEvent, UiMenuBarItem, UiMenuItemPanel,
+    UiMenuItemSelected, UiOverlayRoot, UiPointerEvent, UiPointerHitEvent, UiPopover, UiRoot,
+    UiThemePicker, UiThemePickerChanged, UiThemePickerMenu, UiTimePicker, UiTimePickerChanged,
+    UiTimePickerPanel, UiToast, UiTooltip,
     events::UiEvent,
     runtime::MasonryRuntime,
     set_active_style_variant_by_name,
@@ -61,6 +63,17 @@ pub enum OverlayUiAction {
     NavigateDateMonth { forward: bool },
     SelectDateDay { day: u32 },
     DismissDatePicker,
+    // Time picker overlay
+    ToggleTimePicker,
+    SelectTimeHour { hour: u8 },
+    SelectTimeMinute { minute: u8 },
+    SelectTimePeriod { is_pm: bool },
+    DismissTimePicker,
+    // Expander
+    ToggleExpander,
+    // Context menu
+    SelectContextMenuItem { index: usize },
+    DismissContextMenu,
     // Toast
     DismissToast,
 }
@@ -535,6 +548,24 @@ pub fn ensure_overlay_defaults(world: &mut World) {
         }
     }
 
+    let time_picker_panels = {
+        let mut query = world.query::<(Entity, &UiTimePickerPanel)>();
+        query
+            .iter(world)
+            .map(|(entity, panel)| (entity, panel.anchor))
+            .collect::<Vec<_>>()
+    };
+
+    for (panel_entity, anchor) in time_picker_panels {
+        if world.get::<UiPopover>(panel_entity).is_none() {
+            world.entity_mut(panel_entity).insert(
+                UiPopover::new(anchor)
+                    .with_placement(OverlayPlacement::BottomStart)
+                    .with_auto_flip_placement(true),
+            );
+        }
+    }
+
     let tooltips = {
         let mut query = world.query::<(Entity, &UiTooltip)>();
         query
@@ -624,6 +655,8 @@ pub fn reparent_overlay_entities(world: &mut World) {
                 With<UiThemePickerMenu>,
                 With<UiColorPickerPanel>,
                 With<UiDatePickerPanel>,
+                With<UiTimePickerPanel>,
+                With<UiContextMenu>,
                 With<UiToast>,
                 With<UiPopover>,
                 With<UiTooltip>,
@@ -684,6 +717,14 @@ fn collect_date_picker_panels_for_picker(world: &mut World, anchor: Entity) -> V
         .collect()
 }
 
+fn collect_time_picker_panels_for_picker(world: &mut World, anchor: Entity) -> Vec<Entity> {
+    let mut query = world.query::<(Entity, &UiTimePickerPanel)>();
+    query
+        .iter(world)
+        .filter_map(|(entity, panel)| (panel.anchor == anchor).then_some(entity))
+        .collect()
+}
+
 fn close_menu_panel(world: &mut World, panel_entity: Entity) {
     let anchor = world.get::<UiMenuItemPanel>(panel_entity).map(|p| p.anchor);
     close_anchored_overlay::<UiMenuBarItem>(world, panel_entity, anchor, |item| {
@@ -709,6 +750,19 @@ fn close_date_picker_panel(world: &mut World, panel_entity: Entity) {
     });
 }
 
+fn close_time_picker_panel(world: &mut World, panel_entity: Entity) {
+    let anchor = world
+        .get::<UiTimePickerPanel>(panel_entity)
+        .map(|p| p.anchor);
+    close_anchored_overlay::<UiTimePicker>(world, panel_entity, anchor, |picker| {
+        picker.is_open = false;
+    });
+}
+
+fn close_context_menu(world: &mut World, menu_entity: Entity) {
+    despawn_overlay_entity(world, menu_entity);
+}
+
 fn close_overlay_entity(world: &mut World, overlay_entity: Entity) {
     if world.get::<UiDialog>(overlay_entity).is_some() {
         dismiss_dialog_overlay(world, overlay_entity);
@@ -722,6 +776,10 @@ fn close_overlay_entity(world: &mut World, overlay_entity: Entity) {
         close_color_picker_panel(world, overlay_entity);
     } else if world.get::<UiDatePickerPanel>(overlay_entity).is_some() {
         close_date_picker_panel(world, overlay_entity);
+    } else if world.get::<UiTimePickerPanel>(overlay_entity).is_some() {
+        close_time_picker_panel(world, overlay_entity);
+    } else if world.get::<UiContextMenu>(overlay_entity).is_some() {
+        close_context_menu(world, overlay_entity);
     } else {
         despawn_overlay_entity(world, overlay_entity);
     }
@@ -1137,6 +1195,145 @@ pub fn handle_overlay_actions(world: &mut World) {
                 }
             }
 
+            // --- Time picker actions ---
+            OverlayUiAction::ToggleTimePicker => {
+                let Some(time_picker) = world.get::<UiTimePicker>(event.entity).copied() else {
+                    continue;
+                };
+
+                let existing = collect_time_picker_panels_for_picker(world, event.entity);
+                for panel in existing {
+                    if world.get_entity(panel).is_ok() {
+                        close_time_picker_panel(world, panel);
+                    }
+                }
+
+                if time_picker.is_open {
+                    if let Some(mut picker) = world.get_mut::<UiTimePicker>(event.entity) {
+                        picker.is_open = false;
+                    }
+                    continue;
+                }
+
+                spawn_popover_in_overlay_root(
+                    world,
+                    UiTimePickerPanel {
+                        anchor: event.entity,
+                        use_24h: time_picker.use_24h,
+                    },
+                    UiPopover::new(event.entity)
+                        .with_placement(OverlayPlacement::BottomStart)
+                        .with_auto_flip_placement(true),
+                );
+
+                if let Some(mut picker) = world.get_mut::<UiTimePicker>(event.entity) {
+                    picker.is_open = true;
+                }
+            }
+
+            OverlayUiAction::SelectTimeHour { hour } => {
+                let Some(anchor) = world
+                    .get::<UiTimePickerPanel>(event.entity)
+                    .map(|p| p.anchor)
+                else {
+                    continue;
+                };
+                if let Some(mut picker) = world.get_mut::<UiTimePicker>(anchor) {
+                    picker.hour = hour;
+                }
+            }
+
+            OverlayUiAction::SelectTimeMinute { minute } => {
+                let Some(anchor) = world
+                    .get::<UiTimePickerPanel>(event.entity)
+                    .map(|p| p.anchor)
+                else {
+                    continue;
+                };
+                if let Some(mut picker) = world.get_mut::<UiTimePicker>(anchor) {
+                    picker.minute = minute;
+                }
+            }
+
+            OverlayUiAction::SelectTimePeriod { is_pm } => {
+                let Some(anchor) = world
+                    .get::<UiTimePickerPanel>(event.entity)
+                    .map(|p| p.anchor)
+                else {
+                    continue;
+                };
+                if let Some(mut picker) = world.get_mut::<UiTimePicker>(anchor) {
+                    let (h12, _) = picker.hour_12();
+                    let new_hour = if is_pm {
+                        if h12 == 12 { 12 } else { h12 + 12 }
+                    } else {
+                        if h12 == 12 { 0 } else { h12 }
+                    };
+                    picker.hour = new_hour.min(23);
+                }
+            }
+
+            OverlayUiAction::DismissTimePicker => {
+                let Some(panel) = world.get::<UiTimePickerPanel>(event.entity).copied() else {
+                    continue;
+                };
+                let anchor = panel.anchor;
+                let Some(picker) = world.get::<UiTimePicker>(anchor).copied() else {
+                    close_time_picker_panel(world, event.entity);
+                    continue;
+                };
+                let changed = UiTimePickerChanged {
+                    picker: anchor,
+                    hour: picker.hour,
+                    minute: picker.minute,
+                    second: picker.second,
+                };
+                if world.get_entity(event.entity).is_ok() {
+                    close_time_picker_panel(world, event.entity);
+                }
+                world.resource::<UiEventQueue>().push_typed(anchor, changed);
+            }
+
+            // --- Expander actions ---
+            OverlayUiAction::ToggleExpander => {
+                if let Some(mut expander) = world.get_mut::<UiExpander>(event.entity) {
+                    expander.is_expanded = !expander.is_expanded;
+                    let changed = UiExpanderChanged {
+                        expander: event.entity,
+                        is_expanded: expander.is_expanded,
+                    };
+                    world.resource::<UiEventQueue>().push_typed(event.entity, changed);
+                }
+            }
+
+            // --- Context menu actions ---
+            OverlayUiAction::SelectContextMenuItem { index } => {
+                let Some(ctx_menu) = world.get::<UiContextMenu>(event.entity).cloned() else {
+                    continue;
+                };
+                let trigger = ctx_menu.trigger;
+                if index < ctx_menu.items.len() {
+                    let label = ctx_menu.items[index].label.clone();
+                    let selected = UiContextMenuItemSelected {
+                        trigger,
+                        index,
+                        label,
+                    };
+                    world.resource::<UiEventQueue>().push_typed(trigger, selected);
+                }
+                if world.get_entity(event.entity).is_ok() {
+                    close_context_menu(world, event.entity);
+                }
+            }
+
+            OverlayUiAction::DismissContextMenu => {
+                if world.get_entity(event.entity).is_ok()
+                    && world.get::<UiContextMenu>(event.entity).is_some()
+                {
+                    close_context_menu(world, event.entity);
+                }
+            }
+
             OverlayUiAction::DismissToast => {
                 if world.get_entity(event.entity).is_ok() {
                     despawn_entity_tree(world, event.entity);
@@ -1429,6 +1626,30 @@ fn overlay_size_for_entity(
 
     if world.get::<UiDatePickerPanel>(entity).is_some() {
         return (280.0, 300.0);
+    }
+
+    if world.get::<UiTimePickerPanel>(entity).is_some() {
+        return (220.0, 300.0);
+    }
+
+    if let Some(ctx_menu) = world.get::<UiContextMenu>(entity) {
+        let item_style = resolve_style_for_classes(world, ["overlay.context_menu.item"]);
+        let text_size = item_style.text.size.max(15.0);
+        let padding = item_style.layout.padding.max(6.0);
+        let labels: Vec<&str> = ctx_menu.items.iter().map(|i| i.label.as_str()).collect();
+        let width = estimate_dropdown_surface_width_px(
+            160.0,
+            labels,
+            text_size,
+            padding * 2.0 + 16.0,
+        );
+        let height = estimate_dropdown_viewport_height_px(
+            ctx_menu.items.len(),
+            text_size,
+            padding.max(8.0),
+            4.0,
+        );
+        return (width.max(160.0), height.max(48.0));
     }
 
     if let Some(toast) = world.get::<UiToast>(entity) {
@@ -1744,6 +1965,8 @@ pub fn sync_overlay_positions(world: &mut World) {
                 close_dropdown(world, stale);
             } else if world.get::<UiThemePickerMenu>(stale).is_some() {
                 close_theme_picker_menu(world, stale);
+            } else if world.get::<UiTimePickerPanel>(stale).is_some() {
+                close_time_picker_panel(world, stale);
             } else {
                 despawn_entity_tree(world, stale);
                 remove_overlay_from_stack(world, stale);
@@ -1771,6 +1994,54 @@ fn primary_window_physical_cursor(world: &mut World) -> Option<(Entity, Vec2)> {
     let (window_entity, window) = window_query.iter(world).next()?;
     let cursor = window.physical_cursor_position()?;
     Some((window_entity, cursor))
+}
+
+/// Spawn a context menu overlay at the current cursor position.
+///
+/// Returns the overlay entity if a context menu was spawned, `None` otherwise.
+fn spawn_context_menu_at_cursor(
+    world: &mut World,
+    trigger: Entity,
+    items: Vec<UiContextMenuItem>,
+) -> Option<Entity> {
+    let cursor_pos = {
+        let mut primary_window_query =
+            world.query_filtered::<&Window, With<PrimaryWindow>>();
+        let window = primary_window_query.iter(world).next()?;
+        let logical_pos = window.cursor_position()?;
+        (logical_pos.x as f64, logical_pos.y as f64)
+    };
+
+    let overlay_root = ensure_overlay_root_entity(world);
+    let entity = world
+        .spawn((
+            UiContextMenu {
+                items,
+                trigger,
+            },
+            ChildOf(overlay_root),
+            OverlayState {
+                is_modal: false,
+                anchor: None,
+            },
+            OverlayConfig {
+                placement: OverlayPlacement::BottomStart,
+                anchor: None,
+                auto_flip: false,
+            },
+            OverlayComputedPosition {
+                x: cursor_pos.0,
+                y: cursor_pos.1,
+                width: 0.0,
+                height: 0.0,
+                placement: OverlayPlacement::BottomStart,
+                is_positioned: true,
+            },
+        ))
+        .id();
+
+    push_overlay_to_stack(world, entity);
+    Some(entity)
 }
 
 /// Centralized native Bevy click interception for layered overlay dismissal + blocking.
@@ -2066,6 +2337,91 @@ pub fn bubble_ui_pointer_events(world: &mut World) {
                 .map(|child_of| child_of.parent());
         }
     }
+}
+
+/// Detect right-click on entities carrying [`UiContextMenuTrigger`] and spawn
+/// a context menu overlay at the cursor position.
+pub fn handle_context_menu_right_clicks(world: &mut World) {
+    let right_just_pressed = world
+        .get_resource::<ButtonInput<MouseButton>>()
+        .is_some_and(|input| input.just_pressed(MouseButton::Right));
+
+    if !right_just_pressed {
+        return;
+    }
+
+    // If a context menu is already open, close it first
+    {
+        let stack = world.resource::<OverlayStack>();
+        let existing: Vec<Entity> = stack
+            .active_overlays
+            .iter()
+            .filter(|e| world.get::<UiContextMenu>(**e).is_some())
+            .copied()
+            .collect();
+        let _ = stack;
+        for e in existing {
+            close_context_menu(world, e);
+        }
+    }
+
+    // Hit test to find entity under cursor
+    let (cursor_x, cursor_y) = {
+        let mut window_query = world.query_filtered::<&Window, With<PrimaryWindow>>();
+        let Some(window) = window_query.iter(world).next() else {
+            return;
+        };
+        let Some(phys) = window.physical_cursor_position() else {
+            return;
+        };
+        (phys.x as f64, phys.y as f64)
+    };
+
+    // Collect widget ids under cursor for entity matching
+    let hit_widget_ids: Vec<u64> = {
+        let Some(mut runtime) = world.get_non_send_mut::<MasonryRuntime>() else {
+            return;
+        };
+        let _ = runtime.render_root.redraw();
+        let pointer = (cursor_x, cursor_y).into();
+        let hit_path = runtime.get_hit_path(pointer);
+        hit_path
+            .iter()
+            .filter_map(|id| {
+                let debug = runtime.render_root.get_widget(*id)?.get_debug_text()?;
+                debug
+                    .strip_prefix("entity=")
+                    .or_else(|| debug.strip_prefix("opaque_hitbox_entity="))
+                    .and_then(|s| s.parse::<u64>().ok())
+            })
+            .collect()
+    };
+
+    // Now find the trigger entity from the collected bits
+    let hit_entity = hit_widget_ids
+        .iter()
+        .find_map(|bits| {
+            let entity = Entity::try_from_bits(*bits)?;
+            world
+                .get::<UiContextMenuTrigger>(entity)
+                .is_some()
+                .then_some(entity)
+        });
+
+    let Some(trigger_entity) = hit_entity else {
+        return;
+    };
+
+    let items = world
+        .get::<UiContextMenuTrigger>(trigger_entity)
+        .map(|t| t.items.clone())
+        .unwrap_or_default();
+
+    if items.is_empty() {
+        return;
+    }
+
+    spawn_context_menu_at_cursor(world, trigger_entity, items);
 }
 
 /// Keep pseudo-state interaction queue alive when raw pointer events are consumed.

@@ -25,10 +25,11 @@ use crate::{
         PartScrollBarVertical, PartScrollThumbHorizontal, PartScrollThumbVertical,
         PartScrollViewport, ScrollAxis, SplitDirection, ToastKind, UiBreadcrumbItem, UiCanvas,
         UiCanvasCommand, UiCanvasPathCommand, UiCanvasPosition, UiColorPicker, UiColorPickerPanel,
-        UiDataTable, UiDatePicker, UiDatePickerPanel, UiDivider, UiGroupBox, UiListSelectionMode,
-        UiListView, UiMenuBar, UiMenuBarItem, UiMenuItemPanel, UiMessageBar, UiNavigationView,
-        UiRadioGroup, UiScrollView, UiSearch, UiSortDirection, UiSpinner, UiSplitPane, UiTabBar,
-        UiTable, UiToast, UiTooltip, UiTreeNode,
+        UiContextMenu, UiDataTable, UiDatePicker, UiDatePickerPanel, UiDivider, UiExpander,
+        UiGroupBox, UiListSelectionMode, UiListView, UiMenuBar, UiMenuBarItem, UiMenuItemPanel,
+        UiMessageBar, UiNavigationView, UiRadioGroup, UiScrollView, UiSearch, UiSortDirection,
+        UiSpinner, UiSplitPane, UiTabBar, UiTable, UiTimePicker, UiTimePickerPanel, UiToast,
+        UiTooltip, UiTreeNode,
     },
     icons::LUCIDE_FONT_FAMILY,
     overlay::OverlayUiAction,
@@ -2102,5 +2103,338 @@ pub(crate) fn project_navigation_view(nav: &UiNavigationView, ctx: ProjectionCtx
                 .with_width(Dim::Stretch)
                 .with_height(Dim::Stretch),
         ),
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Time Picker
+// ---------------------------------------------------------------------------
+
+pub(crate) fn project_time_picker(picker: &UiTimePicker, ctx: ProjectionCtx<'_>) -> UiView {
+    let style = resolve_style(ctx.world, ctx.entity);
+    let time_str = if picker.use_24h {
+        format!("{:02}:{:02}", picker.hour, picker.minute)
+    } else {
+        let (h12, is_pm) = picker.hour_12();
+        format!(
+            "{}:{:02} {}",
+            h12,
+            picker.minute,
+            if is_pm { "PM" } else { "AM" }
+        )
+    };
+    let icon_color = style
+        .colors
+        .text
+        .unwrap_or(Color::from_rgb8(0xE7, 0xEC, 0xF8));
+    let icon = if picker.is_open {
+        vector_icon(VectorIcon::ChevronUp, 10.0, icon_color)
+    } else {
+        vector_icon(VectorIcon::Clock, 12.0, icon_color)
+    };
+    let content = flex_row(vec![
+        icon.into_any_flex(),
+        apply_label_style(label(time_str), &style).into_any_flex(),
+    ])
+    .cross_axis_alignment(CrossAxisAlignment::Center)
+    .gap(Length::px(6.0));
+    Arc::new(apply_direct_widget_style(
+        ecs_button_with_child(
+            ctx.entity,
+            OverlayUiAction::ToggleTimePicker,
+            content,
+        ),
+        &style,
+    ))
+}
+
+pub(crate) fn project_time_picker_panel(
+    panel_comp: &UiTimePickerPanel,
+    ctx: ProjectionCtx<'_>,
+) -> UiView {
+    let pos = match overlay_position(ctx.world, ctx.entity) {
+        Some(p) => p,
+        None => return hidden_placeholder(),
+    };
+
+    let panel_style = default_panel_style(ctx.world, "overlay.time_picker.panel");
+    let mut cell_style =
+        resolve_style_for_classes(ctx.world, ["overlay.time_picker.cell"]);
+    if cell_style.layout.padding <= 0.0 {
+        cell_style.layout.padding = 4.0;
+    }
+    let mut selected_style = cell_style.clone();
+    selected_style.colors.bg = Some(Color::from_rgb8(0x00, 0x78, 0xD4));
+
+    let anchor_entity = ctx
+        .world
+        .get::<AnchoredTo>(ctx.entity)
+        .map(|a| a.0);
+
+    let use_24h = panel_comp.use_24h;
+
+    // Fetch current picker values
+    let (cur_hour, cur_minute) = anchor_entity
+        .and_then(|a| ctx.world.get::<UiTimePicker>(a))
+        .map(|p| (p.hour, p.minute))
+        .unwrap_or((12, 0));
+
+    let (cur_h12, cur_is_pm) = if use_24h {
+        (cur_hour, false)
+    } else {
+        let picker = anchor_entity
+            .and_then(|a| ctx.world.get::<UiTimePicker>(a))
+            .unwrap();
+        picker.hour_12()
+    };
+
+    // --- Hour selector ---
+    let hour_count: u8 = if use_24h { 24 } else { 12 };
+    let hour_start: u8 = if use_24h { 0 } else { 1 };
+    let mut hour_buttons = Vec::new();
+    for h in hour_start..hour_start + hour_count {
+        let hour_val = h;
+        let is_sel = if use_24h {
+            hour_val == cur_hour
+        } else {
+            hour_val == cur_h12
+        };
+        let s = if is_sel { &selected_style } else { &cell_style };
+        let label_text = format!("{:02}", hour_val);
+        let btn = ecs_button(
+            ctx.entity,
+            OverlayUiAction::SelectTimeHour { hour: hour_val },
+            label_text,
+        );
+        hour_buttons
+            .push(apply_direct_widget_style(btn, s).flex(1.0).into_any_flex());
+    }
+    let hour_col = flex_col(hour_buttons).gap(Length::px(2.0));
+
+    // --- Minute selector ---
+    let mut minute_buttons = Vec::new();
+    for m in 0u8..60u8 {
+        let is_sel = m == cur_minute;
+        let s = if is_sel { &selected_style } else { &cell_style };
+        let label_text = format!("{:02}", m);
+        let btn = ecs_button(
+            ctx.entity,
+            OverlayUiAction::SelectTimeMinute { minute: m },
+            label_text,
+        );
+        minute_buttons
+            .push(apply_direct_widget_style(btn, s).flex(1.0).into_any_flex());
+    }
+    let min_col = flex_col(minute_buttons).gap(Length::px(2.0));
+
+    // --- Separator ---
+    let sep = apply_label_style(label(":"), &cell_style)
+        .flex(1.0)
+        .into_any_flex();
+
+    let mut columns = vec![hour_col.into_any_flex(), sep, min_col.into_any_flex()];
+
+    // --- AM/PM selector (12h mode) ---
+    if !use_24h {
+        let am_style = if cur_is_pm { &cell_style } else { &selected_style };
+        let pm_style = if cur_is_pm { &selected_style } else { &cell_style };
+        let am_btn = ecs_button(
+            ctx.entity,
+            OverlayUiAction::SelectTimePeriod { is_pm: false },
+            "AM".to_string(),
+        );
+        let pm_btn = ecs_button(
+            ctx.entity,
+            OverlayUiAction::SelectTimePeriod { is_pm: true },
+            "PM".to_string(),
+        );
+        let am_pm_col = flex_col(vec![
+            apply_direct_widget_style(am_btn, am_style).into_any_flex(),
+            apply_direct_widget_style(pm_btn, pm_style).into_any_flex(),
+        ])
+        .gap(Length::px(2.0));
+        columns.push(am_pm_col.into_any_flex());
+    }
+
+    // --- Done button ---
+    let done_btn = ecs_button(
+        ctx.entity,
+        OverlayUiAction::DismissTimePicker,
+        "Done".to_string(),
+    );
+    let done_row = flex_row(vec![
+        apply_direct_widget_style(done_btn, &cell_style).into_any_flex(),
+    ]);
+
+    let content = flex_col(vec![
+        flex_row(columns).gap(Length::px(4.0)).into_any_flex(),
+        done_row.into_any_flex(),
+    ])
+    .gap(Length::px(6.0));
+
+    let computed_pos = ctx
+        .world
+        .get::<OverlayComputedPosition>(ctx.entity)
+        .copied()
+        .unwrap_or_default();
+    let panel_width = if computed_pos.width > 1.0 {
+        computed_pos.width
+    } else {
+        220.0
+    };
+    let panel_height = if computed_pos.height > 1.0 {
+        computed_pos.height
+    } else {
+        300.0
+    };
+
+    let panel_view = apply_widget_style(
+        crate::xilem::view::portal(content)
+            .dims((Length::px(panel_width), Length::px(panel_height))),
+        &panel_style,
+    );
+
+    Arc::new(
+        transformed(crate::views::opaque_hitbox_for_entity(
+            ctx.entity,
+            panel_view,
+        ))
+        .translate(pos),
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Expander
+// ---------------------------------------------------------------------------
+
+pub(crate) fn project_expander(expander: &UiExpander, ctx: ProjectionCtx<'_>) -> UiView {
+    let style = resolve_style(ctx.world, ctx.entity);
+    let icon_color = style
+        .colors
+        .text
+        .unwrap_or(Color::from_rgb8(0xE7, 0xEC, 0xF8));
+
+    let chevron = if expander.is_expanded {
+        vector_icon(VectorIcon::ChevronDown, 10.0, icon_color)
+    } else {
+        vector_icon(VectorIcon::ChevronRight, 10.0, icon_color)
+    };
+
+    let header_text = apply_label_style(label(expander.header.clone()), &style);
+
+    let header_row = flex_row(vec![chevron.into_any_flex(), header_text.into_any_flex()])
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .gap(Length::px(6.0));
+
+    let header_btn = apply_direct_widget_style(
+        ecs_button_with_child(ctx.entity, OverlayUiAction::ToggleExpander, header_row),
+        &style,
+    );
+
+    let mut items = vec![header_btn.into_any_flex()];
+
+    if expander.is_expanded {
+        for child in &ctx.children {
+            items.push(child.clone().into_any_flex());
+        }
+    }
+
+    Arc::new(apply_widget_style(
+        apply_flex_alignment(flex_col(items), &style).gap(Length::px(style.layout.gap.max(4.0))),
+        &style,
+    ))
+}
+
+// ---------------------------------------------------------------------------
+// Context Menu
+// ---------------------------------------------------------------------------
+
+pub(crate) fn project_context_menu(menu: &UiContextMenu, ctx: ProjectionCtx<'_>) -> UiView {
+    let pos = match overlay_position(ctx.world, ctx.entity) {
+        Some(p) => p,
+        None => return hidden_placeholder(),
+    };
+
+    let menu_style = default_panel_style(ctx.world, "overlay.context_menu.panel");
+    let mut item_style = default_item_style(ctx.world, "overlay.context_menu.item");
+    if item_style.colors.text.is_none() {
+        item_style.colors.text = menu_style.colors.text;
+    }
+    let mut disabled_style = item_style.clone();
+    if let Some(text) = disabled_style.colors.text {
+        disabled_style.colors.text = Some(text.with_alpha(0.4));
+    }
+
+    let mut menu_items: Vec<UiView> = Vec::new();
+    for (i, item) in menu.items.iter().enumerate() {
+        if item.separator_after && !menu_items.is_empty() {
+            let separator = sized_box(label(""))
+                .height(Dim::Fixed(Length::px(1.0)))
+                .width(Dim::Stretch);
+            let mut sep_style = ResolvedStyle::default();
+            sep_style.colors.bg = Some(Color::from_rgba8(255, 255, 255, 40));
+            menu_items.push(Arc::new(apply_widget_style(separator, &sep_style)));
+        }
+
+        let label_view = apply_label_style(label(item.label.clone()), &item_style);
+
+        let row_content: UiView = if let Some(glyph) = item.icon_glyph {
+            let mut icon_style = ResolvedStyle::default();
+            icon_style.colors.text = if item.enabled {
+                item_style.colors.text
+            } else {
+                disabled_style.colors.text
+            };
+            icon_style.text.size = item_style.text.size * 0.9;
+            icon_style.font_family = Some(vec![LUCIDE_FONT_FAMILY.to_string()]);
+            let icon_view = apply_label_style(label(glyph.to_string()), &icon_style);
+            Arc::new(
+                flex_row(vec![icon_view.into_any_flex(), label_view.into_any_flex()])
+                    .gap(Length::px(6.0)),
+            )
+        } else {
+            Arc::new(label_view)
+        };
+
+        if item.enabled {
+            let btn = ecs_button_with_child(
+                ctx.entity,
+                OverlayUiAction::SelectContextMenuItem { index: i },
+                row_content,
+            );
+            menu_items.push(Arc::new(apply_direct_widget_style(btn, &item_style)));
+        } else {
+            menu_items.push(Arc::new(apply_widget_style(row_content, &disabled_style)));
+        }
+    }
+
+    let flex_items: Vec<_> = menu_items.into_iter().map(|v| v.into_any_flex()).collect();
+
+    let computed_pos = ctx
+        .world
+        .get::<OverlayComputedPosition>(ctx.entity)
+        .copied()
+        .unwrap_or_default();
+    let panel_width = if computed_pos.width > 1.0 {
+        computed_pos.width
+    } else {
+        180.0
+    };
+    let panel_height = if computed_pos.height > 1.0 {
+        computed_pos.height
+    } else {
+        flex_items.len() as f64 * 32.0 + 16.0
+    };
+
+    let content = flex_col(flex_items).gap(Length::px(menu_style.layout.gap.max(4.0)));
+    let scrollable = crate::xilem::view::portal(content)
+        .dims((Length::px(panel_width), Length::px(panel_height)));
+
+    Arc::new(
+        transformed(crate::views::opaque_hitbox_for_entity(
+            ctx.entity,
+            apply_widget_style(scrollable, &menu_style),
+        ))
+        .translate(pos),
     )
 }

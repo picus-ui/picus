@@ -27,7 +27,7 @@ use crate::{
     i18n::AppI18n,
     overlay::{
         bubble_ui_pointer_events, ensure_overlay_defaults, ensure_overlay_root,
-        handle_global_overlay_clicks, handle_overlay_actions, reparent_overlay_entities,
+        handle_context_menu_right_clicks, handle_global_overlay_clicks, handle_overlay_actions, reparent_overlay_entities,
         sync_overlay_positions, sync_overlay_stack_lifecycle, OverlayPointerRoutingState,
     },
     projection::{register_core_projectors, UiProjectorRegistry},
@@ -142,6 +142,7 @@ impl Plugin for PicusPlugin {
                     dispatch_drag_events,
                     bubble_ui_pointer_events,
                     handle_global_overlay_clicks,
+                    handle_context_menu_right_clicks,
                     sync_scroll_view_layout_geometry,
                     handle_scroll_view_wheel,
                     handle_clipboard_events,

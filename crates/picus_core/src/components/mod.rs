@@ -14,10 +14,12 @@ mod card;
 mod checkbox;
 mod color_picker;
 mod combo_box;
+mod context_menu;
 mod data_table;
 mod date_picker;
 mod dialog;
 mod divider;
+mod expander;
 mod grid;
 mod group_box;
 mod image;
@@ -43,6 +45,7 @@ mod table;
 mod text;
 mod text_input;
 mod theme_picker;
+mod time_picker;
 mod titlebar;
 mod toast;
 mod toolbar;
@@ -58,10 +61,12 @@ pub use card::*;
 pub use checkbox::*;
 pub use color_picker::*;
 pub use combo_box::*;
+pub use context_menu::*;
 pub use data_table::*;
 pub use date_picker::*;
 pub use dialog::*;
 pub use divider::*;
+pub use expander::*;
 pub use grid::*;
 pub use group_box::*;
 pub use image::*;
@@ -87,6 +92,7 @@ pub use table::*;
 pub use text::*;
 pub use text_input::*;
 pub use theme_picker::*;
+pub use time_picker::*;
 pub use titlebar::*;
 pub use toast::*;
 pub use toolbar::*;
@@ -216,14 +222,12 @@ pub fn register_builtin_ui_components(app: &mut App) {
         .register_ui_component::<color_picker::UiColorPickerPanel>()
         .register_ui_component::<date_picker::UiDatePicker>()
         .register_ui_component::<date_picker::UiDatePickerPanel>()
+        .register_ui_component::<time_picker::UiTimePicker>()
+        .register_ui_component::<time_picker::UiTimePickerPanel>()
+        .register_ui_component::<expander::UiExpander>()
+        .register_ui_component::<context_menu::UiContextMenu>()
         .register_ui_component::<theme_picker::UiThemePicker>()
         .register_ui_component::<theme_picker::UiThemePickerMenu>()
         .register_ui_component::<navigation_view::UiNavigationView>()
         .register_ui_component::<titlebar::UiTitleBar>();
 }
-
-
-
-
-
-

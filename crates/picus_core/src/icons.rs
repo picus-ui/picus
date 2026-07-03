@@ -26,6 +26,7 @@ pub enum PicusIcon {
     Settings,
     ArrowLeft,
     ArrowRight,
+    Clock,
 }
 
 impl PicusIcon {
@@ -47,6 +48,7 @@ impl PicusIcon {
             Self::Settings => lucide_icons::Icon::Settings,
             Self::ArrowLeft => lucide_icons::Icon::ArrowLeft,
             Self::ArrowRight => lucide_icons::Icon::ArrowRight,
+            Self::Clock => lucide_icons::Icon::Clock,
         }
     }
 
