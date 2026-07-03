@@ -27,6 +27,12 @@ impl UiRadioGroup {
     }
 }
 
+impl Default for UiRadioGroup {
+    fn default() -> Self {
+        Self::new(Vec::<String>::new())
+    }
+}
+
 /// Emitted when the selection in a [`UiRadioGroup`] changes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UiRadioGroupChanged {

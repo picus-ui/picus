@@ -107,6 +107,12 @@ impl UiAvatar {
     }
 }
 
+impl Default for UiAvatar {
+    fn default() -> Self {
+        Self::new("")
+    }
+}
+
 /// Generate initials from a name string (max 2 characters).
 ///
 /// Returns the first letter of the first word and, if available, the first letter

@@ -3,7 +3,7 @@ use bevy_ecs::{entity::Entity, prelude::*};
 use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 
 /// Causes a floating tooltip to appear when the entity is hovered.
-#[derive(Component, Debug, Clone, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Default, PartialEq, Eq)]
 pub struct HasTooltip {
     /// Text shown inside the tooltip.
     pub text: String,
@@ -23,6 +23,15 @@ pub struct UiTooltip {
     pub text: String,
     /// The entity that triggered this tooltip.
     pub anchor: Entity,
+}
+
+impl Default for UiTooltip {
+    fn default() -> Self {
+        Self {
+            text: String::new(),
+            anchor: Entity::PLACEHOLDER,
+        }
+    }
 }
 
 impl UiComponentTemplate for UiTooltip {

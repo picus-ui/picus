@@ -105,6 +105,14 @@ pub struct UiThemePickerMenu {
     pub anchor: Entity,
 }
 
+impl Default for UiThemePickerMenu {
+    fn default() -> Self {
+        Self {
+            anchor: Entity::PLACEHOLDER,
+        }
+    }
+}
+
 /// Emitted when a [`UiThemePicker`] selects a new variant.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UiThemePickerChanged {

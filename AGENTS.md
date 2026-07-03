@@ -169,21 +169,33 @@ Migration rules from old spawn code:
    entities inside `Children [...]` are comma-separated.
 3. Move `ChildOf(parent)` structure into nested `Children [...]`; do not keep
    explicit parent entity plumbing unless later systems need the entity ID.
-4. Prefer field patch syntax for components that implement `Default + Clone`,
-   such as `UiButton { label: { "Save".to_string() } }`.
-5. For components that do not or should not expose a default template, wrap the
+4. Prefer field patch syntax for template-ready components, such as
+   `UiButton { label: { "Save".to_string() } }`. Field patch syntax requires
+   Bevy `FromTemplate`; for ordinary Picus UI authoring types this means
+   `Default + Clone`.
+5. All public Picus UI authoring components and their nested authoring values
+   must remain `Default + Clone` unless they are documented runtime-only
+   exceptions. This is a public BSN contract, not a convenience.
+6. For components that do not or should not expose a default template, wrap the
    existing constructor with `template_value(...)`, for example
-   `template_value(MyWidget::new(args))`.
-6. Extract repeated fragments into Rust functions returning `impl Scene` or
+   `template_value(MyWidget::new(args))`, or insert the component from an ECS
+   system. Type-erased runtime hooks such as `UiDialogCloseAction` are examples
+   of this exception path.
+7. Extract repeated fragments into Rust functions returning `impl Scene` or
    `impl SceneList`; keep dynamic data flow and event handling in ordinary ECS
    systems.
-7. `UiComponentTemplate::expand` remains authoritative for Picus-owned template
+8. `UiComponentTemplate::expand` remains authoritative for Picus-owned template
    parts. BSN creates the logical ECS tree; Picus still expands logical controls
    and projects them into the retained Masonry runtime.
-8. When adding a new Picus component intended for BSN authoring, derive
-   `Default + Clone` where the default is meaningful. Use Bevy `FromTemplate`
-   only when fields need spawn-time context such as named entity references or
-   asset handle templates.
+9. When adding a new Picus UI authoring component, derive or implement
+   `Default + Clone` and update the
+   `public_ui_authoring_types_are_bsn_template_ready` compile-time test. Use
+   Bevy `FromTemplate` directly only when fields need spawn-time context such
+   as named entity references or asset handle templates.
+10. Components with `Entity` fields may use `Entity::PLACEHOLDER` as the
+    default only to support BSN patching. Real scenes must patch those fields
+    with a meaningful entity reference or let the relevant ECS system populate
+    them.
 
 ## 7. Synthesis and Events
 

@@ -8,13 +8,14 @@ use bevy_ecs::prelude::*;
 use bevy_window::{PrimaryWindow, Window};
 
 use crate::{
-    runtime::MasonryRuntime,
     events::{UiEventQueue, UiPointerHitEvent, UiPointerPhase},
+    runtime::MasonryRuntime,
 };
 
 /// Drag data type identifier.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub enum DragDataType {
+    #[default]
     Text,
     File,
     Custom(&'static str),
@@ -26,6 +27,12 @@ pub enum DragData {
     Text(String),
     File(Vec<String>),
     Custom(Entity, String),
+}
+
+impl Default for DragData {
+    fn default() -> Self {
+        Self::Text(String::new())
+    }
 }
 
 /// Visual preview configuration for drag ghost.
@@ -54,11 +61,30 @@ pub struct DragSource {
     pub drag_preview: Option<DragPreview>,
 }
 
+impl Default for DragSource {
+    fn default() -> Self {
+        Self {
+            can_drag: true,
+            drag_data: None,
+            drag_preview: None,
+        }
+    }
+}
+
 /// Component marking an entity as a drop target.
 #[derive(Component, Debug, Clone)]
 pub struct DropTarget {
     pub allow_drop: bool,
     pub accepted_types: Vec<DragDataType>,
+}
+
+impl Default for DropTarget {
+    fn default() -> Self {
+        Self {
+            allow_drop: true,
+            accepted_types: Vec::new(),
+        }
+    }
 }
 
 /// Event component attached to entities during drag operations.
@@ -69,11 +95,19 @@ pub enum DragEvent {
     /// Emitted on a target entity when the drag enters its area.
     DragEnter { source: Entity, data: DragData },
     /// Emitted while the drag hovers over a target.
-    DragOver { source: Entity, data: DragData, position: (f64, f64) },
+    DragOver {
+        source: Entity,
+        data: DragData,
+        position: (f64, f64),
+    },
     /// Emitted on the previous target when the drag leaves its area.
     DragLeave { source: Entity },
     /// Emitted on the final target when the drag is released over it.
-    Drop { source: Entity, data: DragData, position: (f64, f64) },
+    Drop {
+        source: Entity,
+        data: DragData,
+        position: (f64, f64),
+    },
     /// Emitted on the source when the drag ends.
     DragCompleted { dropped: bool },
 }
@@ -114,8 +148,7 @@ fn entity_at_physical_position(
 ) -> Option<Entity> {
     // get_hit_path accepts physical coordinates and converts to logical
     // using the runtime's internal scale factor.
-    let hit_path =
-        runtime.get_hit_path(masonry_core::kurbo::Point::new(physical_x, physical_y));
+    let hit_path = runtime.get_hit_path(masonry_core::kurbo::Point::new(physical_x, physical_y));
 
     // The last element in the hit path is the deepest widget under the pointer.
     hit_path.last().and_then(|widget_id| {
@@ -167,9 +200,9 @@ pub fn track_drag_state(
                         drag_state.drag_position = event.position;
                         drag_state.current_target = None;
 
-                        commands.entity(entity).insert(DragEvent::DragStarting {
-                            data: data.clone(),
-                        });
+                        commands
+                            .entity(entity)
+                            .insert(DragEvent::DragStarting { data: data.clone() });
 
                         // Consumed – skip re-push.
                         continue;
@@ -181,23 +214,22 @@ pub fn track_drag_state(
         // --- While dragging: update the hover target ---
         if drag_state.is_dragging {
             let under_pointer = entity;
-            let is_drop_target = drop_targets
-                .get(under_pointer)
-                .is_ok_and(|t| t.allow_drop);
+            let is_drop_target = drop_targets.get(under_pointer).is_ok_and(|t| t.allow_drop);
 
             if is_drop_target {
                 let previous = drag_state.current_target.replace(under_pointer);
                 match previous {
                     Some(prev) if prev != under_pointer => {
                         if let Some(source) = drag_state.source_entity {
-                            commands.entity(prev).insert(DragEvent::DragLeave { source });
+                            commands
+                                .entity(prev)
+                                .insert(DragEvent::DragLeave { source });
                         }
                         if let Some(data) = drag_state.drag_data.clone() {
                             if let Some(source) = drag_state.source_entity {
-                                commands.entity(under_pointer).insert(DragEvent::DragEnter {
-                                    source,
-                                    data,
-                                });
+                                commands
+                                    .entity(under_pointer)
+                                    .insert(DragEvent::DragEnter { source, data });
                             }
                         }
                     }
@@ -217,17 +249,18 @@ pub fn track_drag_state(
                         // First target entered.
                         if let Some(data) = drag_state.drag_data.clone() {
                             if let Some(source) = drag_state.source_entity {
-                                commands.entity(under_pointer).insert(DragEvent::DragEnter {
-                                    source,
-                                    data,
-                                });
+                                commands
+                                    .entity(under_pointer)
+                                    .insert(DragEvent::DragEnter { source, data });
                             }
                         }
                     }
                 }
             } else if let Some(prev) = drag_state.current_target.take() {
                 if let Some(source) = drag_state.source_entity {
-                    commands.entity(prev).insert(DragEvent::DragLeave { source });
+                    commands
+                        .entity(prev)
+                        .insert(DragEvent::DragLeave { source });
                 }
             }
 
@@ -248,7 +281,9 @@ pub fn track_drag_state(
                 }
 
                 if let Some(source) = drag_state.source_entity {
-                    commands.entity(source).insert(DragEvent::DragCompleted { dropped });
+                    commands
+                        .entity(source)
+                        .insert(DragEvent::DragCompleted { dropped });
                 }
 
                 // Reset drag state.
@@ -303,16 +338,12 @@ pub fn dispatch_drag_events(
     };
 
     // Hit-test at the physical cursor position.
-    let hit_entity =
-        entity_at_physical_position(runtime, cursor_pos.x as f64, cursor_pos.y as f64);
+    let hit_entity = entity_at_physical_position(runtime, cursor_pos.x as f64, cursor_pos.y as f64);
 
     let previous_target = drag_state.current_target;
 
     if let Some(target_entity) = hit_entity {
-        if drop_targets
-            .get(target_entity)
-            .is_ok_and(|t| t.allow_drop)
-        {
+        if drop_targets.get(target_entity).is_ok_and(|t| t.allow_drop) {
             let source = drag_state.source_entity.unwrap();
             let data = drag_state.drag_data.clone().unwrap();
 
@@ -322,10 +353,9 @@ pub fn dispatch_drag_events(
                     commands.entity(old).insert(DragEvent::DragLeave { source });
                 }
                 // Entered new target.
-                commands.entity(target_entity).insert(DragEvent::DragEnter {
-                    source,
-                    data,
-                });
+                commands
+                    .entity(target_entity)
+                    .insert(DragEvent::DragEnter { source, data });
                 drag_state.current_target = Some(target_entity);
             } else {
                 // Still over the same target.

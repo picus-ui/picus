@@ -17,6 +17,18 @@ pub struct ClipRect {
     pub corner_radius: f64,
 }
 
+impl Default for ClipRect {
+    fn default() -> Self {
+        Self {
+            x: 0.0,
+            y: 0.0,
+            width: 0.0,
+            height: 0.0,
+            corner_radius: 0.0,
+        }
+    }
+}
+
 /// Drop shadow parameters.
 #[derive(Debug, Clone, Copy)]
 pub struct DropShadow {
@@ -25,6 +37,18 @@ pub struct DropShadow {
     pub offset_y: f64,
     pub blur_radius: f64,
     pub spread: f64,
+}
+
+impl Default for DropShadow {
+    fn default() -> Self {
+        Self {
+            color: Color::from_rgba8(0, 0, 0, 0),
+            offset_x: 0.0,
+            offset_y: 0.0,
+            blur_radius: 0.0,
+            spread: 0.0,
+        }
+    }
 }
 
 /// 2D visual transformation.
@@ -60,6 +84,15 @@ pub struct GradientStop {
     pub color: Color,
 }
 
+impl Default for GradientStop {
+    fn default() -> Self {
+        Self {
+            offset: 0.0,
+            color: Color::from_rgba8(0, 0, 0, 0),
+        }
+    }
+}
+
 /// A brush that can fill a visual element.
 #[derive(Debug, Clone)]
 pub enum CompositionBrush {
@@ -77,6 +110,12 @@ pub enum CompositionBrush {
     Image(Entity),
 }
 
+impl Default for CompositionBrush {
+    fn default() -> Self {
+        Self::Solid(Color::from_rgba8(0, 0, 0, 0))
+    }
+}
+
 /// A named visual effect applied to a layer or element.
 #[derive(Debug, Clone)]
 pub enum CompositionEffect {
@@ -84,6 +123,12 @@ pub enum CompositionEffect {
     Saturation { factor: f64 },
     Tint { color: Color, amount: f64 },
     Opacity { opacity: f32 },
+}
+
+impl Default for CompositionEffect {
+    fn default() -> Self {
+        Self::Opacity { opacity: 1.0 }
+    }
 }
 
 /// Per-entity visual composition properties.
@@ -174,15 +219,16 @@ pub fn apply_composition_effects(
         let effects = std::mem::take(&mut layer.effects);
         for effect in &effects {
             if let CompositionEffect::Opacity { opacity } = effect {
-                layer.brushes.push(CompositionBrush::Solid(Color::from_rgba8(
-                    0,
-                    0,
-                    0,
-                    (opacity * 255.0) as u8,
-                )));
+                layer
+                    .brushes
+                    .push(CompositionBrush::Solid(Color::from_rgba8(
+                        0,
+                        0,
+                        0,
+                        (opacity * 255.0) as u8,
+                    )));
             }
         }
         layer.effects = effects;
     }
 }
-

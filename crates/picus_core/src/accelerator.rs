@@ -5,10 +5,9 @@
 //! modifier key state and dispatches [`AcceleratorActivated`] events through
 //! the global [`UiEventQueue`] when a matching accelerator is pressed.
 
-
 use bevy_ecs::message::MessageReader;
 use bevy_ecs::prelude::*;
-use bevy_input::keyboard::{KeyCode, KeyboardInput};
+use bevy_input::keyboard::{KeyCode, KeyboardInput, NativeKeyCode};
 
 use crate::events::UiEventQueue;
 
@@ -34,6 +33,16 @@ pub struct KeyboardAccelerator {
     pub modifiers: AcceleratorModifiers,
     /// Whether this accelerator is currently active.
     pub enabled: bool,
+}
+
+impl Default for KeyboardAccelerator {
+    fn default() -> Self {
+        Self {
+            key: KeyCode::Unidentified(NativeKeyCode::Unidentified),
+            modifiers: AcceleratorModifiers::default(),
+            enabled: true,
+        }
+    }
 }
 
 impl KeyboardAccelerator {
@@ -99,7 +108,7 @@ pub enum AcceleratorScope {
 
 /// Optional text override shown in menus for this accelerator
 /// (e.g. "Ctrl+S", "Ctrl+Shift+Z").
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Default)]
 pub struct AcceleratorTextOverride(pub String);
 
 /// Event pushed to [`UiEventQueue`] when an accelerator is activated.
@@ -233,7 +242,3 @@ mod tests {
         assert_eq!(a.modifiers, b.modifiers);
     }
 }
-
-
-
-

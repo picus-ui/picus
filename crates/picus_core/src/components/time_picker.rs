@@ -54,7 +54,7 @@ impl UiTimePicker {
     /// Build an `UiTimePicker` from a 12-hour value and AM/PM flag.
     #[must_use]
     pub fn from_12h(h12: u8, is_pm: bool, minute: u8, second: u8) -> Self {
-        let mut h = h12.min(12).max(1);
+        let mut h = h12.clamp(1, 12);
         if is_pm {
             if h != 12 {
                 h += 12;
@@ -72,6 +72,12 @@ impl UiTimePicker {
     }
 }
 
+impl Default for UiTimePicker {
+    fn default() -> Self {
+        Self::new(0, 0, 0)
+    }
+}
+
 /// Floating time picker panel (rendered in the overlay layer).
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UiTimePickerPanel {
@@ -79,6 +85,15 @@ pub struct UiTimePickerPanel {
     pub anchor: Entity,
     /// Whether to show in 24-hour mode (matches the picker setting).
     pub use_24h: bool,
+}
+
+impl Default for UiTimePickerPanel {
+    fn default() -> Self {
+        Self {
+            anchor: Entity::PLACEHOLDER,
+            use_24h: true,
+        }
+    }
 }
 
 /// Emitted when the selected time changes in a [`UiTimePicker`].

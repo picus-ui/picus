@@ -96,6 +96,12 @@ impl UiRating {
     }
 }
 
+impl Default for UiRating {
+    fn default() -> Self {
+        Self::new(0.0)
+    }
+}
+
 impl UiComponentTemplate for UiRating {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::elements::project_rating(component, ctx)

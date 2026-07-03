@@ -4,15 +4,13 @@
 //! (roles, labels, values, states) and systems for synchronising this
 //! metadata with the AccessKit accessibility tree.
 
-use accesskit::{
-    HasPopup, Node, Toggled,
-};
+use accesskit::{HasPopup, Node, Toggled};
 use bevy_ecs::prelude::*;
 
 use crate::events::UiEventQueue;
 
 /// Accessibility role mapped to AccessKit roles.
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum AccessibleRole {
     Button,
     CheckBox,
@@ -40,6 +38,7 @@ pub enum AccessibleRole {
     Tree,
     TreeItem,
     Window,
+    #[default]
     Unknown,
 }
 
@@ -78,11 +77,11 @@ impl AccessibleRole {
 }
 
 /// Screen-reader label attached to an entity.
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Default)]
 pub struct AccessibleLabel(pub String);
 
 /// Longer description for screen readers.
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Default)]
 pub struct AccessibleDescription(pub String);
 
 /// Numeric value and range for sliders, progress bars, etc.
@@ -197,9 +196,7 @@ pub fn sync_accessibility_tree(
 /// This is a framework-level dispatch; concrete components (buttons,
 /// sliders, text inputs) should drain [`AccessibleAction`] from
 /// [`UiEventQueue`] and perform the appropriate mutation.
-pub fn handle_accessibility_actions(
-    queue: Res<UiEventQueue>,
-) {
+pub fn handle_accessibility_actions(queue: Res<UiEventQueue>) {
     // AccessKit action requests arrive through the bevy_a11y
     // `AccessibilityRequested` resource.  In the current bevy 0.19
     // integration this resource is read per-frame and exposes
@@ -235,5 +232,3 @@ pub fn handle_accessibility_actions(
     // for the bevy_a11y ActionRequest bridge to stabilise.
     let _ = queue;
 }
-
-

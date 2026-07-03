@@ -3,7 +3,7 @@ use bevy_ecs::prelude::*;
 use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 
 /// A single breadcrumb item in a navigation path.
-#[derive(Component, Debug, Clone, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Default, PartialEq, Eq)]
 pub struct UiBreadcrumbItem {
     /// The display text for this breadcrumb segment.
     pub label: String,

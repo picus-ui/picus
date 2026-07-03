@@ -7,9 +7,10 @@ use crate::{
 };
 
 /// Scroll axis used by [`UiScrollView`] interactions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ScrollAxis {
     Horizontal,
+    #[default]
     Vertical,
 }
 

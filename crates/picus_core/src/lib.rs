@@ -97,9 +97,9 @@ pub use accessibility::*;
 pub use app_ext::*;
 
 pub use clipboard::*;
+pub use components::*;
 pub use composition::*;
 pub use drag_drop::*;
-pub use components::*;
 pub use ecs::*;
 pub use events::*;
 pub use fonts::*;
@@ -123,55 +123,61 @@ pub use widget_actions::*;
 pub mod prelude {
     //! Convenience exports for building `picus_core` apps.
 
-    pub use bevy_ecs::hierarchy::{ChildOf, Children};
     pub use crate::scene::*;
+    pub use bevy_ecs::hierarchy::{ChildOf, Children};
 
     pub use crate::{
-        AppBreakpoints, AppI18n, AppPicusExt, AutoDismiss, BevyWindowOptions, BuiltinUiAction,
-        ColorStyle, ComputedStyle, CurrentColorStyle, EcsButtonView, GridExt, GridParams,
-        HasTooltip, InlineStyle, InteractionState, LayoutStyle, LocalizeText, MasonryRuntime,
-        ObjectFit, OverlayComputedPosition, OverlayConfig, OverlayMouseButtonCursor,
-        OverlayPlacement, OverlayPointerRoutingState, OverlayStack, OverlayState, OverlayUiAction,
-        PicusBuiltinsPlugin, PicusPlugin, ProjectionCtx, PseudoClass, ScrollAxis, Selector,
-        SplitDirection, StopUiPointerPropagation, StyleClass, StyleDirty, StyleRule, StyleSetter,
-        StyleSheet, StyleTransition, SyncAssetSource, SyncTextSource, SynthesizedUiViews,
-        TargetColorStyle, TextStyle, ToastKind, TypedUiEvent, UiAnyView, UiBadge, UiButton,
-        UiCanvas, UiCanvasCommand, UiCanvasPathCommand, UiCanvasPosition, UiCheckbox,
-        UiCheckboxChanged, UiColorPicker, UiColorPickerChanged, UiColorPickerPanel, UiComboBox,
-        UiComboBoxChanged, UiComboOption, UiComponentTemplate, UiDataColumn, UiDataRow,
-        UiDataTable, UiDataTableSelectionChanged, UiDataTableSort, UiDataTableSortChanged,
-        UiDatePicker, UiDatePickerChanged, UiDatePickerPanel, UiDialog, UiDropdownItem,
-        UiDropdownMenu, UiDropdownPlacement, UiEvent, UiEventQueue, UiFlexColumn, UiFlexRow,
-        UiGrid, UiGridAutoFlow, UiGridCell, UiGridLength, UiGridLengthParseError, UiGroupBox,
-        UiImage, UiImageAlignmentX, UiImageAlignmentY, UiImageViewBox, UiImageViewBoxUnits,
-        UiInteractionEvent, UiLabel, UiListSelectionMode, UiListView, UiListViewSelectionChanged,
-        UiMenuBar, UiMenuBarItem, UiMenuItem, UiMenuItemPanel, UiMenuItemSelected,
-        UiMultilineTextInput, UiMultilineTextInputChanged, UiOverlayRoot, UiPasswordInput,
-        UiPasswordInputChanged, UiPointerEvent, UiPointerHitEvent, UiPointerPhase, UiPopover,
-        UiProgressBar, UiProjector, UiProjectorRegistry, UiRadioGroup, UiRadioGroupChanged,
-        UiResponsiveGrid, UiResponsiveRow, UiRoot, UiScrollView, UiScrollViewChanged, UiSlider,
-        UiSliderChanged, UiSortDirection, UiSpinner, UiSplitPane, UiSwitch, UiSwitchChanged,
-        UiSynthesisStats, UiTabBar, UiTabChanged, UiTable, UiTextInput, UiTextInputChanged,
-        UiThemePicker, UiThemePickerChanged, UiThemePickerMenu, UiThemePickerOption, UiToast,
-        UiTooltip, UiTreeNode, UiTreeNodeToggled, UiView, UiVisibleResponsive, WidgetUiAction,
-        WindowSize, XilemFontBridge, bubble_ui_pointer_events, button, button_with_child, checkbox,
-        collect_bevy_font_assets, dismiss_overlays_on_click, ecs_button, ecs_button_with_child,
-        ecs_checkbox, ecs_slider, ecs_switch, ecs_text_button, ecs_text_input, emit_ui_action,
-        ensure_overlay_root, ensure_overlay_root_entity, ensure_template_part,
-        expand_builtin_ui_component_templates, find_template_part, gather_ui_roots,
-        handle_global_overlay_clicks, handle_overlay_actions, handle_tooltip_hovers,
-        handle_widget_actions, inject_bevy_input_into_masonry, mark_style_dirty,
-        rebuild_masonry_runtime, register_builtin_projectors, register_builtin_style_type_aliases,
-        register_builtin_ui_components, resolve_localized_text, resolve_style,
-        resolve_style_for_classes, resolve_style_for_entity_classes, run_app,
-        run_app_with_window_options, slider, spawn_in_overlay_root, spawn_popover_in_overlay_root,
-        sync_dropdown_positions, sync_fonts_to_xilem, sync_overlay_positions,
-        sync_overlay_stack_lifecycle, synthesize_roots, synthesize_roots_with_stats, synthesize_ui,
-        synthesize_world, text_button, text_input, tick_auto_dismiss, tick_toasts,
-        track_window_size, xilem_badge, xilem_badge_count, xilem_badge_text, xilem_button,
-        xilem_button_any_pointer, xilem_canvas, xilem_checkbox, xilem_grid, xilem_image,
-        xilem_progress_bar, xilem_slider, xilem_switch, xilem_text_button, xilem_text_input,
-        xilem_zstack,
+        AppBreakpoints, AppI18n, AppPicusExt, AutoDismiss, AvatarShape, BevyWindowOptions,
+        BuiltinUiAction, ButtonAppearance, ButtonIconPosition, ButtonShape, ButtonSize, ColorStyle,
+        ComputedStyle, CurrentColorStyle, EcsButtonView, GridExt, GridParams, HasTooltip,
+        InlineStyle, InteractionState, LayoutStyle, LocalizeText, MasonryRuntime, MessageBarKind,
+        NavigationViewItem, ObjectFit, OverlayComputedPosition, OverlayConfig,
+        OverlayMouseButtonCursor, OverlayPlacement, OverlayPointerRoutingState, OverlayStack,
+        OverlayState, OverlayUiAction, PicusBuiltinsPlugin, PicusPlugin, ProjectionCtx,
+        PseudoClass, RatingColor, RatingSize, ScrollAxis, Selector, SplitDirection,
+        StopUiPointerPropagation, StyleClass, StyleDirty, StyleRule, StyleSetter, StyleSheet,
+        StyleTransition, SyncAssetSource, SyncTextSource, SynthesizedUiViews, TargetColorStyle,
+        TextStyle, TitleBarAction, TitleBarIcon, TitleBarState, ToastKind, TypedUiEvent, UiAnyView,
+        UiAvatar, UiBadge, UiBreadcrumb, UiBreadcrumbItem, UiButton, UiCanvas, UiCanvasCommand,
+        UiCanvasPathCommand, UiCanvasPosition, UiCard, UiCheckbox, UiCheckboxChanged,
+        UiColorPicker, UiColorPickerChanged, UiColorPickerPanel, UiComboBox, UiComboBoxChanged,
+        UiComboOption, UiComponentTemplate, UiContextMenu, UiContextMenuItem,
+        UiContextMenuItemSelected, UiContextMenuTrigger, UiDataColumn, UiDataRow, UiDataTable,
+        UiDataTableSelectionChanged, UiDataTableSort, UiDataTableSortChanged, UiDatePicker,
+        UiDatePickerChanged, UiDatePickerPanel, UiDialog, UiDivider, UiDropdownItem,
+        UiDropdownMenu, UiDropdownPlacement, UiEvent, UiEventQueue, UiExpander, UiExpanderChanged,
+        UiFlexColumn, UiFlexRow, UiGrid, UiGridAutoFlow, UiGridCell, UiGridLength,
+        UiGridLengthParseError, UiGroupBox, UiImage, UiImageAlignmentX, UiImageAlignmentY,
+        UiImageViewBox, UiImageViewBoxUnits, UiInteractionEvent, UiLabel, UiLink, UiLinkAction,
+        UiListSelectionMode, UiListView, UiListViewSelectionChanged, UiMenuBar, UiMenuBarItem,
+        UiMenuItem, UiMenuItemPanel, UiMenuItemSelected, UiMessageBar, UiMultilineTextInput,
+        UiMultilineTextInputChanged, UiNavigationSelectionChanged, UiNavigationView, UiOverlayRoot,
+        UiPasswordInput, UiPasswordInputChanged, UiPointerEvent, UiPointerHitEvent, UiPointerPhase,
+        UiPopover, UiProgressBar, UiProjector, UiProjectorRegistry, UiRadioGroup,
+        UiRadioGroupChanged, UiRating, UiRatingChanged, UiResponsiveGrid, UiResponsiveRow, UiRoot,
+        UiScrollView, UiScrollViewChanged, UiSearch, UiSlider, UiSliderChanged, UiSortDirection,
+        UiSpinner, UiSplitPane, UiSwitch, UiSwitchChanged, UiSynthesisStats, UiTabBar,
+        UiTabChanged, UiTable, UiText, UiTextInput, UiTextInputChanged, UiThemePicker,
+        UiThemePickerChanged, UiThemePickerMenu, UiThemePickerOption, UiTitleBar, UiToast,
+        UiToolbar, UiTooltip, UiTreeNode, UiTreeNodeToggled, UiView, UiVisibleResponsive,
+        WidgetUiAction, WindowSize, XilemFontBridge, bubble_ui_pointer_events, button,
+        button_with_child, checkbox, collect_bevy_font_assets, dismiss_overlays_on_click,
+        ecs_button, ecs_button_with_child, ecs_checkbox, ecs_slider, ecs_switch, ecs_text_button,
+        ecs_text_input, emit_ui_action, ensure_overlay_root, ensure_overlay_root_entity,
+        ensure_template_part, expand_builtin_ui_component_templates, find_template_part,
+        gather_ui_roots, handle_global_overlay_clicks, handle_overlay_actions,
+        handle_tooltip_hovers, handle_widget_actions, inject_bevy_input_into_masonry,
+        mark_style_dirty, rebuild_masonry_runtime, register_builtin_projectors,
+        register_builtin_style_type_aliases, register_builtin_ui_components,
+        resolve_localized_text, resolve_style, resolve_style_for_classes,
+        resolve_style_for_entity_classes, run_app, run_app_with_window_options, slider,
+        spawn_in_overlay_root, spawn_popover_in_overlay_root, sync_dropdown_positions,
+        sync_fonts_to_xilem, sync_overlay_positions, sync_overlay_stack_lifecycle,
+        synthesize_roots, synthesize_roots_with_stats, synthesize_ui, synthesize_world,
+        text_button, text_input, tick_auto_dismiss, tick_toasts, track_window_size, xilem_badge,
+        xilem_badge_count, xilem_badge_text, xilem_button, xilem_button_any_pointer, xilem_canvas,
+        xilem_checkbox, xilem_grid, xilem_image, xilem_progress_bar, xilem_slider, xilem_switch,
+        xilem_text_button, xilem_text_input, xilem_zstack,
     };
 
     pub use crate::{
@@ -182,5 +188,3 @@ pub mod prelude {
 
 #[cfg(test)]
 mod tests;
-
-

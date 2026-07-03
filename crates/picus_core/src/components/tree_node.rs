@@ -6,7 +6,7 @@ use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 ///
 /// Tree nodes are connected through ECS parent/child relationships.
 /// A node with `UiTreeNode` children shows an expand/collapse toggle.
-#[derive(Component, Debug, Clone, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Default, PartialEq, Eq)]
 pub struct UiTreeNode {
     /// Display label for this node.
     pub label: String,

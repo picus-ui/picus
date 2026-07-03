@@ -101,7 +101,9 @@ fn picus_plugin_enables_bsn_ui_tree_spawning() {
     let button = children[1];
 
     assert_eq!(
-        app.world().get::<crate::UiLabel>(label).map(|label| label.text.as_str()),
+        app.world()
+            .get::<crate::UiLabel>(label)
+            .map(|label| label.text.as_str()),
         Some("Hello from BSN")
     );
     assert_eq!(
@@ -110,6 +112,164 @@ fn picus_plugin_enables_bsn_ui_tree_spawning() {
             .map(|button| button.label.as_str()),
         Some("Click")
     );
+}
+
+#[test]
+fn public_ui_authoring_types_are_bsn_template_ready() {
+    fn assert_component<T>()
+    where
+        T: Component + Default + Clone + bevy_ecs::template::FromTemplate,
+    {
+    }
+
+    fn assert_value<T>()
+    where
+        T: Default + Clone + bevy_ecs::template::FromTemplate,
+    {
+    }
+
+    assert_component::<crate::UiRoot>();
+    assert_component::<crate::UiOverlayRoot>();
+    assert_component::<crate::UiFlexColumn>();
+    assert_component::<crate::UiFlexRow>();
+    assert_component::<crate::UiLabel>();
+    assert_component::<crate::LocalizeText>();
+    assert_component::<crate::OverlayConfig>();
+    assert_component::<crate::OverlayComputedPosition>();
+    assert_component::<crate::OverlayState>();
+    assert_component::<crate::AutoDismiss>();
+    assert_component::<crate::AnchoredTo>();
+    assert_component::<crate::OverlayAnchorRect>();
+    assert_component::<crate::UiResponsiveRow>();
+    assert_component::<crate::UiVisibleResponsive>();
+    assert_component::<crate::UiResponsiveGrid>();
+
+    assert_component::<crate::StyleClass>();
+    assert_component::<crate::StyleDirty>();
+    assert_component::<crate::InteractionState>();
+    assert_component::<crate::InlineStyle>();
+    assert_component::<crate::LayoutStyle>();
+    assert_component::<crate::ColorStyle>();
+    assert_component::<crate::TextStyle>();
+    assert_component::<crate::StyleTransition>();
+    assert_component::<crate::StopUiPointerPropagation>();
+
+    assert_component::<crate::AccessibleRole>();
+    assert_component::<crate::AccessibleLabel>();
+    assert_component::<crate::AccessibleDescription>();
+    assert_component::<crate::AccessibleValue>();
+    assert_component::<crate::AccessibleState>();
+    assert_component::<crate::KeyboardAccelerator>();
+    assert_component::<crate::AcceleratorScope>();
+    assert_component::<crate::AcceleratorTextOverride>();
+    assert_component::<crate::ClipboardText>();
+    assert_component::<crate::CompositionVisual>();
+    assert_component::<crate::CompositionLayer>();
+    assert_component::<crate::DragSource>();
+    assert_component::<crate::DropTarget>();
+    assert_component::<crate::ValidationState>();
+    assert_component::<crate::ValidationRules>();
+    assert_component::<crate::ValidatedString>();
+    assert_component::<crate::ValidationDisplay>();
+    assert_component::<crate::NeedsValidation>();
+
+    assert_component::<crate::UiAvatar>();
+    assert_component::<crate::UiBadge>();
+    assert_component::<crate::UiBreadcrumb>();
+    assert_component::<crate::UiBreadcrumbItem>();
+    assert_component::<crate::UiButton>();
+    assert_component::<crate::UiCanvas>();
+    assert_component::<crate::UiCanvasPosition>();
+    assert_component::<crate::UiCard>();
+    assert_component::<crate::UiCheckbox>();
+    assert_component::<crate::UiColorPicker>();
+    assert_component::<crate::UiColorPickerPanel>();
+    assert_component::<crate::UiComboBox>();
+    assert_component::<crate::UiContextMenuTrigger>();
+    assert_component::<crate::UiContextMenu>();
+    assert_component::<crate::UiDataTable>();
+    assert_component::<crate::UiDatePicker>();
+    assert_component::<crate::UiDatePickerPanel>();
+    assert_component::<crate::UiDialog>();
+    assert_component::<crate::UiDivider>();
+    assert_component::<crate::UiDropdownMenu>();
+    assert_component::<crate::UiDropdownItem>();
+    assert_component::<crate::UiExpander>();
+    assert_component::<crate::UiGrid>();
+    assert_component::<crate::UiGridCell>();
+    assert_component::<crate::UiGroupBox>();
+    assert_component::<crate::UiImage>();
+    assert_component::<crate::UiLink>();
+    assert_component::<crate::UiListView>();
+    assert_component::<crate::UiMenuBar>();
+    assert_component::<crate::UiMenuBarItem>();
+    assert_component::<crate::UiMenuItemPanel>();
+    assert_component::<crate::UiMessageBar>();
+    assert_component::<crate::UiMultilineTextInput>();
+    assert_component::<crate::UiNavigationView>();
+    assert_component::<crate::UiPasswordInput>();
+    assert_component::<crate::UiPopover>();
+    assert_component::<crate::UiProgressBar>();
+    assert_component::<crate::UiRadioGroup>();
+    assert_component::<crate::UiRating>();
+    assert_component::<crate::UiScrollView>();
+    assert_component::<crate::UiSearch>();
+    assert_component::<crate::UiSlider>();
+    assert_component::<crate::UiSpinner>();
+    assert_component::<crate::UiSplitPane>();
+    assert_component::<crate::UiSwitch>();
+    assert_component::<crate::UiTabBar>();
+    assert_component::<crate::UiTable>();
+    assert_component::<crate::UiText>();
+    assert_component::<crate::UiTextInput>();
+    assert_component::<crate::UiThemePicker>();
+    assert_component::<crate::UiThemePickerMenu>();
+    assert_component::<crate::UiTimePicker>();
+    assert_component::<crate::UiTimePickerPanel>();
+    assert_component::<crate::UiTitleBar>();
+    assert_component::<crate::UiToolbar>();
+    assert_component::<crate::UiToast>();
+    assert_component::<crate::UiTooltip>();
+    assert_component::<crate::HasTooltip>();
+    assert_component::<crate::UiTreeNode>();
+    assert_component::<crate::TitleBarState>();
+
+    assert_value::<crate::AcceleratorModifiers>();
+    assert_value::<crate::AvatarShape>();
+    assert_value::<crate::ButtonAppearance>();
+    assert_value::<crate::ButtonIconPosition>();
+    assert_value::<crate::ButtonShape>();
+    assert_value::<crate::ButtonSize>();
+    assert_value::<crate::ClipRect>();
+    assert_value::<crate::CompositionBrush>();
+    assert_value::<crate::CompositionEffect>();
+    assert_value::<crate::DragData>();
+    assert_value::<crate::DragDataType>();
+    assert_value::<crate::DragPreview>();
+    assert_value::<crate::DropShadow>();
+    assert_value::<crate::GradientStop>();
+    assert_value::<crate::MessageBarKind>();
+    assert_value::<crate::NavigationViewItem>();
+    assert_value::<crate::RatingColor>();
+    assert_value::<crate::RatingSize>();
+    assert_value::<crate::ScrollAxis>();
+    assert_value::<crate::SplitDirection>();
+    assert_value::<crate::ToastKind>();
+    assert_value::<crate::TypographyPreset>();
+    assert_value::<crate::UiComboOption>();
+    assert_value::<crate::UiContextMenuItem>();
+    assert_value::<crate::UiDataColumn>();
+    assert_value::<crate::UiDataRow>();
+    assert_value::<crate::UiDataTableSort>();
+    assert_value::<crate::UiImageViewBox>();
+    assert_value::<crate::UiImageViewBoxUnits>();
+    assert_value::<crate::UiImageAlignmentX>();
+    assert_value::<crate::UiImageAlignmentY>();
+    assert_value::<crate::UiListSelectionMode>();
+    assert_value::<crate::UiMenuItem>();
+    assert_value::<crate::UiSortDirection>();
+    assert_value::<crate::UiThemePickerOption>();
+    assert_value::<crate::VisualTransform>();
 }
 
 fn init_test_tracing() {
@@ -1003,7 +1163,11 @@ fn resolve_style_for_entity_classes_applies_hover_pseudo_state() {
     world.insert_resource(sheet);
 
     let entity = world
-        .spawn((InteractionState { hovered: true, pressed: false, focused: false },))
+        .spawn((InteractionState {
+            hovered: true,
+            pressed: false,
+            focused: false,
+        },))
         .id();
     let resolved = resolve_style_for_entity_classes(&world, entity, ["test.button"]);
 
@@ -1071,7 +1235,11 @@ fn selector_and_rule_applies_hover_and_pressed_states() {
     let entity = world
         .spawn((
             crate::StyleClass(vec!["test.button".to_string()]),
-            InteractionState { hovered: true, pressed: true, focused: false },
+            InteractionState {
+                hovered: true,
+                pressed: true,
+                focused: false,
+            },
         ))
         .id();
 
@@ -1289,7 +1457,11 @@ fn pointer_left_does_not_clear_pressed_marker() {
     world.insert_resource(bevy_time::Time::<()>::default());
 
     let entity = world
-        .spawn((crate::InteractionState { hovered: true, pressed: true, focused: false },))
+        .spawn((crate::InteractionState {
+            hovered: true,
+            pressed: true,
+            focused: false,
+        },))
         .id();
 
     world
@@ -4346,7 +4518,11 @@ fn tooltip_hover_spawns_and_despawns_overlay_entity() {
         .spawn((
             crate::UiButton::new("Hover me"),
             crate::HasTooltip::new("Tooltip text"),
-            crate::InteractionState { hovered: true, pressed: false, focused: false },
+            crate::InteractionState {
+                hovered: true,
+                pressed: false,
+                focused: false,
+            },
             ChildOf(root),
         ))
         .id();
@@ -4374,7 +4550,11 @@ fn tooltip_hover_spawns_and_despawns_overlay_entity() {
 
     app.world_mut()
         .entity_mut(source)
-        .insert(crate::InteractionState { hovered: false, pressed: false, focused: false });
+        .insert(crate::InteractionState {
+            hovered: false,
+            pressed: false,
+            focused: false,
+        });
     app.update();
 
     let mut tooltip_query = app.world_mut().query::<&crate::UiTooltip>();
@@ -4525,8 +4705,14 @@ fn scroll_view_left_aligns_narrow_content_after_viewport_stretch() {
         .get_widget(label_widget_id)
         .expect("label widget id should resolve");
 
-    let scroll_x = scroll_widget.ctx().to_window(masonry_core::kurbo::Point::ZERO).x;
-    let label_x = label_widget.ctx().to_window(masonry_core::kurbo::Point::ZERO).x;
+    let scroll_x = scroll_widget
+        .ctx()
+        .to_window(masonry_core::kurbo::Point::ZERO)
+        .x;
+    let label_x = label_widget
+        .ctx()
+        .to_window(masonry_core::kurbo::Point::ZERO)
+        .x;
 
     assert!(
         (label_x - scroll_x).abs() <= 4.0,

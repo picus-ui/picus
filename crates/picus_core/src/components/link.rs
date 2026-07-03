@@ -6,7 +6,7 @@ use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 ///
 /// Renders as interactive text that changes appearance on hover and emits
 /// a `UiEvent` when clicked.
-#[derive(Component, Debug, Clone, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Default, PartialEq, Eq)]
 pub struct UiLink {
     /// The link text content.
     pub text: String,

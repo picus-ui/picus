@@ -5,7 +5,7 @@ use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 /// A titled group box that visually groups related content.
 ///
 /// Place content entities as ECS children.
-#[derive(Component, Debug, Clone, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Default, PartialEq, Eq)]
 pub struct UiGroupBox {
     /// Title displayed at the top of the group box.
     pub title: String,

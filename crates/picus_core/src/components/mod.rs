@@ -229,5 +229,6 @@ pub fn register_builtin_ui_components(app: &mut App) {
         .register_ui_component::<theme_picker::UiThemePicker>()
         .register_ui_component::<theme_picker::UiThemePickerMenu>()
         .register_ui_component::<navigation_view::UiNavigationView>()
-        .register_ui_component::<titlebar::UiTitleBar>();
+        .register_ui_component::<titlebar::UiTitleBar>()
+        .register_ui_component::<toolbar::UiToolbar>();
 }

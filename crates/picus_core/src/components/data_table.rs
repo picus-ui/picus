@@ -5,8 +5,9 @@ use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 use super::UiListSelectionMode;
 
 /// Sort direction for a [`UiDataTable`] column.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum UiSortDirection {
+    #[default]
     Ascending,
     Descending,
 }
@@ -22,7 +23,7 @@ impl UiSortDirection {
 }
 
 /// Active sort descriptor for [`UiDataTable`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct UiDataTableSort {
     pub column: usize,
     pub direction: UiSortDirection,
@@ -36,7 +37,7 @@ impl UiDataTableSort {
 }
 
 /// Column metadata for [`UiDataTable`].
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct UiDataColumn {
     pub id: String,
     pub label: String,
@@ -69,7 +70,7 @@ impl UiDataColumn {
 }
 
 /// Data row for [`UiDataTable`].
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct UiDataRow {
     pub id: String,
     pub cells: Vec<String>,
@@ -269,6 +270,12 @@ impl UiDataTable {
         };
         self.sort = Some(next);
         Some(next)
+    }
+}
+
+impl Default for UiDataTable {
+    fn default() -> Self {
+        Self::new(Vec::new())
     }
 }
 

@@ -20,7 +20,7 @@ pub enum UiImageViewBoxUnits {
 ///
 /// The current Masonry image widget does not expose source-rectangle rendering,
 /// so this is stored for data/model parity and future custom image projection.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct UiImageViewBox {
     pub x: f64,
     pub y: f64,

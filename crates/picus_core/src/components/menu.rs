@@ -3,7 +3,7 @@ use bevy_ecs::{entity::Entity, prelude::*};
 use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 
 /// A single item in a menu (inside a dropdown).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct UiMenuItem {
     pub label: String,
     pub value: String,
@@ -20,7 +20,7 @@ impl UiMenuItem {
 }
 
 /// A top-level entry in a menu bar with a dropdown list of menu items.
-#[derive(Component, Debug, Clone, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Default, PartialEq, Eq)]
 pub struct UiMenuBarItem {
     /// Label displayed on the menu bar button.
     pub label: String,
@@ -52,6 +52,14 @@ pub struct UiMenuBar;
 pub struct UiMenuItemPanel {
     /// The [`UiMenuBarItem`] anchor entity this panel belongs to.
     pub anchor: Entity,
+}
+
+impl Default for UiMenuItemPanel {
+    fn default() -> Self {
+        Self {
+            anchor: Entity::PLACEHOLDER,
+        }
+    }
 }
 
 /// Emitted when a menu item is selected from a [`UiMenuBarItem`] dropdown.

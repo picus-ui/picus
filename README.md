@@ -159,9 +159,25 @@ expansion, style resolution, event routing, synthesis, and retained Masonry
 projection all run through the same pipeline as hand-written spawns. Picus treats
 BSN as an in-code UI DSL; external `.bsn` files are not the recommended workflow.
 
-For custom components used in `bsn!`, derive `Default + Clone` when possible, or
-derive/implement Bevy's `FromTemplate` when a field needs spawn-time context such
-as named entity references or asset handle templates.
+BSN field-patch syntax, such as `UiButton { label: { "Save".to_string() } }`,
+requires the patched type to be template-ready. Picus maintains its public UI
+authoring components and their nested authoring values as `Default + Clone`, which
+uses Bevy's blanket `FromTemplate` implementation. For application components that
+you want to patch in `bsn!`, derive both:
+
+```rust
+#[derive(Component, Debug, Clone, Default)]
+struct LoginPanel {
+    title: String,
+}
+```
+
+If a component intentionally carries runtime-only or type-erased behavior, do not
+make callers guess. Use `template_value(MyComponent::new(...))` or spawn that
+component from an ECS system. Picus documents this as the exception path for
+event-hook components such as `UiDialogCloseAction`. Components with `Entity`
+fields may use `Entity::PLACEHOLDER` only as a patching default; replace it with a
+real entity reference when the value matters at runtime.
 
 ---
 

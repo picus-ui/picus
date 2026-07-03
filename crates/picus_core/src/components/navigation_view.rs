@@ -6,7 +6,7 @@ use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 ///
 /// Each item has a display label and an optional icon glyph
 /// from the bundled Lucide icon font.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct NavigationViewItem {
     /// Human-readable label shown in the sidebar.
     pub label: String,
@@ -65,6 +65,12 @@ impl UiNavigationView {
     pub fn with_selected(mut self, index: usize) -> Self {
         self.selected = index;
         self
+    }
+}
+
+impl Default for UiNavigationView {
+    fn default() -> Self {
+        Self::new(Vec::new())
     }
 }
 

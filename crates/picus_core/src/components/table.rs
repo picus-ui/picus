@@ -3,7 +3,7 @@ use bevy_ecs::prelude::*;
 use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 
 /// A simple data table with column headers and rows.
-#[derive(Component, Debug, Clone, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Default, PartialEq, Eq)]
 pub struct UiTable {
     /// Column header labels.
     pub columns: Vec<String>,

@@ -116,6 +116,15 @@ pub struct UiDropdownItem {
     pub index: usize,
 }
 
+impl Default for UiDropdownItem {
+    fn default() -> Self {
+        Self {
+            dropdown: Entity::PLACEHOLDER,
+            index: 0,
+        }
+    }
+}
+
 /// Emitted when a [`UiComboBox`] selection changes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UiComboBoxChanged {

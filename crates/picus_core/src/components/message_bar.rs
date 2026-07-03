@@ -63,6 +63,12 @@ impl UiMessageBar {
     }
 }
 
+impl Default for UiMessageBar {
+    fn default() -> Self {
+        Self::info("")
+    }
+}
+
 impl UiComponentTemplate for UiMessageBar {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::widgets::project_message_bar(component, ctx)

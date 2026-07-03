@@ -84,6 +84,12 @@ impl UiDialog {
     }
 }
 
+impl Default for UiDialog {
+    fn default() -> Self {
+        Self::new("", "")
+    }
+}
+
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct PartDialogTitle;
 

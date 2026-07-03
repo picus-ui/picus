@@ -109,6 +109,12 @@ impl UiListView {
     }
 }
 
+impl Default for UiListView {
+    fn default() -> Self {
+        Self::new(Vec::<String>::new())
+    }
+}
+
 /// Emitted when a [`UiListView`] selection changes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UiListViewSelectionChanged {

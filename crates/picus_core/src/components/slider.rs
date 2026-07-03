@@ -38,6 +38,12 @@ impl UiSlider {
     }
 }
 
+impl Default for UiSlider {
+    fn default() -> Self {
+        Self::new(0.0, 1.0, 0.0)
+    }
+}
+
 /// Emitted when [`UiSlider`] value changes.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct UiSliderChanged {

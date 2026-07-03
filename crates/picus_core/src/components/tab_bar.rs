@@ -42,6 +42,12 @@ impl UiTabBar {
     }
 }
 
+impl Default for UiTabBar {
+    fn default() -> Self {
+        Self::new(Vec::<String>::new())
+    }
+}
+
 /// Emitted when the active tab changes in a [`UiTabBar`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UiTabChanged {

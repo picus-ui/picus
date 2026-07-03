@@ -6,7 +6,7 @@ use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 ///
 /// Children entities are only rendered when [`is_expanded`] is `true`.
 /// The header row displays an expand/collapse chevron before the header text.
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Default)]
 pub struct UiExpander {
     /// Header text shown in the always-visible header row.
     pub header: String,

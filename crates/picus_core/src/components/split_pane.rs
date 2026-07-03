@@ -39,6 +39,12 @@ impl UiSplitPane {
     }
 }
 
+impl Default for UiSplitPane {
+    fn default() -> Self {
+        Self::new(0.5)
+    }
+}
+
 impl UiComponentTemplate for UiSplitPane {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::widgets::project_split_pane(component, ctx)

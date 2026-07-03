@@ -193,6 +193,12 @@ impl Default for AutoDismiss {
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AnchoredTo(pub Entity);
 
+impl Default for AnchoredTo {
+    fn default() -> Self {
+        Self(Entity::PLACEHOLDER)
+    }
+}
+
 /// Cached window-space rectangle for anchored overlays.
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq)]
 pub struct OverlayAnchorRect {

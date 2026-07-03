@@ -95,6 +95,12 @@ impl UiToast {
     }
 }
 
+impl Default for UiToast {
+    fn default() -> Self {
+        Self::new("")
+    }
+}
+
 impl UiComponentTemplate for UiToast {
     fn expand(world: &mut World, entity: Entity) {
         let toast = world.get::<UiToast>(entity).cloned();

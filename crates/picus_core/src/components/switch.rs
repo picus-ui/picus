@@ -6,7 +6,7 @@ use crate::{
 };
 
 /// Built-in switch/toggle UI component.
-#[derive(Component, Debug, Clone, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Default, PartialEq, Eq)]
 pub struct UiSwitch {
     pub on: bool,
     pub label: Option<String>,

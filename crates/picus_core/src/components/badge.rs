@@ -3,7 +3,7 @@ use bevy_ecs::prelude::*;
 use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 
 /// A small non-interactive badge / pill label.
-#[derive(Component, Debug, Clone, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Default, PartialEq, Eq)]
 pub struct UiBadge {
     pub text: String,
     pub text_key: Option<String>,

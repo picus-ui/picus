@@ -24,6 +24,12 @@ impl UiDatePicker {
     }
 }
 
+impl Default for UiDatePicker {
+    fn default() -> Self {
+        Self::new(1970, 1, 1)
+    }
+}
+
 /// Floating date picker calendar panel (rendered in the overlay layer).
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UiDatePickerPanel {
@@ -32,6 +38,16 @@ pub struct UiDatePickerPanel {
     /// Month currently shown in the calendar (may differ from selected month).
     pub view_year: i32,
     pub view_month: u32,
+}
+
+impl Default for UiDatePickerPanel {
+    fn default() -> Self {
+        Self {
+            anchor: Entity::PLACEHOLDER,
+            view_year: 1970,
+            view_month: 1,
+        }
+    }
 }
 
 /// Emitted when the selected date changes in a [`UiDatePicker`].

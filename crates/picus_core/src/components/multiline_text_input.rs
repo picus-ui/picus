@@ -83,6 +83,12 @@ impl UiMultilineTextInput {
     }
 }
 
+impl Default for UiMultilineTextInput {
+    fn default() -> Self {
+        Self::new("")
+    }
+}
+
 /// Emitted when [`UiMultilineTextInput`] value changes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UiMultilineTextInputChanged {

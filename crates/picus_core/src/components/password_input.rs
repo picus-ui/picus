@@ -70,6 +70,12 @@ impl UiPasswordInput {
     }
 }
 
+impl Default for UiPasswordInput {
+    fn default() -> Self {
+        Self::new("")
+    }
+}
+
 /// Emitted when [`UiPasswordInput`] value changes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UiPasswordInputChanged {

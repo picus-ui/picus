@@ -69,6 +69,12 @@ impl UiPopover {
     }
 }
 
+impl Default for UiPopover {
+    fn default() -> Self {
+        Self::new(Entity::PLACEHOLDER)
+    }
+}
+
 impl UiComponentTemplate for UiPopover {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::popover::project_popover(component, ctx)

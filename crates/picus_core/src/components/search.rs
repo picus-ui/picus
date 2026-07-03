@@ -5,7 +5,7 @@ use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 /// A search input field with a search icon (Fluent v9 SearchBox).
 ///
 /// Renders as a styled text input with a magnifying-glass icon.
-#[derive(Component, Debug, Clone, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Default, PartialEq, Eq)]
 pub struct UiSearch {
     /// Placeholder text shown when the field is empty.
     pub placeholder: String,

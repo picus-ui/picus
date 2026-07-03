@@ -1,12 +1,9 @@
 use bevy_ecs::{entity::Entity, prelude::*};
 
-use crate::{
-    ProjectionCtx, UiView,
-    components::UiComponentTemplate,
-};
+use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 
 /// A single item inside a context menu.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct UiContextMenuItem {
     /// Display text.
     pub label: String,
@@ -52,7 +49,7 @@ impl UiContextMenuItem {
 }
 
 /// Marker component for entities that show a context menu on right-click.
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Default)]
 pub struct UiContextMenuTrigger {
     /// The menu items to show when right-clicked.
     pub items: Vec<UiContextMenuItem>,
@@ -76,6 +73,15 @@ pub struct UiContextMenu {
     pub items: Vec<UiContextMenuItem>,
     /// The trigger entity that spawned this context menu.
     pub trigger: Entity,
+}
+
+impl Default for UiContextMenu {
+    fn default() -> Self {
+        Self {
+            items: Vec::new(),
+            trigger: Entity::PLACEHOLDER,
+        }
+    }
 }
 
 /// Emitted when a context menu item is selected.
