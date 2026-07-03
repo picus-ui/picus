@@ -9,3 +9,4 @@ bevy_ecs.workspace = true
 bevy_math.workspace = true
 picus_core.workspace = true
 shared_utils.workspace = true
+unic-langid.workspace = true

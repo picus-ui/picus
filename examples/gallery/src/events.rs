@@ -6,8 +6,10 @@
 
 use bevy_ecs::prelude::*;
 use picus_core::{
-    BuiltinUiAction, OverlayPlacement, ToastKind, UiCheckboxChanged, UiColorPickerChanged,
+    AppI18n, BuiltinUiAction, OverlayPlacement, ToastKind, UiCheckboxChanged, UiColorPickerChanged,
     UiComboBoxChanged, UiDataTableSelectionChanged, UiDataTableSortChanged, UiDatePickerChanged,
+    // Note: LanguageIdentifier is from unic_langid crate, accessed via its own dep.
+    // But we can parse strings with unic_langid::LanguageIdentifier.
     UiDialog, UiEventQueue, UiListViewSelectionChanged, UiMenuItemSelected,
     UiMultilineTextInputChanged, UiNavigationSelectionChanged, UiNavigationView,
     UiPasswordInputChanged, UiRadioGroupChanged, UiScrollViewChanged, UiSliderChanged,
@@ -222,13 +224,25 @@ pub fn drain_gallery_events(world: &mut World) {
         .resource_mut::<UiEventQueue>()
         .drain_actions::<UiComboBoxChanged>()
     {
-        update_status(
-            world,
-            format!(
-                "ComboBox {:?}: {} ({})",
-                event.action.combo, event.action.selected, event.action.value
-            ),
-        );
+        if event.entity == rt.locale_combo {
+            match event.action.value.parse::<unic_langid::LanguageIdentifier>() {
+                Ok(locale) => {
+                    world.resource_mut::<AppI18n>().set_active_locale(locale);
+                    update_status(
+                        world,
+                        format!("I18n: switched locale to {}", event.action.value),
+                    );
+                }
+                Err(_) => {
+                    update_status(world, format!("I18n: invalid locale {}", event.action.value));
+                }
+            }
+        } else {
+            update_status(
+                world,
+                format!("ComboBox {:?}: {} ({})", event.action.combo, event.action.selected, event.action.value),
+            );
+        }
     }
 
     for event in world

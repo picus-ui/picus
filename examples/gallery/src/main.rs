@@ -11,7 +11,7 @@
 //! - [`state`] — `GalleryPage` enum, `GalleryState`/`GalleryRuntime` resources, `NavCategory`
 //! - [`views`] — `UiComponentTemplate` implementations for `GalleryRoot` and `GalleryStatus`
 //! - [`events`] — Event dispatch for all component interactions
-//! - [`pages`] — 15 page modules, each showcasing a component category
+//! - [`pages`] — 16 page modules, each showcasing a component category
 //!
 //! ## Fluent UI Pattern Mapping
 //!
@@ -26,7 +26,8 @@
 //! | `gallery.ron` theme    | Fluent UI `makeStyles` tokens      |
 
 use picus_core::{
-    AppPicusExt, InlineStyle, LayoutStyle, NavigationViewItem, PicusPlugin, UiAvatar, UiBadge,
+    AppI18n, AppPicusExt, InlineStyle, LayoutStyle, NavigationViewItem, PicusPlugin,
+    SyncAssetSource, SyncTextSource, UiAvatar, UiBadge,
     UiFlexColumn, UiFlexRow, UiLabel, UiNavigationView, UiRoot, UiScrollView, UiSearch,
     UiThemePicker, avatar_sizes,
     bevy_app::{App, Startup, Update},
@@ -50,7 +51,7 @@ use views::{GalleryRoot, GalleryStatus};
 /// Build the full gallery application tree.
 ///
 /// Creates the top bar, sidebar navigation, page content area, and spawns
-/// all 15 component showcase pages.
+/// all 16 component showcase pages.
 fn setup_gallery(mut commands: Commands) {
     let root = commands
         .spawn((UiRoot, GalleryRoot, class("gallery.root")))
@@ -158,6 +159,12 @@ fn setup_gallery(mut commands: Commands) {
             nav_view,
             GalleryPage::Layout,
             pages::layout::spawn_layout_page,
+        ),
+        locale_combo: spawn_page(
+            &mut commands,
+            nav_view,
+            GalleryPage::I18n,
+            pages::i18n::spawn_i18n_page,
         ),
     };
 
@@ -289,9 +296,31 @@ fn build_gallery_app() -> App {
     let mut app = App::new();
     app.add_plugins(PicusPlugin)
         .load_style_sheet_ron(include_str!("../assets/themes/gallery.ron"))
-        .register_xilem_font(picus_core::SyncAssetSource::Bytes(include_bytes!(
+        .register_xilem_font(SyncAssetSource::Bytes(include_bytes!(
             "../../../assets/fonts/NotoSans-Regular.ttf",
         )))
+        .register_xilem_font(SyncAssetSource::Bytes(include_bytes!(
+            "../../../assets/fonts/NotoSansCJKsc-Regular.otf",
+        )))
+        .register_xilem_font(SyncAssetSource::Bytes(include_bytes!(
+            "../../../assets/fonts/NotoSansCJKjp-Regular.otf",
+        )))
+        .insert_resource(AppI18n::new("en-US".parse().unwrap()))
+        .register_i18n_bundle(
+            "en-US",
+            SyncTextSource::String(include_str!("../assets/locales/en-US/main.ftl")),
+            vec!["Inter", "sans-serif"],
+        )
+        .register_i18n_bundle(
+            "zh-CN",
+            SyncTextSource::String(include_str!("../assets/locales/zh-CN/main.ftl")),
+            vec!["Inter", "Noto Sans CJK SC", "sans-serif"],
+        )
+        .register_i18n_bundle(
+            "ja-JP",
+            SyncTextSource::String(include_str!("../assets/locales/ja-JP/main.ftl")),
+            vec!["Inter", "Noto Sans CJK JP", "sans-serif"],
+        )
         .insert_resource(GalleryState::default())
         .register_ui_component::<GalleryRoot>()
         .register_ui_component::<GalleryStatus>()
@@ -347,6 +376,7 @@ mod tests {
                 "Icons",
                 "Transitions",
                 "Overlay",
+                "I18n",
             ],
         );
     }

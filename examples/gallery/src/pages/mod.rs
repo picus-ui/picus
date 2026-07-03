@@ -5,6 +5,7 @@
 
 pub mod buttons;
 pub mod grid_view;
+pub mod i18n;
 pub mod icons;
 pub mod inputs;
 pub mod layout;

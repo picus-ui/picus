@@ -14,7 +14,6 @@ members = [
 	"examples/shared_utils",
 	"examples/timer",
 	"examples/todo_list",
-	"examples/ui_showcase",
 ]
 
 [workspace.package]

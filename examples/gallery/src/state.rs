@@ -36,11 +36,12 @@ pub enum GalleryPage {
     Icons,
     Transitions,
     Overlay,
+    I18n,
 }
 
 impl GalleryPage {
     /// All gallery pages in display order.
-    pub const ALL: [Self; 15] = [
+    pub const ALL: [Self; 16] = [
         Self::Buttons,
         Self::Inputs,
         Self::Selection,
@@ -56,6 +57,7 @@ impl GalleryPage {
         Self::Icons,
         Self::Transitions,
         Self::Overlay,
+        Self::I18n,
     ];
 
     /// Sidebar category groups — matches the Fluent UI pattern of
@@ -85,6 +87,11 @@ impl GalleryPage {
         NavCategory {
             label: "Overlay & Motion",
             first_page_index: 14,
+            page_count: 1,
+        },
+        NavCategory {
+            label: "I18n & Localization",
+            first_page_index: 15,
             page_count: 1,
         },
     ];
@@ -127,6 +134,9 @@ impl GalleryPage {
             Self::Overlay => {
                 "Dialogs, toasts, tooltips, combo overlays, and anchored popup surfaces."
             }
+            Self::I18n => {
+                "Internationalization, locale switching, and CJK font fallback with Fluent bundles."
+            }
         }
     }
 
@@ -148,6 +158,7 @@ impl GalleryPage {
             Self::Icons => "Icons",
             Self::Transitions => "Transitions",
             Self::Overlay => "Overlay",
+            Self::I18n => "I18n",
         }
     }
 
@@ -169,6 +180,7 @@ impl GalleryPage {
             Self::Icons => "\u{f128}",       // icons
             Self::Transitions => "\u{f12c}", // sparkles
             Self::Overlay => "\u{f11f}",     // layers
+            Self::I18n => "\u{f0ac}",        // globe
         }
     }
 }
@@ -204,4 +216,5 @@ pub struct GalleryRuntime {
     pub native_message_btn: Entity,
     pub popover_dialog_btn: Entity,
     pub burst_placeholder_btn: Entity,
+    pub locale_combo: Entity,
 }

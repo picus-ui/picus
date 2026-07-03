@@ -1893,6 +1893,7 @@ dependencies = [
  "bevy_math",
  "picus_core",
  "shared_utils",
+ "unic-langid",
 ]
 
 [[package]]
@@ -1934,18 +1935,6 @@ dependencies = [
  "picus_core",
  "shared_utils",
  "tracing-subscriber",
-]
-
-[[package]]
-name = "example_ui_showcase"
-version = "0.1.0"
-dependencies = [
- "bevy_ecs",
- "picus_core",
- "shared_utils",
- "tracing",
- "tracing-subscriber",
- "unic-langid",
 ]
 
 [[package]]
