@@ -3,9 +3,12 @@ use crate::{
     ecs::{OverlayStack, OverlayState, UiOverlayRoot},
     styling::{apply_widget_style, resolve_style_for_classes},
 };
-use masonry_core::layout::{Dim, UnitPoint};
+use masonry_core::{
+    layout::{Dim, UnitPoint},
+    properties::Dimensions,
+};
 use picus_view::style::Style;
-use picus_view::view::{label, zstack};
+use picus_view::view::{label, sized_box, zstack};
 use std::sync::Arc;
 
 pub(crate) fn project_overlay_root(_: &UiOverlayRoot, ctx: ProjectionCtx<'_>) -> UiView {
@@ -28,21 +31,23 @@ pub(crate) fn project_overlay_root(_: &UiOverlayRoot, ctx: ProjectionCtx<'_>) ->
             dimmer_style.colors.bg = Some(crate::xilem::Color::from_rgba8(0, 0, 0, 160));
         }
 
-        let dimmer: UiView = Arc::new(apply_widget_style(
-            picus_view::view::sized_box(label(""))
-                .width(Dim::Stretch)
-                .height(Dim::Stretch),
-            &dimmer_style,
-        ));
+        let dimmer: UiView = Arc::new(
+            sized_box(apply_widget_style(sized_box(label("")), &dimmer_style)).dims(
+                Dimensions::AUTO
+                    .with_width(Dim::Stretch)
+                    .with_height(Dim::Stretch),
+            ),
+        );
         layers.push(dimmer);
     }
 
     layers.extend(ctx.children);
 
     Arc::new(
-        zstack(layers)
-            .alignment(UnitPoint::TOP_LEFT)
-            .width(Dim::Stretch)
-            .height(Dim::Stretch),
+        zstack(layers).alignment(UnitPoint::TOP_LEFT).dims(
+            Dimensions::AUTO
+                .with_width(Dim::Stretch)
+                .with_height(Dim::Stretch),
+        ),
     )
 }

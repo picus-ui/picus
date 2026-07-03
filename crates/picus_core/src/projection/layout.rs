@@ -8,7 +8,10 @@ use crate::{
     styling::{apply_flex_alignment, apply_widget_style, resolve_style},
 };
 use bevy_ecs::{entity::Entity, hierarchy::Children, prelude::World};
-use masonry_core::layout::{Dim, Length};
+use masonry_core::{
+    layout::{Dim, Length},
+    properties::Dimensions,
+};
 use picus_view::style::Style;
 use picus_view::view::{
     FlexExt as _, GridExt as _, GridParams, flex_col, flex_row, grid, sized_box, zstack,
@@ -212,7 +215,7 @@ pub(crate) fn project_flex_column(_: &UiFlexColumn, ctx: ProjectionCtx<'_>) -> U
         .map(|(entity, view)| {
             let flex_grow = read_flex_grow(ctx.world, *entity);
             if flex_grow > 0.0 {
-                view.clone().flex(flex_grow).into_any_flex()
+                view.clone().flex(flex_grow).into()
             } else {
                 view.clone().into_any_flex()
             }
@@ -235,20 +238,24 @@ pub(crate) fn project_flex_row(_: &UiFlexRow, ctx: ProjectionCtx<'_>) -> UiView 
         .map(|(entity, view)| {
             let flex_grow = read_flex_grow(ctx.world, *entity);
             if flex_grow > 0.0 {
-                view.clone().flex(flex_grow).into_any_flex()
+                view.clone().flex(flex_grow).into()
             } else {
                 view.clone().into_any_flex()
             }
         })
         .collect::<Vec<_>>();
 
-    Arc::new(apply_widget_style(
-        apply_flex_alignment(flex_row(children), &style)
-            .gap(Length::px(style.layout.gap))
-            .width(Dim::Stretch)
-            .height(Dim::Stretch),
-        &style,
-    ))
+    Arc::new(
+        sized_box(apply_widget_style(
+            apply_flex_alignment(flex_row(children), &style).gap(Length::px(style.layout.gap)),
+            &style,
+        ))
+        .dims(
+            Dimensions::AUTO
+                .with_width(Dim::Stretch)
+                .with_height(Dim::Stretch),
+        ),
+    )
 }
 
 pub(crate) fn project_grid(grid_component: &UiGrid, ctx: ProjectionCtx<'_>) -> UiView {
@@ -411,13 +418,17 @@ pub(crate) fn project_responsive_row(row: &UiResponsiveRow, ctx: ProjectionCtx<'
     };
 
     if is_row {
-        Arc::new(apply_widget_style(
-            apply_flex_alignment(flex_row(children), &style)
-                .gap(Length::px(style.layout.gap))
-                .width(Dim::Stretch)
-                .height(Dim::Stretch),
-            &style,
-        ))
+        Arc::new(
+            sized_box(apply_widget_style(
+                apply_flex_alignment(flex_row(children), &style).gap(Length::px(style.layout.gap)),
+                &style,
+            ))
+            .dims(
+                Dimensions::AUTO
+                    .with_width(Dim::Stretch)
+                    .with_height(Dim::Stretch),
+            ),
+        )
     } else {
         Arc::new(apply_widget_style(
             apply_flex_alignment(flex_col(children), &style)

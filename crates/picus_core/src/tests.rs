@@ -29,7 +29,10 @@ use bevy_input::{
 };
 use bevy_math::{Rect, Vec2};
 use bevy_window::{CursorMoved, PrimaryWindow, Window, WindowResized};
-use masonry_core::core::{Widget, WidgetId, WidgetRef};
+use masonry_core::{
+    core::{Widget, WidgetId, WidgetRef, WindowEvent},
+    dpi::PhysicalSize,
+};
 
 #[derive(Component, Debug, Clone, Copy)]
 struct TestRoot;
@@ -612,6 +615,69 @@ fn clicking_text_input_enables_window_ime() {
             .get::<Window>(window_entity)
             .expect("primary window should exist")
             .ime_enabled
+    );
+}
+
+#[test]
+fn navigation_view_tracks_flex_column_window_height() {
+    let mut app = App::new();
+    app.add_plugins(PicusPlugin);
+
+    let nav = spawn_navigation_height_probe(&mut app);
+
+    app.update();
+
+    resize_masonry_runtime(&mut app, 480, 320);
+    let short_height = widget_height_for_entity(&app, nav);
+
+    resize_masonry_runtime(&mut app, 480, 640);
+    let tall_height = widget_height_for_entity(&app, nav);
+
+    assert!(
+        (short_height - 320.0).abs() <= 1.0,
+        "nav height should match short viewport, got {short_height}"
+    );
+    assert!(
+        (tall_height - 640.0).abs() <= 1.0,
+        "nav height should match tall viewport, got {tall_height}"
+    );
+}
+
+#[test]
+fn navigation_view_tracks_invisible_primary_window_resizes() {
+    let mut app = App::new();
+    app.add_plugins(PicusPlugin);
+
+    let mut window = Window {
+        visible: false,
+        ..Default::default()
+    };
+    window.resolution.set(480.0, 320.0);
+    let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+    let nav = spawn_navigation_height_probe(&mut app);
+
+    app.update();
+
+    resize_primary_window(&mut app, window_entity, 480.0, 320.0);
+    let short_height = widget_height_for_entity(&app, nav);
+
+    resize_primary_window(&mut app, window_entity, 480.0, 640.0);
+    let tall_height = widget_height_for_entity(&app, nav);
+
+    assert!(
+        !app.world()
+            .get::<Window>(window_entity)
+            .expect("primary window should exist")
+            .visible
+    );
+    assert!(
+        (short_height - 320.0).abs() <= 1.0,
+        "nav height should match invisible window's short size, got {short_height}"
+    );
+    assert!(
+        (tall_height - 640.0).abs() <= 1.0,
+        "nav height should match invisible window's tall size, got {tall_height}"
     );
 }
 
@@ -2609,6 +2675,86 @@ fn widget_center_for_entity(app: &App, entity: Entity) -> Vec2 {
         .or_else(|| runtime.find_widget_id_for_entity_bits(entity.to_bits(), false))
         .expect("entity should resolve to a Masonry widget");
     widget_center_for_widget_id(app, widget_id)
+}
+
+fn spawn_navigation_height_probe(app: &mut App) -> Entity {
+    let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+    let body = app
+        .world_mut()
+        .spawn((
+            crate::UiFlexColumn,
+            crate::InlineStyle {
+                layout: crate::LayoutStyle {
+                    flex_grow: Some(1.0),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            ChildOf(root),
+        ))
+        .id();
+    let nav = app
+        .world_mut()
+        .spawn((
+            crate::UiNavigationView::new([
+                crate::NavigationViewItem::new("First"),
+                crate::NavigationViewItem::new("Second"),
+            ]),
+            crate::InlineStyle {
+                layout: crate::LayoutStyle {
+                    flex_grow: Some(1.0),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            ChildOf(body),
+        ))
+        .id();
+
+    app.world_mut()
+        .spawn((crate::UiLabel::new("Selected page"), ChildOf(nav)));
+
+    nav
+}
+
+fn widget_height_for_entity(app: &App, entity: Entity) -> f64 {
+    let runtime = app.world().non_send::<crate::MasonryRuntime>();
+    let widget_id = runtime
+        .find_widget_id_for_entity_bits(entity.to_bits(), false)
+        .expect("entity should resolve to a Masonry widget");
+    runtime
+        .render_root
+        .get_widget(widget_id)
+        .expect("widget id should resolve in render tree")
+        .ctx()
+        .border_box_size()
+        .height
+}
+
+fn resize_primary_window(app: &mut App, window_entity: Entity, width: f32, height: f32) {
+    {
+        let mut window = app
+            .world_mut()
+            .get_mut::<Window>(window_entity)
+            .expect("window should exist");
+        window.resolution.set(width, height);
+    }
+
+    app.world_mut().write_message(WindowResized {
+        window: window_entity,
+        width: 1.0,
+        height: 1.0,
+    });
+
+    app.update();
+}
+
+fn resize_masonry_runtime(app: &mut App, width: u32, height: u32) {
+    let mut runtime = app.world_mut().non_send_mut::<crate::MasonryRuntime>();
+    let _ = runtime
+        .render_root
+        .handle_window_event(WindowEvent::Resize(PhysicalSize::new(width, height)));
+    let _ = runtime.render_root.redraw();
 }
 
 fn open_combo_dropdown(app: &mut App, combo: Entity) -> Entity {

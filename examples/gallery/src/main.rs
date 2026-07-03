@@ -318,6 +318,7 @@ fn main() -> Result<(), EventLoopError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use picus_core::bevy_window::{PrimaryWindow, Window, WindowResized};
 
     #[test]
     fn embedded_gallery_theme_ron_parses() {
@@ -354,5 +355,98 @@ mod tests {
     fn gallery_categories_cover_all_pages() {
         let total: usize = GalleryPage::CATEGORIES.iter().map(|c| c.page_count).sum();
         assert_eq!(total, GalleryPage::ALL.len());
+    }
+
+    #[test]
+    fn gallery_navigation_view_tracks_invisible_window_resize() {
+        let mut app = build_gallery_app();
+
+        let mut window = Window {
+            visible: false,
+            ..Default::default()
+        };
+        window.resolution.set(900.0, 320.0);
+        let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+        app.update();
+
+        let nav = app.world().resource::<GalleryRuntime>().nav_view;
+        let body = app
+            .world()
+            .get::<ChildOf>(nav)
+            .expect("nav should have a body parent")
+            .parent();
+        assert_eq!(
+            picus_core::resolve_style(app.world(), body)
+                .layout
+                .flex_grow,
+            1.0
+        );
+        assert_eq!(
+            picus_core::resolve_style(app.world(), nav).layout.flex_grow,
+            1.0
+        );
+
+        resize_primary_window(&mut app, window_entity, 900.0, 320.0);
+        assert_eq!(
+            app.world()
+                .non_send::<picus_core::MasonryRuntime>()
+                .viewport_size(),
+            (900.0, 320.0)
+        );
+        let short_height = widget_height_for_entity(&mut app, nav);
+
+        resize_primary_window(&mut app, window_entity, 900.0, 640.0);
+        assert_eq!(
+            app.world()
+                .non_send::<picus_core::MasonryRuntime>()
+                .viewport_size(),
+            (900.0, 640.0)
+        );
+        let tall_height = widget_height_for_entity(&mut app, nav);
+
+        assert!(
+            !app.world()
+                .get::<Window>(window_entity)
+                .expect("primary window should exist")
+                .visible
+        );
+        assert!(
+            (tall_height - short_height - 320.0).abs() <= 2.0,
+            "nav height should grow with the invisible window resize; short={short_height}, tall={tall_height}"
+        );
+    }
+
+    fn resize_primary_window(app: &mut App, window_entity: Entity, width: f32, height: f32) {
+        {
+            let mut window = app
+                .world_mut()
+                .get_mut::<Window>(window_entity)
+                .expect("window should exist");
+            window.resolution.set(width, height);
+        }
+
+        app.world_mut().write_message(WindowResized {
+            window: window_entity,
+            width: 1.0,
+            height: 1.0,
+        });
+
+        app.update();
+    }
+
+    fn widget_height_for_entity(app: &mut App, entity: Entity) -> f64 {
+        let mut runtime = app.world_mut().non_send_mut::<picus_core::MasonryRuntime>();
+        let _ = runtime.render_root.redraw();
+        let widget_id = runtime
+            .find_widget_id_for_entity_bits(entity.to_bits(), false)
+            .expect("entity should resolve to a Masonry widget");
+        runtime
+            .render_root
+            .get_widget(widget_id)
+            .expect("widget id should resolve in render tree")
+            .ctx()
+            .border_box_size()
+            .height
     }
 }

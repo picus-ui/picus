@@ -31,15 +31,16 @@ use masonry_core::{
         keyboard::{Key, KeyState, Modifiers, NamedKey},
     },
     dpi::{PhysicalPosition, PhysicalSize},
-    layout::{Dim, UnitPoint},
+    layout::UnitPoint,
     peniko::Color,
+    properties::Dimensions,
 };
 use masonry_imaging::{Layer as ImagingLayer, PreparedFrame, texture_render::Renderer};
 use picus_surface::{ExistingWindowMetrics, ExternalWindowSurface};
 use picus_view::{
     ViewCtx,
     picus_widget::widgets::Passthrough,
-    view::{label, zstack},
+    view::{label, sized_box, zstack},
 };
 use wgpu::PresentMode;
 use xilem_core::{ProxyError, RawProxy, SendMessage, View, ViewId};
@@ -380,7 +381,8 @@ impl MasonryRuntime {
             if widget.ctx().is_stashed() {
                 return;
             }
-            let _ = widget.get_debug_text()
+            let _ = widget
+                .get_debug_text()
                 .and_then(|d| parse_entity_debug_binding(&d))
                 .map(|(bits, _)| map.insert(widget.id(), bits));
             for child in widget.children() {
@@ -756,14 +758,29 @@ impl MasonryRuntime {
 }
 
 fn compose_runtime_root(roots: &[UiView]) -> UiView {
+    fn viewport_child(root: UiView) -> UiView {
+        Arc::new(sized_box(root).dims(Dimensions::STRETCH))
+    }
+
     match roots {
         [] => Arc::new(label("picus_core: no synthesized root")),
         [root] => root.clone(),
         _ => Arc::new(
-            zstack(roots.to_vec())
-                .alignment(UnitPoint::TOP_LEFT)
-                .width(Dim::Stretch)
-                .height(Dim::Stretch),
+            zstack(
+                roots
+                    .iter()
+                    .enumerate()
+                    .map(|(index, root)| {
+                        if index + 1 == roots.len() {
+                            root.clone()
+                        } else {
+                            viewport_child(root.clone())
+                        }
+                    })
+                    .collect::<Vec<_>>(),
+            )
+            .alignment(UnitPoint::TOP_LEFT)
+            .dims(Dimensions::STRETCH),
         ),
     }
 }

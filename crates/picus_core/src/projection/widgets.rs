@@ -9,7 +9,10 @@ use bevy_ecs::{
 };
 use masonry_core::imaging::Painter;
 use masonry_core::kurbo::{Axis, BezPath, Circle, Line, Point, Rect, Stroke};
-use masonry_core::layout::{Dim, Length};
+use masonry_core::{
+    layout::{Dim, Length},
+    properties::Dimensions,
+};
 use picus_view::view::{
     CrossAxisAlignment, FlexExt as _, MainAxisAlignment, canvas, divider_h, divider_v, flex_col,
     flex_item, flex_row, label, radio_group as xilem_radio_group, sized_box, spinner, split,
@@ -285,9 +288,7 @@ pub(crate) fn project_scroll_view(scroll_view: &UiScrollView, ctx: ProjectionCtx
         .unwrap_or_else(|| resolve_style_for_classes(ctx.world, ["template.scroll_view.viewport"]));
 
     let viewport_surface = apply_widget_style(
-        sized_box(portal)
-            .width(Dim::Stretch)
-            .height(Dim::Stretch),
+        sized_box(portal).width(Dim::Stretch).height(Dim::Stretch),
         &viewport_style,
     );
 
@@ -1948,10 +1949,7 @@ pub(crate) fn project_search(search: &UiSearch, ctx: ProjectionCtx<'_>) -> UiVie
 // ---------------------------------------------------------------------------
 
 /// Project a [`UiNavigationView`] into a sidebar + content layout.
-pub(crate) fn project_navigation_view(
-    nav: &UiNavigationView,
-    ctx: ProjectionCtx<'_>,
-) -> UiView {
+pub(crate) fn project_navigation_view(nav: &UiNavigationView, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let sidebar_style = resolve_style_for_classes(ctx.world, ["nav.sidebar"]);
     let mut base_item_style = resolve_style_for_classes(ctx.world, ["nav.item"]);
@@ -2050,10 +2048,13 @@ pub(crate) fn project_navigation_view(
         .unwrap_or_else(|| Arc::new(label("")));
 
     let content_area = flex_col(vec![
-        flex_item(content, 1.0),        // flex:1 preserved via From<FlexItem>, NOT .into_any_flex()
+        flex_item(content, 1.0), // flex:1 preserved via From<FlexItem>, NOT .into_any_flex()
     ])
-    .width(Dim::Stretch)
-    .height(Dim::Stretch);
+    .dims(
+        Dimensions::AUTO
+            .with_width(Dim::Stretch)
+            .with_height(Dim::Stretch),
+    );
 
     // --- Sidebar needs its own scroll portal to avoid clipping on small windows ---
     let sidebar_portal = scroll_portal(sidebar, Point::ORIGIN)
@@ -2064,10 +2065,14 @@ pub(crate) fn project_navigation_view(
     // --- Layout: sidebar (scrollable) | content (flex-grow: 1) ---
     let row = flex_row(vec![
         sidebar_portal.into_any_flex(),
-        flex_item(content_area, 1.0).into(),  // .into() preserves flex params via From<FlexItem>
-    ])
-    .width(Dim::Stretch)
-    .height(Dim::Stretch);
+        flex_item(content_area, 1.0).into(), // .into() preserves flex params via From<FlexItem>
+    ]);
 
-    Arc::new(apply_widget_style(row, &style))
+    Arc::new(
+        sized_box(apply_widget_style(row, &style)).dims(
+            Dimensions::AUTO
+                .with_width(Dim::Stretch)
+                .with_height(Dim::Stretch),
+        ),
+    )
 }
