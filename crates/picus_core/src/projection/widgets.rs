@@ -2050,7 +2050,7 @@ pub(crate) fn project_navigation_view(
         .unwrap_or_else(|| Arc::new(label("")));
 
     let content_area = flex_col(vec![
-        flex_item(content, 1.0).into_any_flex(),
+        flex_item(content, 1.0),        // flex:1 preserved via From<FlexItem>, NOT .into_any_flex()
     ])
     .width(Dim::Stretch)
     .height(Dim::Stretch);
@@ -2064,7 +2064,7 @@ pub(crate) fn project_navigation_view(
     // --- Layout: sidebar (scrollable) | content (flex-grow: 1) ---
     let row = flex_row(vec![
         sidebar_portal.into_any_flex(),
-        flex_item(content_area, 1.0).into_any_flex(),
+        flex_item(content_area, 1.0).into(),  // .into() preserves flex params via From<FlexItem>
     ])
     .width(Dim::Stretch)
     .height(Dim::Stretch);
