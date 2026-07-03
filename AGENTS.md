@@ -52,6 +52,10 @@ cross-cutting design decisions that code comments cannot express well.
 8. **Commit messages**
    - All commit messages must be written in English.
 
+9. **Code formatting**
+   - Run `cargo fmt` only before committing, as part of the final pre-commit workflow.
+   - Formatting-only changes are not semantic modifications. Do not rebuild or retest after a pure formatting change.
+
 ## 2. Workspace
 
 `picus` is a Bevy-first UI framework that combines ECS state management with a
