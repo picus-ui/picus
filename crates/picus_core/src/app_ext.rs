@@ -60,7 +60,7 @@ fn flush_pending_font_registrations(app: &mut App) {
 ///     AppPicusExt, PicusPlugin, ProjectionCtx, UiComponentTemplate, UiRoot, UiView,
 ///     bevy_app::{App, Startup},
 ///     bevy_ecs::prelude::*,
-///     text_button,
+///     button,
 /// };
 ///
 /// #[derive(Component, Clone, Copy)]
@@ -73,7 +73,7 @@ fn flush_pending_font_registrations(app: &mut App) {
 ///
 /// impl UiComponentTemplate for Root {
 ///     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-///         Arc::new(text_button(ctx.entity, Action::Clicked, "Click"))
+///         Arc::new(button(ctx.entity, Action::Clicked, "Click"))
 ///     }
 /// }
 ///

@@ -22,14 +22,14 @@ use picus_core::{
         hierarchy::ChildOf,
         prelude::*,
     },
-    button, emit_ui_action,
+    button, emit_ui_action, text_input,
     masonry_core::layout::{Dim, Length},
     resolve_style,
     scene::{CommandsSceneExt, bsn},
     xilem::{
         InsertNewline,
         style::Style as _,
-        view::{FlexExt as _, flex_col, flex_row, label, sized_box, text_input as xilem_text_input},
+        view::{FlexExt as _, flex_col, flex_row, label, sized_box},
         winit::{error::EventLoopError},
     },
 };
@@ -329,12 +329,14 @@ fn project_composer(_: &ComposerView, ctx: ProjectionCtx<'_>) -> UiView {
         .unwrap_or_default();
     let input_entity = ctx.entity;
     let enter_entity = ctx.entity;
-    let input = xilem_text_input(draft, move |_, value| {
-        emit_ui_action(input_entity, PicusCodeAction::ComposerChanged(value));
-    })
+    let input = text_input(
+        input_entity,
+        draft,
+        PicusCodeAction::ComposerChanged,
+    )
     .placeholder("Message CodeWhale...")
     .insert_newline(InsertNewline::OnShiftEnter)
-    .on_enter(move |_, _| {
+    .on_enter(move |_| {
         emit_ui_action(enter_entity, PicusCodeAction::Send);
     });
     let send_btn = button(ctx.entity, PicusCodeAction::Send, "Send");

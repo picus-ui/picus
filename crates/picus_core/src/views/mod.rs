@@ -1,24 +1,21 @@
 //! View helpers exported by `picus_core`.
 //!
-//! This module exposes two naming groups:
-//! - ECS-adapted UI components (`button`, `button_with_child`, `checkbox`, `slider`, `switch`,
-//!   `text_button`, `text_input`)
-//! - Raw retained widgets with `xilem_` compatibility prefix (`xilem_button`, `xilem_checkbox`, ...)
+//! This module exposes Picus ECS action helpers. Low-level retained widgets remain available
+//! from `picus_view::view` for projection internals, but Picus-facing helpers should route
+//! user interaction through [`crate::UiEventQueue`].
 //!
 //! # Example
 //!
 //! ```
 //! use picus_core::{
-//!     button, xilem_button,
+//!     button,
 //!     bevy_ecs::world::World,
-//!     xilem::view::label,
 //! };
 //!
 //! let mut world = World::new();
 //! let entity = world.spawn_empty().id();
 //!
-//! let _ecs_adapted = button(entity, (), "ECS event button");
-//! let _raw_retained = xilem_button::<(), (), _, _>(label("Raw retained button"), |_| ());
+//! let _button = button(entity, (), "ECS event button");
 //! ```
 mod ecs_button_view;
 mod ecs_button_with_child_view;
@@ -36,20 +33,11 @@ pub use ecs_component_views::ecs_checkbox as checkbox;
 pub(crate) use ecs_component_views::ecs_radio_button;
 pub use ecs_component_views::ecs_slider as slider;
 pub use ecs_component_views::ecs_switch as switch;
-pub use ecs_component_views::ecs_text_button as text_button;
 pub use ecs_component_views::ecs_text_input as text_input;
 pub use ecs_component_views::{
-    ecs_checkbox, ecs_slider, ecs_switch, ecs_text_button, ecs_text_input,
+    EcsSliderView, EcsSwitchView, ecs_checkbox, ecs_slider, ecs_switch, ecs_text_input,
 };
 pub use ecs_drag_thumb_view::{EcsDragThumbView, ecs_drag_thumb};
 pub use entity_scope_view::entity_scope;
 pub use opaque_hitbox_view::{OpaqueHitboxView, opaque_hitbox, opaque_hitbox_for_entity};
-pub use picus_view::view::{
-    GridExt, GridParams, ObjectFit, badge as xilem_badge, badge_count as xilem_badge_count,
-    badge_text as xilem_badge_text, button as xilem_button,
-    button_any_pointer as xilem_button_any_pointer, canvas as xilem_canvas,
-    checkbox as xilem_checkbox, grid as xilem_grid, image as xilem_image,
-    progress_bar as xilem_progress_bar, slider as xilem_slider, switch as xilem_switch,
-    text_button as xilem_text_button, text_input as xilem_text_input, zstack as xilem_zstack,
-};
 pub use scroll_portal_view::{ScrollPortalView, scroll_portal};

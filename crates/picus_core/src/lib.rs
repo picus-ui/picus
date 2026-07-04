@@ -16,7 +16,7 @@
 //!     UiView,
 //!     bevy_app::{App, PreUpdate, Startup},
 //!     bevy_ecs::prelude::*,
-//!     text_button,
+//!     button,
 //! };
 //!
 //! #[derive(Component, Clone, Copy)]
@@ -29,7 +29,7 @@
 //!
 //! impl UiComponentTemplate for Root {
 //!     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-//!         Arc::new(text_button(ctx.entity, Action::Clicked, "Click"))
+//!         Arc::new(button(ctx.entity, Action::Clicked, "Click"))
 //!     }
 //! }
 //!
@@ -129,7 +129,7 @@ pub mod prelude {
     pub use crate::{
         AppBreakpoints, AppI18n, AppPicusExt, AutoDismiss, AvatarShape, BevyWindowOptions,
         BuiltinUiAction, ButtonAppearance, ButtonIconPosition, ButtonShape, ButtonSize, ColorStyle,
-        ComputedStyle, CurrentColorStyle, EcsButtonView, GridExt, GridParams, HasTooltip,
+        ComputedStyle, CurrentColorStyle, EcsButtonView, EcsSliderView, EcsSwitchView, HasTooltip,
         InlineStyle, InteractionState, LayoutStyle, LocalizeText, MasonryRuntime, MessageBarKind,
         NavigationViewItem, ObjectFit, OverlayComputedPosition, OverlayConfig,
         OverlayMouseButtonCursor, OverlayPlacement, OverlayPointerRoutingState, OverlayStack,
@@ -164,7 +164,7 @@ pub mod prelude {
         UiTreeNodeToggled, UiView, UiVisibleResponsive, UiWindow, WidgetUiAction, WindowRuntime,
         WindowSize, XilemFontBridge, bubble_ui_pointer_events, button, button_with_child, checkbox,
         collect_bevy_font_assets, dismiss_overlays_on_click, ecs_button, ecs_button_with_child,
-        ecs_checkbox, ecs_slider, ecs_switch, ecs_text_button, ecs_text_input, emit_ui_action,
+        ecs_checkbox, ecs_slider, ecs_switch, ecs_text_input, emit_ui_action,
         ensure_overlay_root, ensure_overlay_root_entity, ensure_template_part,
         expand_builtin_ui_component_templates, find_template_part, gather_ui_roots,
         handle_global_overlay_clicks, handle_overlay_actions, handle_tooltip_hovers,
@@ -175,11 +175,7 @@ pub mod prelude {
         run_app_with_window_options, slider, spawn_in_overlay_root, spawn_popover_in_overlay_root,
         sync_dropdown_positions, sync_fonts_to_xilem, sync_overlay_positions,
         sync_overlay_stack_lifecycle, synthesize_roots, synthesize_roots_with_stats, synthesize_ui,
-        synthesize_world, text_button, text_input, tick_auto_dismiss, tick_toasts,
-        track_window_size, xilem_badge, xilem_badge_count, xilem_badge_text, xilem_button,
-        xilem_button_any_pointer, xilem_canvas, xilem_checkbox, xilem_grid, xilem_image,
-        xilem_progress_bar, xilem_slider, xilem_switch, xilem_text_button, xilem_text_input,
-        xilem_zstack,
+        synthesize_world, text_input, tick_auto_dismiss, tick_toasts, track_window_size,
     };
 
     pub use crate::{

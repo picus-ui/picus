@@ -2597,7 +2597,7 @@ fn placeholder_color_from_style(style: &ResolvedStyle) -> Color {
 
 /// Apply text + box styling to a text input view.
 pub fn apply_text_input_style(
-    view: TextInput<(), ()>,
+    view: TextInput<()>,
     style: &ResolvedStyle,
 ) -> impl WidgetView<(), ()> {
     let mut styled = view
@@ -2617,7 +2617,7 @@ pub fn apply_text_input_style(
 
 /// Apply text-input styling directly on the widget itself.
 pub fn apply_direct_text_input_style(
-    view: TextInput<(), ()>,
+    view: TextInput<()>,
     style: &ResolvedStyle,
 ) -> impl WidgetView<(), ()> {
     let scale = style.layout.scale.max(0.01);

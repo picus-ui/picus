@@ -485,13 +485,12 @@ fn project_ecs_text_input(
         styled = styled.font(font_stack);
     }
 
-    let styled = styled.placeholder_color(placeholder_color_from_style(&style));
-
     if let Some(text_color) = style.colors.text {
         return Arc::new(
             transformed(
                 styled
                     .text_color(text_color)
+                    .placeholder_color(placeholder_color_from_style(&style))
                     .padding(style_padding(style.layout.padding))
                     .corner_radius(Length::px(style.layout.corner_radius))
                     .border(
@@ -511,6 +510,7 @@ fn project_ecs_text_input(
     Arc::new(
         transformed(
             styled
+                .placeholder_color(placeholder_color_from_style(&style))
                 .padding(style_padding(style.layout.padding))
                 .corner_radius(Length::px(style.layout.corner_radius))
                 .border(

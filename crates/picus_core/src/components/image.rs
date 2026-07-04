@@ -3,7 +3,7 @@ use bevy_ecs::prelude::*;
 use masonry_core::peniko::{
     Blob, ImageAlphaType, ImageBrush, ImageData, ImageFormat, ImageQuality,
 };
-use picus_view::view::ObjectFit;
+pub use picus_view::view::ObjectFit;
 use std::{path::Path, sync::Arc};
 
 use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};

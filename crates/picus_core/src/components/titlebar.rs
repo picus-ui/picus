@@ -3,7 +3,7 @@ use std::sync::Arc;
 use bevy_ecs::prelude::*;
 use picus_view::view::{AnyFlexChild, FlexExt as _, FlexSpacer, flex_row, label};
 
-use crate::{ProjectionCtx, UiView, components::UiComponentTemplate, text_button};
+use crate::{ProjectionCtx, UiView, button, components::UiComponentTemplate};
 
 /// Title bar icon type.
 #[derive(Debug, Clone)]
@@ -79,13 +79,13 @@ impl UiComponentTemplate for UiTitleBar {
 
         // Window control buttons
         if component.show_minimize {
-            children.push(text_button(ctx.entity, TitleBarAction::Minimize, "─").into_any_flex());
+            children.push(button(ctx.entity, TitleBarAction::Minimize, "─").into_any_flex());
         }
         if component.show_maximize {
-            children.push(text_button(ctx.entity, TitleBarAction::Maximize, "□").into_any_flex());
+            children.push(button(ctx.entity, TitleBarAction::Maximize, "□").into_any_flex());
         }
         if component.show_close {
-            children.push(text_button(ctx.entity, TitleBarAction::Close, "✕").into_any_flex());
+            children.push(button(ctx.entity, TitleBarAction::Close, "✕").into_any_flex());
         }
 
         Arc::new(flex_row(children))

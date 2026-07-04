@@ -7,77 +7,26 @@ use picus_widget::parley::{FontFamily, StyleProperty};
 use picus_widget::peniko::Color;
 use picus_widget::properties::{CaretColor, ContentColor, PlaceholderColor, SelectionColor};
 use picus_widget::widgets::{self, TextAction};
+use std::marker::PhantomData;
 
 use crate::core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 use crate::views::Prop;
 use crate::{InsertNewline, Pod, TextAlign, ViewCtx, WidgetView as _};
 
-// FIXME - A major problem of the current approach (always setting the text_input contents)
-// is that if the user forgets to hook up the modify the state's contents in the callback,
-// the text_input will always be reset to the initial state. This will be very annoying for the user.
-
-type Callback<State, Action> = Box<dyn Fn(&mut State, String) -> Action + Send + Sync + 'static>;
+type Callback = Box<dyn Fn(String) + Send + Sync + 'static>;
 
 /// A view which displays editable text.
-///
-/// The text input's current text currently *must* be stored in your app's state, and so
-/// will not work if it isn't managed correctly.
-/// If the user has made an input, the updated value is provided by the `on_changed`
-/// callback, which is the second parameter to this function (where the first is a
-/// clone of the current contents).
-/// See the examples for how to use this.
 ///
 /// By default, the text input is single-line - that is, pressing Enter <kbd>↵</kbd> does
 /// not insert a newline.
 /// This can be configured using [`insert_newline`](TextInput::insert_newline) on the
 /// returned view.
 /// In the default state, Enter <kbd>↵</kbd> being pressed can therefore be used as a
-/// "submit" operation.
-/// This can be detected by setting the [`on_enter`](TextInput::on_enter) callback.
-///
-/// # Examples
-///
-/// Create a basic text input with its content stored in the app state:
-///
-/// ```
-/// # use picus_view as xilem;
-/// # use xilem::view::text_input;
-/// # use xilem::WidgetView;
-///
-/// struct State {
-///     content: String,
-/// }
-///
-/// fn view(state: &mut State) -> impl WidgetView<State> {
-///     text_input(state.content.clone(), |state: &mut State, input: String| {
-///         state.content = input;
-///     })
-/// }
-/// ```
-///
-/// Create a multiline `text_input`:
-///
-/// ```
-/// # use picus_view as xilem;
-/// use xilem::view::text_input;
-/// use xilem::picus_widget::widgets::InsertNewline;
-/// # use xilem::WidgetView;
-///
-/// # struct State {
-/// #    content: String,
-/// # }
-///
-/// # fn view(state: &mut State) -> impl WidgetView<State> {
-/// text_input(state.content.clone(), |state: &mut State, input: String| {
-///     state.content = input;
-/// })
-/// .insert_newline(InsertNewline::OnEnter)
-/// # }
-/// ```
-pub fn text_input<F, State, Action>(contents: String, on_changed: F) -> TextInput<State, Action>
+/// "submit" operation via [`on_enter`](TextInput::on_enter).
+pub fn text_input<State, F>(contents: String, on_changed: F) -> TextInput<State>
 where
-    F: Fn(&mut State, String) -> Action + Send + Sync + 'static,
     State: 'static,
+    F: Fn(String) + Send + Sync + 'static,
 {
     TextInput {
         contents,
@@ -94,15 +43,16 @@ where
         // Since we don't support setting the word wrapping, we can default to
         // not clipping
         clip: true,
+        phantom: PhantomData,
     }
 }
 
 /// The [`View`] created by [`text_input`].
 #[must_use = "View values do nothing unless provided to Xilem."]
-pub struct TextInput<State: 'static, Action> {
+pub struct TextInput<State: 'static = ()> {
     contents: String,
-    on_changed: Callback<State, Action>,
-    on_enter: Option<Callback<State, Action>>,
+    on_changed: Callback,
+    on_enter: Option<Callback>,
     text_color: Option<Color>,
     placeholder: ArcStr,
     text_alignment: TextAlign,
@@ -112,10 +62,11 @@ pub struct TextInput<State: 'static, Action> {
     insert_newline: InsertNewline,
     disabled: bool,
     clip: bool,
+    phantom: PhantomData<fn() -> State>,
     // TODO: add more attributes of `picus_widget::widgets::TextInput`
 }
 
-impl<State: 'static, Action: 'static> TextInput<State, Action> {
+impl<State: 'static> TextInput<State> {
     /// Set the text's color.
     ///
     /// This overwrites the default `ContentColor` property for the inner `TextArea` widget.
@@ -127,14 +78,14 @@ impl<State: 'static, Action: 'static> TextInput<State, Action> {
     /// Set the insertion caret's color.
     ///
     /// This overwrites the default `CaretColor` property for the inner `TextArea` widget.
-    pub fn caret_color(self, color: Color) -> Prop<CaretColor, Self, State, Action> {
+    pub fn caret_color(self, color: Color) -> Prop<CaretColor, Self, State, ()> {
         self.prop(CaretColor { color })
     }
 
     /// Set the selection's color.
     ///
     /// This overwrites the default `SelectionColor` property for the inner `TextArea` widget.
-    pub fn selection_color(self, color: Color) -> Prop<SelectionColor, Self, State, Action> {
+    pub fn selection_color(self, color: Color) -> Prop<SelectionColor, Self, State, ()> {
         self.prop(SelectionColor { color })
     }
 
@@ -145,7 +96,7 @@ impl<State: 'static, Action: 'static> TextInput<State, Action> {
     }
 
     /// Set the [`PlaceholderColor`] property, which sets the color of the text shown when the input is empty.
-    pub fn placeholder_color(self, color: Color) -> Prop<PlaceholderColor, Self, State, Action> {
+    pub fn placeholder_color(self, color: Color) -> Prop<PlaceholderColor, Self, State, ()> {
         self.prop(PlaceholderColor::new(color))
     }
 
@@ -192,7 +143,7 @@ impl<State: 'static, Action: 'static> TextInput<State, Action> {
     /// will never be called.
     pub fn on_enter<F>(mut self, on_enter: F) -> Self
     where
-        F: Fn(&mut State, String) -> Action + Send + Sync + 'static,
+        F: Fn(String) + Send + Sync + 'static,
     {
         self.on_enter = Some(Box::new(on_enter));
         self
@@ -221,8 +172,8 @@ impl<State: 'static, Action: 'static> TextInput<State, Action> {
     }
 }
 
-impl<State: 'static, Action> ViewMarker for TextInput<State, Action> {}
-impl<State: 'static, Action: 'static> View<State, Action, ViewCtx> for TextInput<State, Action> {
+impl<State: 'static> ViewMarker for TextInput<State> {}
+impl<State: 'static> View<State, (), ViewCtx> for TextInput<State> {
     type Element = Pod<widgets::TextInput>;
     type ViewState = ();
 
@@ -291,14 +242,8 @@ impl<State: 'static, Action: 'static> View<State, Action, ViewCtx> for TextInput
 
         let mut text_area = widgets::TextInput::text_mut(&mut element);
 
-        // Unlike the other properties, we don't compare to the previous value;
-        // instead, we compare directly to the element's text. This is to handle
-        // cases like "Previous data says contents is 'fooba', user presses 'r',
-        // now data and contents are both 'foobar' but previous data is 'fooba'"
-        // without calling `set_text`.
-
-        // This is probably not the right behaviour, but determining what is the right behaviour is hard
-        if text_area.widget.text() != &self.contents {
+        // Preserve in-flight edits until the ECS-bound value actually changes.
+        if self.contents != prev.contents && text_area.widget.text() != &self.contents {
             widgets::TextArea::reset_text(&mut text_area, &self.contents);
         }
 
@@ -336,8 +281,8 @@ impl<State: 'static, Action: 'static> View<State, Action, ViewCtx> for TextInput
         _: &mut Self::ViewState,
         message: &mut MessageCtx,
         _: Mut<'_, Self::Element>,
-        app_state: &mut State,
-    ) -> MessageResult<Action> {
+        _: &mut State,
+    ) -> MessageResult<()> {
         debug_assert!(
             message.remaining_path().is_empty(),
             "id path should be empty in TextInput::message"
@@ -345,16 +290,15 @@ impl<State: 'static, Action: 'static> View<State, Action, ViewCtx> for TextInput
         match message.take_message::<TextAction>() {
             Some(action) => match *action {
                 TextAction::Changed(text) => {
-                    MessageResult::Action((self.on_changed)(app_state, text))
+                    (self.on_changed)(text);
+                    MessageResult::Action(())
                 }
                 TextAction::Entered(text) if self.on_enter.is_some() => {
-                    MessageResult::Action((self.on_enter.as_ref().unwrap())(app_state, text))
+                    (self.on_enter.as_ref().unwrap())(text);
+                    MessageResult::Action(())
                 }
 
-                TextAction::Entered(_) => {
-                    tracing::error!("Textbox::message: on_enter is not set");
-                    MessageResult::Stale
-                }
+                TextAction::Entered(_) => MessageResult::Stale,
             },
             None => {
                 tracing::error!(?message, "Wrong message type in TextInput::message");

@@ -202,6 +202,13 @@ Interactive controls use the ECS event route:
 
 - `EcsButtonView` and `EcsButtonWithChildView` emit pointer interaction events and
   typed actions through `UiEventQueue`.
+- `picus_core::views` exposes Picus ECS action helpers only (`button`, `text_input`,
+  `slider`, `switch`, `checkbox`, and related `ecs_*` forms). Do not re-export raw
+  retained widgets with `xilem_*` aliases from `picus_core`; projection internals
+  that need low-level widgets import them directly from `picus_view::view`.
+- Text input, slider, switch, and checkbox helpers map retained widget actions into
+  `UiEventQueue`. Do not expose the old Xilem app-state callback model in
+  Picus-facing view APIs.
 - `UiEventQueue` stores type-erased actions and supports typed non-destructive
   drains through `drain_actions::<T>()`.
 - `UiPointerHitEvent` is the hit-tested source event; `UiPointerEvent` bubbles

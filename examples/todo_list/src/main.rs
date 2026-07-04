@@ -8,7 +8,7 @@ use picus_core::{
         hierarchy::{ChildOf, Children},
         prelude::*,
     },
-    button, checkbox, emit_ui_action,
+    button, checkbox, emit_ui_action, text_input,
     masonry_core::layout::Length,
     resolve_style, resolve_style_for_classes, resolve_style_for_entity_classes, run_app,
     scene::{Scene, WorldSceneExt, bsn, template_value},
@@ -16,7 +16,7 @@ use picus_core::{
         InsertNewline,
         view::{
             FlexExt as _, FlexSpacer, MainAxisAlignment, flex_col, flex_row, label, sized_box,
-            text_input as xilem_text_input, virtual_scroll,
+            virtual_scroll,
         },
         winit::error::EventLoopError,
     },
@@ -116,12 +116,10 @@ fn project_todo_input_area(_: &TodoInputArea, ctx: ProjectionCtx<'_>) -> UiView 
     Arc::new(apply_widget_style(
         flex_row((
             apply_text_input_style(
-                xilem_text_input(draft, move |_, value| {
-                    emit_ui_action(input_entity, TodoEvent::SetDraft(value));
-                })
+                text_input(input_entity, draft, TodoEvent::SetDraft)
                 .placeholder("What needs to be done?")
                 .insert_newline(InsertNewline::OnShiftEnter)
-                .on_enter(move |_, _| {
+                .on_enter(move |_| {
                     emit_ui_action(entity_for_enter, TodoEvent::SubmitDraft);
                 }),
                 &input_style,

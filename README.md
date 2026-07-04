@@ -229,7 +229,7 @@ The workspace includes several example applications:
 
 | App | Cargo package | Description |
 |-----|---------------|-------------|
-| `gallery` | `example_gallery` | MewUI-inspired component gallery with Picus controls |
+| `gallery` | `example_gallery` | Component gallery with Picus controls |
 | `chess_game` | `example_chess_game` | Full chess UI with embedded engine |
 | `async_downloader` | `example_async_downloader` | Async operations with progress UI |
 | `calculator` | `example_calculator` | Standard calculator interface |
