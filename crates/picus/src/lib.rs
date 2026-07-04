@@ -46,7 +46,7 @@ pub mod components {
         UiTable, UiText, UiTextInput, UiTextInputChanged, UiThemePicker, UiThemePickerChanged,
         UiThemePickerMenu, UiThemePickerOption, UiTitleBar, UiToast, UiToolbar, UiTooltip,
         UiTreeNode, UiTreeNodeToggled, UiView, UiVisibleResponsive, UiWindow, button,
-        button_with_child, checkbox, slider, switch, text_input,
+        button_with_child, checkbox, icon, slider, switch, text_input,
     };
 }
 

@@ -61,6 +61,7 @@ pub mod ecs;
 pub mod events;
 pub mod fonts;
 pub mod i18n;
+pub mod icon;
 pub mod icons;
 pub mod overlay;
 pub mod plugin;

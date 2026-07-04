@@ -97,9 +97,10 @@ CodeWhale runtime in-process via a dedicated bridge thread (see
   installed codewhale uses is honored. Only `WireFormat::ChatCompletions`
   providers are streamed in this phase; Anthropic Messages / Responses API
   support is a follow-up.
-- The UI shell: a primary chat window (sidebar thread list + streaming
-  `UiStreamingMarkdown` transcript + composer + status bar) plus secondary
-  About and Settings windows bound via `UiWindow`.
+- The UI shell: a primary chat window (status-rich title bar, thread sidebar
+  with per-thread previews, scrollable streaming `UiStreamingMarkdown`
+  transcript, composer, and status bar) plus secondary About and grouped
+  Settings windows bound via `UiWindow`.
 - `spawn_bridge_with_config_path(Option<PathBuf>)` exists for tests so they
   never touch the user's real `~/.codewhale/` config.
 

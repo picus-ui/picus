@@ -23,10 +23,11 @@ use std::collections::BTreeMap;
 use bevy_ecs::prelude::*;
 use bevy_window::Window;
 use picus::{
-    AppPicusExt, PicusPlugin, StyleClass, UiEventQueue, UiMarkdown, UiRoot, UiStreamingMarkdown,
-    UiWindow, WorldSceneExt,
+    AppPicusExt, PicusPlugin, StyleClass, UiEventQueue, UiMarkdown, UiRoot, UiScrollView,
+    UiStreamingMarkdown, UiWindow, WorldSceneExt,
     bevy_app::{App, PostStartup, PreUpdate, Startup},
-    scene::{CommandsSceneExt, bsn},
+    bevy_math::Vec2,
+    scene::{CommandsSceneExt, bsn, template_value},
     xilem::winit::error::EventLoopError,
 };
 use shared_utils::init_logging;
@@ -84,8 +85,18 @@ fn setup_chat_world(mut commands: Commands) {
                         StyleClass(vec!["picuscode.sidebar".to_string()])
                     ),
                     (
-                        TranscriptColumnView
-                        StyleClass(vec!["picuscode.transcript".to_string()])
+                        template_value(
+                            UiScrollView::new(Vec2::new(680.0, 520.0), Vec2::new(680.0, 1800.0))
+                                .with_vertical_scrollbar(true)
+                                .with_horizontal_scrollbar(false)
+                        )
+                        StyleClass(vec!["picuscode.transcript.scroll".to_string()])
+                        Children [
+                            (
+                                TranscriptColumnView
+                                StyleClass(vec!["picuscode.transcript".to_string()])
+                            ),
+                        ]
                     ),
                 ]
             ),
@@ -177,13 +188,6 @@ fn seed_picus_state(world: &mut World) {
             .expect("transcript column should exist after setup")
     };
 
-    // Seed a welcome markdown so the transcript isn't empty before a thread
-    // is selected.
-    world.spawn((
-        UiMarkdown::new(WELCOME_MARKDOWN),
-        bevy_ecs::hierarchy::ChildOf(transcript_column),
-    ));
-
     let bridge = bridge::spawn_bridge();
 
     // Kick off the initial data loads.
@@ -227,7 +231,10 @@ fn poll_bridge_events(world: &mut World) {
     let mut transcript_rebuild = false;
     let mut threads_changed = false;
 
-    while let Ok(event) = events.recv() {
+    // Non-blocking drain: `recv()` would block the Bevy render thread and
+    // freeze the window, so use `try_recv()` and process whatever has arrived
+    // since the last frame.
+    while let Ok(event) = events.try_recv() {
         match event {
             BridgeEvent::Ready => {}
             BridgeEvent::Threads(threads) => {
@@ -409,11 +416,6 @@ fn rebuild_transcript(world: &mut World) {
     }
 
     if active_thread.is_none() {
-        // Show the welcome markdown when no thread is selected.
-        world.spawn((
-            UiMarkdown::new(WELCOME_MARKDOWN),
-            bevy_ecs::hierarchy::ChildOf(transcript_column),
-        ));
         if let Some(mut s) = world.get_resource_mut::<PicusState>() {
             s.streaming_entity = Entity::PLACEHOLDER;
         }

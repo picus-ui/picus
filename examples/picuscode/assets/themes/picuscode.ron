@@ -5,7 +5,7 @@
       setter: (
         layout: (
           padding: Var("space-md"),
-          gap: Var("gap-sm"),
+          gap: Var("gap-md"),
         ),
         colors: (
           bg: Var("surface-bg"),
@@ -17,12 +17,121 @@
       selector: Class("picuscode.titlebar"),
       setter: (
         layout: (
-          padding: Var("space-xs"),
-          gap: Var("gap-sm"),
+          padding: Var("space-md"),
+          gap: Var("gap-md"),
+          corner_radius: Var("radius-lg"),
+          border_width: Var("border-thin"),
+          align_items: Center,
         ),
         colors: (
-          bg: Var("surface-bg-secondary"),
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
           text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.title"),
+      setter: (
+        text: (
+          size: 18.0,
+          weight: Var("font-weight-semibold"),
+        ),
+        colors: (
+          text: Var("text-heading"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.subtitle"),
+      setter: (
+        text: (
+          size: Var("font-size-caption1"),
+        ),
+        colors: (
+          text: Var("text-secondary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.toolbar.button"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          gap: Var("gap-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+          align_items: Center,
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+          hover_bg: Var("surface-subtle-hover"),
+          hover_border: Var("border-default-hover"),
+          pressed_bg: Var("surface-subtle-pressed"),
+          pressed_border: Var("border-default-pressed"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.toolbar.button.text"),
+      setter: (
+        text: (
+          size: Var("font-size-body1"),
+          weight: Var("font-weight-semibold"),
+        ),
+        colors: (
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.chip"),
+      setter: (
+        layout: (
+          padding: Var("space-xs"),
+          corner_radius: Var("radius-sm"),
+          border_width: Var("border-thin"),
+        ),
+        text: (
+          size: Var("font-size-caption1"),
+          weight: Var("font-weight-semibold"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          border: Var("border-default"),
+          text: Var("text-secondary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.chip.accent"),
+      setter: (
+        colors: (
+          bg: Var("status-info-bg"),
+          border: Var("status-info-border"),
+          text: Var("status-info-fg"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.chip.success"),
+      setter: (
+        colors: (
+          bg: Var("status-success-bg"),
+          border: Var("status-success-border"),
+          text: Var("status-success-fg"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.chip.danger"),
+      setter: (
+        colors: (
+          bg: Var("status-error-bg"),
+          border: Var("status-error-border"),
+          text: Var("status-error-fg"),
         ),
       ),
     ),
@@ -31,7 +140,9 @@
       setter: (
         layout: (
           padding: Var("space-none"),
-          gap: Var("gap-none"),
+          gap: Var("gap-md"),
+          flex_grow: 1.0,
+          align_items: Stretch,
         ),
         colors: (
           bg: Var("surface-bg"),
@@ -43,24 +154,126 @@
       selector: Class("picuscode.sidebar"),
       setter: (
         layout: (
-          padding: Var("space-sm"),
-          gap: Var("gap-xs"),
+          padding: Var("space-md"),
+          gap: Var("gap-md"),
+          corner_radius: Var("radius-lg"),
+          border_width: Var("border-thin"),
         ),
         colors: (
-          bg: Var("surface-bg-secondary"),
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
           text: Var("text-primary"),
         ),
       ),
     ),
     (
-      selector: Class("picuscode.title"),
+      selector: Class("picuscode.sidebar.heading"),
       setter: (
         text: (
-          size: 16.0,
-          weight: 600.0,
+          size: Var("font-size-body2"),
+          weight: Var("font-weight-semibold"),
+        ),
+        colors: (
+          text: Var("text-heading"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.sidebar.caption"),
+      setter: (
+        text: (
+          size: Var("font-size-caption1"),
+        ),
+        colors: (
+          text: Var("text-secondary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.thread.item"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          gap: Var("gap-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+          hover_bg: Var("surface-subtle-hover"),
+          hover_border: Var("border-default-hover"),
+          pressed_bg: Var("surface-subtle-pressed"),
+          pressed_border: Var("border-default-pressed"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.thread.item.active"),
+      setter: (
+        colors: (
+          bg: Var("status-info-bg"),
+          border: Var("status-info-border"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.thread.title"),
+      setter: (
+        text: (
+          size: Var("font-size-body1"),
+          weight: Var("font-weight-semibold"),
         ),
         colors: (
           text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.thread.title.active"),
+      setter: (
+        colors: (
+          text: Var("text-heading"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.thread.preview"),
+      setter: (
+        text: (
+          size: Var("font-size-caption1"),
+          line_height: Var("line-height-caption1"),
+        ),
+        colors: (
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.thread.meta"),
+      setter: (
+        text: (
+          size: Var("font-size-caption2"),
+        ),
+        colors: (
+          text: Var("text-secondary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.transcript.scroll"),
+      setter: (
+        layout: (
+          padding: Var("space-none"),
+          gap: Var("space-none"),
+          flex_grow: 1.0,
+          corner_radius: Var("radius-lg"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-bg"),
+          border: Var("border-default"),
         ),
       ),
     ),
@@ -68,12 +281,90 @@
       selector: Class("picuscode.transcript"),
       setter: (
         layout: (
-          padding: Var("space-sm"),
+          padding: Var("space-md"),
           gap: Var("gap-md"),
         ),
         colors: (
           bg: Var("surface-bg"),
           text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.transcript.header"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          gap: Var("gap-md"),
+          corner_radius: Var("radius-lg"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.transcript.title"),
+      setter: (
+        text: (
+          size: Var("font-size-subtitle1"),
+          weight: Var("font-weight-semibold"),
+        ),
+        colors: (
+          text: Var("text-heading"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.transcript.subtitle"),
+      setter: (
+        text: (
+          size: Var("font-size-caption1"),
+        ),
+        colors: (
+          text: Var("text-secondary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.empty.panel"),
+      setter: (
+        layout: (
+          padding: Var("space-xl"),
+          gap: Var("gap-md"),
+          corner_radius: Var("radius-lg"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.empty.title"),
+      setter: (
+        text: (
+          size: Var("font-size-subtitle2"),
+          weight: Var("font-weight-semibold"),
+        ),
+        colors: (
+          text: Var("text-heading"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.empty.body"),
+      setter: (
+        text: (
+          size: Var("font-size-body1"),
+        ),
+        colors: (
+          text: Var("text-secondary"),
         ),
       ),
     ),
@@ -94,19 +385,60 @@
       selector: Class("picuscode.composer"),
       setter: (
         layout: (
-          padding: Var("space-sm"),
+          padding: Var("space-md"),
           gap: Var("gap-sm"),
+          corner_radius: Var("radius-lg"),
+          border_width: Var("border-thin"),
         ),
         colors: (
-          bg: Var("surface-bg-secondary"),
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.composer.helper"),
+      setter: (
+        text: (
+          size: Var("font-size-caption1"),
+        ),
+        colors: (
+          text: Var("text-secondary"),
         ),
       ),
     ),
     (
       selector: Class("picuscode.status"),
       setter: (
+        layout: (
+          padding: Var("space-sm"),
+          gap: Var("gap-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.status.primary"),
+      setter: (
         text: (
-          size: 12.0,
+          size: Var("font-size-caption1"),
+          weight: Var("font-weight-semibold"),
+        ),
+        colors: (
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.status.secondary"),
+      setter: (
+        text: (
+          size: Var("font-size-caption1"),
         ),
         colors: (
           text: Var("text-secondary"),
@@ -155,12 +487,108 @@
       selector: Class("picuscode.settings.form"),
       setter: (
         layout: (
-          padding: Var("space-sm"),
-          gap: Var("gap-sm"),
+          padding: Var("space-none"),
+          gap: Var("gap-md"),
         ),
         colors: (
           bg: Var("surface-bg"),
           text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.settings.header"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          gap: Var("gap-sm"),
+          corner_radius: Var("radius-lg"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.settings.title"),
+      setter: (
+        text: (
+          size: Var("font-size-title3"),
+          weight: Var("font-weight-semibold"),
+        ),
+        colors: (
+          text: Var("text-heading"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.settings.subtitle"),
+      setter: (
+        text: (
+          size: Var("font-size-caption1"),
+        ),
+        colors: (
+          text: Var("text-secondary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.settings.section"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          gap: Var("gap-md"),
+          corner_radius: Var("radius-lg"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.settings.section.title"),
+      setter: (
+        text: (
+          size: Var("font-size-subtitle2"),
+          weight: Var("font-weight-semibold"),
+        ),
+        colors: (
+          text: Var("text-heading"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.settings.label"),
+      setter: (
+        text: (
+          size: Var("font-size-body1"),
+          weight: Var("font-weight-semibold"),
+        ),
+        colors: (
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.settings.status"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        text: (
+          size: Var("font-size-caption1"),
+        ),
+        colors: (
+          bg: Var("status-info-bg"),
+          border: Var("status-info-border"),
+          text: Var("status-info-fg"),
         ),
       ),
     ),
