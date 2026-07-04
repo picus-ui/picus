@@ -11,6 +11,7 @@ members = [
 	"examples/game_2048",
 	"examples/gallery",
 	"examples/overlay_hit_routing",
+	"examples/picuscode",
 	"examples/shared_utils",
 	"examples/timer",
 	"examples/todo_list",

@@ -77,8 +77,8 @@ Crates:
   window.
 
 Example applications live under `examples/`: `async_downloader`, `calculator`,
-`chess_game`, `game_2048`, `overlay_hit_routing`, `shared_utils`,
-`timer`, `todo_list`, and `gallery`.
+`chess_game`, `game_2048`, `gallery`, `overlay_hit_routing`, `picuscode`,
+`shared_utils`, `timer`, and `todo_list`.
 
 ## 3. Runtime Architecture
 
