@@ -15,7 +15,7 @@ use crate::{
         ResolvedStyle, apply_direct_widget_style, apply_label_style, apply_widget_style,
         font_stack_from_style, resolve_style, resolve_style_for_entity_classes,
     },
-    views::{ecs_button, ecs_button_with_child, ecs_slider, ecs_text_input},
+    views::{button_view, button_with_child_view, slider_view, text_input_view},
     widget_actions::WidgetUiAction,
 };
 use bevy_ecs::prelude::*;
@@ -173,7 +173,7 @@ pub(crate) fn project_button(button_component: &UiButton, ctx: ProjectionCtx<'_>
     };
 
     Arc::new(apply_direct_widget_style(
-        ecs_button_with_child(ctx.entity, BuiltinUiAction::Clicked, content),
+        button_with_child_view(ctx.entity, BuiltinUiAction::Clicked, content),
         &style,
     ))
 }
@@ -239,7 +239,7 @@ pub(crate) fn project_checkbox(checkbox: &UiCheckbox, ctx: ProjectionCtx<'_>) ->
         .gap(Length::px(style.layout.gap.max(8.0)));
 
     Arc::new(apply_direct_widget_style(
-        ecs_button_with_child(
+        button_with_child_view(
             ctx.entity,
             WidgetUiAction::ToggleCheckbox {
                 checkbox: ctx.entity,
@@ -253,7 +253,7 @@ pub(crate) fn project_checkbox(checkbox: &UiCheckbox, ctx: ProjectionCtx<'_>) ->
 pub(crate) fn project_slider(slider: &UiSlider, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     Arc::new(apply_widget_style(
-        ecs_slider(
+        slider_view(
             ctx.entity,
             slider.min,
             slider.max,
@@ -325,7 +325,7 @@ pub(crate) fn project_switch(switch_component: &UiSwitch, ctx: ProjectionCtx<'_>
         .gap(Length::px(style.layout.gap.max(8.0)));
 
     Arc::new(apply_direct_widget_style(
-        ecs_button_with_child(
+        button_with_child_view(
             ctx.entity,
             WidgetUiAction::ToggleSwitch { switch: ctx.entity },
             content,
@@ -401,7 +401,7 @@ pub(crate) fn project_rating(rating: &UiRating, ctx: ProjectionCtx<'_>) -> UiVie
             value: star_value,
         };
 
-        let star_view: UiView = Arc::new(ecs_button(entity, action, star_char));
+        let star_view: UiView = Arc::new(button_view(entity, action, star_char));
         star_views.push(star_view);
     }
 
@@ -413,7 +413,7 @@ pub(crate) fn project_rating(rating: &UiRating, ctx: ProjectionCtx<'_>) -> UiVie
 }
 
 pub(crate) fn project_text_input(input: &UiTextInput, ctx: ProjectionCtx<'_>) -> UiView {
-    project_ecs_text_input(
+    project_text_input_view(
         ctx,
         input.value.clone(),
         input.placeholder.clone(),
@@ -429,7 +429,7 @@ pub(crate) fn project_text_input(input: &UiTextInput, ctx: ProjectionCtx<'_>) ->
 
 pub(crate) fn project_password_input(input: &UiPasswordInput, ctx: ProjectionCtx<'_>) -> UiView {
     let mask = input.mask;
-    project_ecs_text_input(
+    project_text_input_view(
         ctx,
         masked_text(&input.value, mask),
         input.placeholder.clone(),
@@ -447,7 +447,7 @@ pub(crate) fn project_multiline_text_input(
     input: &UiMultilineTextInput,
     ctx: ProjectionCtx<'_>,
 ) -> UiView {
-    project_ecs_text_input(
+    project_text_input_view(
         ctx,
         input.value.clone(),
         input.placeholder.clone(),
@@ -461,7 +461,7 @@ pub(crate) fn project_multiline_text_input(
     )
 }
 
-fn project_ecs_text_input(
+fn project_text_input_view(
     ctx: ProjectionCtx<'_>,
     value: String,
     placeholder: String,
@@ -473,7 +473,7 @@ fn project_ecs_text_input(
     let style = resolve_style(ctx.world, ctx.entity);
     let scale = style.layout.scale.max(0.01);
     let entity = ctx.entity;
-    let mut styled = ecs_text_input(entity, value, move |value| map_action(entity, value))
+    let mut styled = text_input_view(entity, value, move |value| map_action(entity, value))
         .placeholder(placeholder)
         .text_size(style.text.size)
         .text_alignment(map_text_alignment_for_input(style.text.text_align))
@@ -614,7 +614,7 @@ pub(crate) fn project_link(link_component: &UiLink, ctx: ProjectionCtx<'_>) -> U
     let label_child = apply_label_style(label(text), &style);
 
     Arc::new(apply_direct_widget_style(
-        ecs_button_with_child(
+        button_with_child_view(
             ctx.entity,
             crate::UiLinkAction::new(ctx.entity),
             label_child,

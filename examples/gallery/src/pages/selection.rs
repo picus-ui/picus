@@ -1,6 +1,6 @@
 use crate::helpers::{card, grid, placeholder};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
-use picus_core::{
+use picus::{
     UiButton, UiCheckbox, UiColorPicker, UiComboBox, UiComboOption, UiDatePicker, UiListView,
     UiRadioGroup,
     scene::{CommandsSceneExt, bsn, template_value},

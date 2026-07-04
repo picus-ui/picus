@@ -4,7 +4,7 @@
 
 use crate::helpers::{card, class, grid, placeholder, sample_canvas};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
-use picus_core::{
+use picus::{
     UiLabel,
     scene::{CommandsSceneExt, bsn, template_value},
 };

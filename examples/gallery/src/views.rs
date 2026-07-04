@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use picus_core::{
+use picus::{
     ProjectionCtx, UiView, apply_label_style, apply_widget_style,
     bevy_ecs::prelude::*,
     masonry_core::{

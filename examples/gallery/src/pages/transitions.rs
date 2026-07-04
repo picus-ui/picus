@@ -4,7 +4,7 @@
 
 use crate::helpers::{card, class, grid, note, placeholder};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
-use picus_core::{
+use picus::{
     UiButton, UiProgressBar, UiSpinner, UiSwitch, UiThemePicker,
     scene::{CommandsSceneExt, bsn, template_value},
 };

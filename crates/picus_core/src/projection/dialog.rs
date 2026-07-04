@@ -13,7 +13,7 @@ use crate::{
         apply_direct_widget_style, apply_flex_alignment, apply_label_style, apply_widget_style,
         resolve_style, resolve_style_for_classes,
     },
-    views::{ecs_button_with_child, opaque_hitbox_for_entity},
+    views::{button_with_child_view, opaque_hitbox_for_entity},
 };
 use bevy_ecs::{hierarchy::Children, prelude::Entity};
 use masonry_core::layout::{Dim, Length};
@@ -211,7 +211,7 @@ pub(crate) fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiVie
     };
 
     let dismiss_button = apply_direct_widget_style(
-        ecs_button_with_child(
+        button_with_child_view(
             ctx.entity,
             OverlayUiAction::DismissDialog,
             vector_icon(

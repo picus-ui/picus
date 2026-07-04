@@ -5,7 +5,7 @@
 //! them to the appropriate state management logic.
 
 use bevy_ecs::prelude::*;
-use picus_core::{
+use picus::{
     AppI18n,
     BuiltinUiAction,
     OverlayPlacement,

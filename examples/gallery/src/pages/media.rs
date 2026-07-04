@@ -4,7 +4,7 @@
 
 use crate::helpers::{card, class, generated_image, grid, note, placeholder, sample_canvas};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
-use picus_core::{
+use picus::{
     UiImage,
     scene::{CommandsSceneExt, bsn, template_value},
 };

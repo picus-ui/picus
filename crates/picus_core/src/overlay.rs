@@ -1355,9 +1355,9 @@ struct EntityHitBox {
     rect: OverlayAnchorRect,
 }
 
-fn parse_entity_from_ecs_button(widget: WidgetRef<'_, dyn Widget>) -> Option<Entity> {
-    if widget.short_type_name() != "EcsButtonWidget"
-        && widget.short_type_name() != "EcsButtonWithChildWidget"
+fn parse_entity_from_button_view(widget: WidgetRef<'_, dyn Widget>) -> Option<Entity> {
+    if widget.short_type_name() != "ActionButtonWidget"
+        && widget.short_type_name() != "ActionButtonWithChildWidget"
     {
         return None;
     }
@@ -1385,7 +1385,7 @@ fn collect_entity_hit_boxes(widget: WidgetRef<'_, dyn Widget>, out: &mut Vec<Ent
         collect_entity_hit_boxes(child, out);
     }
 
-    let Some(entity) = parse_entity_from_ecs_button(widget) else {
+    let Some(entity) = parse_entity_from_button_view(widget) else {
         return;
     };
 

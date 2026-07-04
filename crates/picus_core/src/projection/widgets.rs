@@ -38,7 +38,7 @@ use crate::{
         apply_widget_style, font_stack_from_style, resolve_style, resolve_style_for_classes,
     },
     views::{
-        ecs_button, ecs_button_with_child, ecs_drag_thumb, ecs_radio_button,
+        button_view, button_with_child_view, drag_thumb_view, radio_button_view,
         opaque_hitbox_for_entity, scroll_portal,
     },
     widget_actions::WidgetUiAction,
@@ -328,9 +328,9 @@ pub(crate) fn project_scroll_view(scroll_view: &UiScrollView, ctx: ProjectionCtx
         );
 
         let thumb_body = if let Some(thumb_entity) = vertical_thumb_part {
-            ecs_drag_thumb(thumb_entity, ScrollAxis::Vertical, "")
+            drag_thumb_view(thumb_entity, ScrollAxis::Vertical, "")
         } else {
-            ecs_drag_thumb(ctx.entity, ScrollAxis::Vertical, "")
+            drag_thumb_view(ctx.entity, ScrollAxis::Vertical, "")
         };
 
         let thumb = apply_widget_style(
@@ -374,9 +374,9 @@ pub(crate) fn project_scroll_view(scroll_view: &UiScrollView, ctx: ProjectionCtx
         );
 
         let thumb_body = if let Some(thumb_entity) = horizontal_thumb_part {
-            ecs_drag_thumb(thumb_entity, ScrollAxis::Horizontal, "")
+            drag_thumb_view(thumb_entity, ScrollAxis::Horizontal, "")
         } else {
-            ecs_drag_thumb(ctx.entity, ScrollAxis::Horizontal, "")
+            drag_thumb_view(ctx.entity, ScrollAxis::Horizontal, "")
         };
 
         let thumb = apply_widget_style(
@@ -632,7 +632,7 @@ pub(crate) fn project_radio_group(radio_group: &UiRadioGroup, ctx: ProjectionCtx
         .enumerate()
         .map(|(i, opt)| {
             let radio_color = item_style.colors.text.or(style.colors.text);
-            let mut btn = ecs_radio_button(
+            let mut btn = radio_button_view(
                 ctx.entity,
                 WidgetUiAction::SelectRadioItem {
                     group: ctx.entity,
@@ -728,7 +728,7 @@ pub(crate) fn project_tab_bar(tab_bar: &UiTabBar, ctx: ProjectionCtx<'_>) -> UiV
             };
             let label_view = apply_label_style(label(tab_label.clone()), s);
             let styled_btn = apply_direct_widget_style(
-                ecs_button_with_child(
+                button_with_child_view(
                     ctx.entity,
                     WidgetUiAction::SelectTab {
                         bar: ctx.entity,
@@ -805,7 +805,7 @@ pub(crate) fn project_tree_node(tree_node: &UiTreeNode, ctx: ProjectionCtx<'_>) 
         ])
         .gap(Length::px(6.0));
 
-        let btn = ecs_button_with_child(
+        let btn = button_with_child_view(
             ctx.entity,
             WidgetUiAction::ToggleTreeNode { node: ctx.entity },
             content,
@@ -967,7 +967,7 @@ pub(crate) fn project_list_view(list_view: &UiListView, ctx: ProjectionCtx<'_>) 
                 ))
             } else {
                 Arc::new(apply_direct_widget_style(
-                    ecs_button_with_child(
+                    button_with_child_view(
                         ctx.entity,
                         WidgetUiAction::SelectListItem {
                             list_view: ctx.entity,
@@ -1065,7 +1065,7 @@ pub(crate) fn project_data_table(table: &UiDataTable, ctx: ProjectionCtx<'_>) ->
             );
             let cell: UiView = if column.is_some_and(|column| column.sortable) {
                 Arc::new(apply_direct_widget_style(
-                    ecs_button_with_child(
+                    button_with_child_view(
                         ctx.entity,
                         WidgetUiAction::SortDataTableColumn {
                             table: ctx.entity,
@@ -1130,7 +1130,7 @@ pub(crate) fn project_data_table(table: &UiDataTable, ctx: ProjectionCtx<'_>) ->
                 row_view
             } else {
                 let row_view: UiView = Arc::new(apply_direct_widget_style(
-                    ecs_button_with_child(
+                    button_with_child_view(
                         ctx.entity,
                         WidgetUiAction::SelectDataTableRow {
                             table: ctx.entity,
@@ -1196,7 +1196,7 @@ pub(crate) fn project_menu_bar_item(item: &UiMenuBarItem, ctx: ProjectionCtx<'_>
     ])
     .gap(Length::px(4.0));
     Arc::new(apply_direct_widget_style(
-        ecs_button_with_child(ctx.entity, OverlayUiAction::ToggleMenuBarItem, content),
+        button_with_child_view(ctx.entity, OverlayUiAction::ToggleMenuBarItem, content),
         &style,
     ))
 }
@@ -1221,7 +1221,7 @@ pub(crate) fn project_menu_item_panel(_: &UiMenuItemPanel, ctx: ProjectionCtx<'_
                 .enumerate()
                 .map(|(i, menu_item)| {
                     apply_direct_widget_style(
-                        ecs_button_with_child(
+                        button_with_child_view(
                             ctx.entity,
                             OverlayUiAction::SelectMenuBarItem { index: i },
                             apply_label_style(label(menu_item.label.clone()), &item_style),
@@ -1372,7 +1372,7 @@ pub(crate) fn project_color_picker(picker: &UiColorPicker, ctx: ProjectionCtx<'_
     ])
     .gap(Length::px(6.0));
     Arc::new(apply_direct_widget_style(
-        ecs_button_with_child(ctx.entity, OverlayUiAction::ToggleColorPicker, content),
+        button_with_child_view(ctx.entity, OverlayUiAction::ToggleColorPicker, content),
         &style,
     ))
 }
@@ -1416,7 +1416,7 @@ pub(crate) fn project_color_picker_panel(
                     .width(Dim::Fixed(Length::px(28.0)))
                     .height(Dim::Fixed(Length::px(28.0)));
                 let swatch_styled = apply_widget_style(swatch_view, &sw_style);
-                let btn = ecs_button_with_child(
+                let btn = button_with_child_view(
                     ctx.entity,
                     OverlayUiAction::SelectColorSwatch { r, g, b },
                     swatch_styled,
@@ -1587,7 +1587,7 @@ pub(crate) fn project_toast(toast: &UiToast, ctx: ProjectionCtx<'_>) -> UiView {
     let mut items = vec![msg.flex(1.0).into_any_flex()];
     if toast.show_close_button {
         let dismiss = apply_direct_widget_style(
-            ecs_button(ctx.entity, OverlayUiAction::DismissToast, "✕".to_string()),
+            button_view(ctx.entity, OverlayUiAction::DismissToast, "✕".to_string()),
             &dismiss_style,
         );
         items.push(dismiss.into_any_flex());
@@ -1624,7 +1624,7 @@ pub(crate) fn project_date_picker(picker: &UiDatePicker, ctx: ProjectionCtx<'_>)
     ])
     .gap(Length::px(6.0));
     Arc::new(apply_direct_widget_style(
-        ecs_button_with_child(ctx.entity, OverlayUiAction::ToggleDatePicker, content),
+        button_with_child_view(ctx.entity, OverlayUiAction::ToggleDatePicker, content),
         &style,
     ))
 }
@@ -1666,12 +1666,12 @@ pub(crate) fn project_date_picker_panel(
 
     // Navigation row
     let nav_style = resolve_style_for_classes(ctx.world, ["overlay.date_picker.nav"]);
-    let prev_btn = ecs_button(
+    let prev_btn = button_view(
         ctx.entity,
         OverlayUiAction::NavigateDateMonth { forward: false },
         "<".to_string(),
     );
-    let next_btn = ecs_button(
+    let next_btn = button_view(
         ctx.entity,
         OverlayUiAction::NavigateDateMonth { forward: true },
         ">".to_string(),
@@ -1719,7 +1719,7 @@ pub(crate) fn project_date_picker_panel(
                 } else {
                     &cell_style
                 };
-                let btn = ecs_button(
+                let btn = button_view(
                     ctx.entity,
                     OverlayUiAction::SelectDateDay { day },
                     day.to_string(),
@@ -2034,7 +2034,7 @@ pub(crate) fn project_navigation_view(nav: &UiNavigationView, ctx: ProjectionCtx
 
             // Wrap in a clickable button that emits SelectNavigationItem
             let button = apply_direct_widget_style(
-                ecs_button_with_child(
+                button_with_child_view(
                     ctx.entity,
                     WidgetUiAction::SelectNavigationItem {
                         nav: ctx.entity,
@@ -2139,7 +2139,7 @@ pub(crate) fn project_time_picker(picker: &UiTimePicker, ctx: ProjectionCtx<'_>)
     .cross_axis_alignment(CrossAxisAlignment::Center)
     .gap(Length::px(6.0));
     Arc::new(apply_direct_widget_style(
-        ecs_button_with_child(ctx.entity, OverlayUiAction::ToggleTimePicker, content),
+        button_with_child_view(ctx.entity, OverlayUiAction::ToggleTimePicker, content),
         &style,
     ))
 }
@@ -2193,7 +2193,7 @@ pub(crate) fn project_time_picker_panel(
         };
         let s = if is_sel { &selected_style } else { &cell_style };
         let label_text = format!("{:02}", hour_val);
-        let btn = ecs_button(
+        let btn = button_view(
             ctx.entity,
             OverlayUiAction::SelectTimeHour { hour: hour_val },
             label_text,
@@ -2208,7 +2208,7 @@ pub(crate) fn project_time_picker_panel(
         let is_sel = m == cur_minute;
         let s = if is_sel { &selected_style } else { &cell_style };
         let label_text = format!("{:02}", m);
-        let btn = ecs_button(
+        let btn = button_view(
             ctx.entity,
             OverlayUiAction::SelectTimeMinute { minute: m },
             label_text,
@@ -2236,12 +2236,12 @@ pub(crate) fn project_time_picker_panel(
         } else {
             &cell_style
         };
-        let am_btn = ecs_button(
+        let am_btn = button_view(
             ctx.entity,
             OverlayUiAction::SelectTimePeriod { is_pm: false },
             "AM".to_string(),
         );
-        let pm_btn = ecs_button(
+        let pm_btn = button_view(
             ctx.entity,
             OverlayUiAction::SelectTimePeriod { is_pm: true },
             "PM".to_string(),
@@ -2255,7 +2255,7 @@ pub(crate) fn project_time_picker_panel(
     }
 
     // --- Done button ---
-    let done_btn = ecs_button(
+    let done_btn = button_view(
         ctx.entity,
         OverlayUiAction::DismissTimePicker,
         "Done".to_string(),
@@ -2324,7 +2324,7 @@ pub(crate) fn project_expander(expander: &UiExpander, ctx: ProjectionCtx<'_>) ->
         .gap(Length::px(6.0));
 
     let header_btn = apply_direct_widget_style(
-        ecs_button_with_child(ctx.entity, OverlayUiAction::ToggleExpander, header_row),
+        button_with_child_view(ctx.entity, OverlayUiAction::ToggleExpander, header_row),
         &style,
     );
 
@@ -2394,7 +2394,7 @@ pub(crate) fn project_context_menu(menu: &UiContextMenu, ctx: ProjectionCtx<'_>)
         };
 
         if item.enabled {
-            let btn = ecs_button_with_child(
+            let btn = button_with_child_view(
                 ctx.entity,
                 OverlayUiAction::SelectContextMenuItem { index: i },
                 row_content,

@@ -15,7 +15,7 @@ use crate::{
         apply_direct_widget_style, apply_flex_alignment, apply_label_style, apply_widget_style,
         resolve_style, resolve_style_for_classes,
     },
-    views::{ecs_button_with_child, opaque_hitbox_for_entity},
+    views::{button_with_child_view, opaque_hitbox_for_entity},
 };
 
 use super::{
@@ -51,7 +51,7 @@ pub(crate) fn project_theme_picker(_: &UiThemePicker, ctx: ProjectionCtx<'_>) ->
     let icon = vector_icon(VectorIcon::SunMoon, 16.0, icon_color);
 
     let button = apply_direct_widget_style(
-        ecs_button_with_child(ctx.entity, OverlayUiAction::ToggleThemePicker, icon),
+        button_with_child_view(ctx.entity, OverlayUiAction::ToggleThemePicker, icon),
         &style,
     );
 
@@ -167,7 +167,7 @@ pub(crate) fn project_theme_picker_menu(
             .cross_axis_alignment(CrossAxisAlignment::Center)
             .gap(Length::px(8.0));
 
-            let item_button = ecs_button_with_child(
+            let item_button = button_with_child_view(
                 ctx.entity,
                 OverlayUiAction::SelectThemePickerItem { index },
                 content,

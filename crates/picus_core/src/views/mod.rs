@@ -1,4 +1,4 @@
-//! View helpers exported by `picus_core`.
+//! Picus action view helpers.
 //!
 //! This module exposes Picus ECS action helpers. Low-level retained widgets remain available
 //! from `picus_view::view` for projection internals, but Picus-facing helpers should route
@@ -17,27 +17,27 @@
 //!
 //! let _button = button(entity, (), "ECS event button");
 //! ```
-mod ecs_button_view;
-mod ecs_button_with_child_view;
-mod ecs_component_views;
-mod ecs_drag_thumb_view;
+mod button_view;
+mod button_with_child_view;
+mod component_views;
+mod drag_thumb_view;
 mod entity_scope_view;
 mod opaque_hitbox_view;
 mod scroll_portal_view;
 
-pub use ecs_button_view::ecs_button as button;
-pub use ecs_button_view::{EcsButtonView, ecs_button};
-pub use ecs_button_with_child_view::ecs_button_with_child as button_with_child;
-pub use ecs_button_with_child_view::{EcsButtonWithChildView, ecs_button_with_child};
-pub use ecs_component_views::ecs_checkbox as checkbox;
-pub(crate) use ecs_component_views::ecs_radio_button;
-pub use ecs_component_views::ecs_slider as slider;
-pub use ecs_component_views::ecs_switch as switch;
-pub use ecs_component_views::ecs_text_input as text_input;
-pub use ecs_component_views::{
-    EcsSliderView, EcsSwitchView, ecs_checkbox, ecs_slider, ecs_switch, ecs_text_input,
+pub use button_view::button_view as button;
+pub use button_view::{ButtonView, button_view};
+pub use button_with_child_view::button_with_child_view as button_with_child;
+pub use button_with_child_view::{ButtonWithChildView, button_with_child_view};
+pub use component_views::checkbox_view as checkbox;
+pub(crate) use component_views::radio_button_view;
+pub use component_views::slider_view as slider;
+pub use component_views::switch_view as switch;
+pub use component_views::text_input_view as text_input;
+pub use component_views::{
+    CheckboxView, SliderView, SwitchView, checkbox_view, slider_view, switch_view, text_input_view,
 };
-pub use ecs_drag_thumb_view::{EcsDragThumbView, ecs_drag_thumb};
+pub use drag_thumb_view::{DragThumbView, drag_thumb_view};
 pub use entity_scope_view::entity_scope;
 pub use opaque_hitbox_view::{OpaqueHitboxView, opaque_hitbox, opaque_hitbox_for_entity};
 pub use scroll_portal_view::{ScrollPortalView, scroll_portal};

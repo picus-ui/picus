@@ -1,6 +1,6 @@
 //! Bevy + Masonry Core integration with ECS-driven UI projection.
 //!
-//! `picus_core` lets you:
+//! `picus_core` contains the implementation surface for Picus:
 //! - register ECS UI components through [`UiComponentTemplate`],
 //! - collect typed UI actions through [`UiEventQueue`],
 //! - describe ECS UI trees with Bevy Scene Notation (`bsn!`),
@@ -121,15 +121,16 @@ pub use views::*;
 pub use widget_actions::*;
 
 pub mod prelude {
-    //! Convenience exports for building `picus_core` apps.
+    //! Convenience exports for Picus internals and legacy `picus_core` users.
 
     pub use crate::scene::*;
     pub use bevy_ecs::hierarchy::{ChildOf, Children};
 
     pub use crate::{
         AppBreakpoints, AppI18n, AppPicusExt, AutoDismiss, AvatarShape, BevyWindowOptions,
-        BuiltinUiAction, ButtonAppearance, ButtonIconPosition, ButtonShape, ButtonSize, ColorStyle,
-        ComputedStyle, CurrentColorStyle, EcsButtonView, EcsSliderView, EcsSwitchView, HasTooltip,
+        BuiltinUiAction, ButtonAppearance, ButtonIconPosition, ButtonShape, ButtonSize,
+        ButtonView, CheckboxView, ColorStyle, ComputedStyle, CurrentColorStyle, SliderView,
+        SwitchView, HasTooltip,
         InlineStyle, InteractionState, LayoutStyle, LocalizeText, MasonryRuntime, MessageBarKind,
         NavigationViewItem, ObjectFit, OverlayComputedPosition, OverlayConfig,
         OverlayMouseButtonCursor, OverlayPlacement, OverlayPointerRoutingState, OverlayStack,
@@ -163,8 +164,8 @@ pub mod prelude {
         UiThemePickerOption, UiTitleBar, UiToast, UiToolbar, UiTooltip, UiTreeNode,
         UiTreeNodeToggled, UiView, UiVisibleResponsive, UiWindow, WidgetUiAction, WindowRuntime,
         WindowSize, XilemFontBridge, bubble_ui_pointer_events, button, button_with_child, checkbox,
-        collect_bevy_font_assets, dismiss_overlays_on_click, ecs_button, ecs_button_with_child,
-        ecs_checkbox, ecs_slider, ecs_switch, ecs_text_input, emit_ui_action,
+        collect_bevy_font_assets, dismiss_overlays_on_click, button_view, button_with_child_view,
+        checkbox_view, slider_view, switch_view, text_input_view, emit_ui_action,
         ensure_overlay_root, ensure_overlay_root_entity, ensure_template_part,
         expand_builtin_ui_component_templates, find_template_part, gather_ui_roots,
         handle_global_overlay_clicks, handle_overlay_actions, handle_tooltip_hovers,

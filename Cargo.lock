@@ -1920,7 +1920,7 @@ name = "example_async_downloader"
 version = "0.1.0"
 dependencies = [
  "bevy_ecs",
- "picus_core",
+ "picus",
  "reqwest",
  "shared_utils",
  "tokio",
@@ -1932,7 +1932,7 @@ name = "example_calculator"
 version = "0.1.0"
 dependencies = [
  "bevy_ecs",
- "picus_core",
+ "picus",
  "shared_utils",
  "tracing-subscriber",
 ]
@@ -1943,7 +1943,7 @@ version = "0.1.0"
 dependencies = [
  "bevy_ecs",
  "num-traits",
- "picus_core",
+ "picus",
  "shared_utils",
  "tracing-subscriber",
 ]
@@ -1954,7 +1954,7 @@ version = "0.1.0"
 dependencies = [
  "bevy_ecs",
  "bevy_math",
- "picus_core",
+ "picus",
  "shared_utils",
  "unic-langid",
 ]
@@ -1964,7 +1964,7 @@ name = "example_game_2048"
 version = "0.1.0"
 dependencies = [
  "bevy_ecs",
- "picus_core",
+ "picus",
  "shared_utils",
  "tracing-subscriber",
 ]
@@ -1974,7 +1974,7 @@ name = "example_overlay_hit_routing"
 version = "0.1.0"
 dependencies = [
  "bevy_ecs",
- "picus_core",
+ "picus",
  "shared_utils",
  "tracing-subscriber",
 ]
@@ -1985,7 +1985,7 @@ version = "0.1.0"
 dependencies = [
  "bevy_ecs",
  "bevy_window",
- "picus_core",
+ "picus",
  "shared_utils",
  "tracing-subscriber",
 ]
@@ -1995,7 +1995,7 @@ name = "example_timer"
 version = "0.1.0"
 dependencies = [
  "bevy_ecs",
- "picus_core",
+ "picus",
  "shared_utils",
  "tokio",
  "tracing-subscriber",
@@ -2006,7 +2006,7 @@ name = "example_todo_list"
 version = "0.1.0"
 dependencies = [
  "bevy_ecs",
- "picus_core",
+ "picus",
  "shared_utils",
  "tracing-subscriber",
 ]
@@ -4084,6 +4084,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "picus"
+version = "0.1.0"
+dependencies = [
+ "picus_core",
+]
+
+[[package]]
 name = "picus_core"
 version = "0.1.0"
 dependencies = [
@@ -5106,7 +5113,7 @@ name = "shared_utils"
 version = "0.1.0"
 dependencies = [
  "bevy_ecs",
- "picus_core",
+ "picus",
  "tracing-subscriber",
 ]
 

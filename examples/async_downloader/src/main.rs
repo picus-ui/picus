@@ -5,7 +5,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use picus_core::{
+use picus::{
     AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiDialog, UiEventQueue, UiRoot,
     UiThemePicker, UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
@@ -547,12 +547,12 @@ fn drain_download_events(world: &mut World) {
     }
 }
 
-picus_core::impl_ui_component_template!(DownloadRootView, project_download_root);
-picus_core::impl_ui_component_template!(DownloadTitle, project_download_title);
-picus_core::impl_ui_component_template!(DownloadUrlRow, project_download_url_row);
-picus_core::impl_ui_component_template!(DownloadActionRow, project_download_action_row);
-picus_core::impl_ui_component_template!(DownloadDialogModeRow, project_download_dialog_mode_row,);
-picus_core::impl_ui_component_template!(DownloadProgressPanel, project_download_progress_panel);
+picus::impl_ui_component_template!(DownloadRootView, project_download_root);
+picus::impl_ui_component_template!(DownloadTitle, project_download_title);
+picus::impl_ui_component_template!(DownloadUrlRow, project_download_url_row);
+picus::impl_ui_component_template!(DownloadActionRow, project_download_action_row);
+picus::impl_ui_component_template!(DownloadDialogModeRow, project_download_dialog_mode_row,);
+picus::impl_ui_component_template!(DownloadProgressPanel, project_download_progress_panel);
 
 fn build_async_downloader_app() -> App {
     init_logging();
@@ -585,7 +585,7 @@ fn main() -> Result<(), EventLoopError> {
 mod tests {
     #[test]
     fn embedded_async_downloader_theme_ron_parses() {
-        picus_core::parse_stylesheet_ron(include_str!("../assets/themes/async_downloader.ron"))
+        picus::parse_stylesheet_ron(include_str!("../assets/themes/async_downloader.ron"))
             .expect("embedded async_downloader stylesheet should parse");
     }
 }

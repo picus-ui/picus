@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use picus_core::{
+use picus::{
     AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot, UiThemePicker,
     UiView, apply_label_style, apply_text_input_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
@@ -390,13 +390,13 @@ fn drain_todo_events_and_mutate_world(world: &mut World) {
     }
 }
 
-picus_core::impl_ui_component_template!(TodoRootView, project_todo_root);
-picus_core::impl_ui_component_template!(TodoHeader, project_todo_header);
-picus_core::impl_ui_component_template!(TodoInputArea, project_todo_input_area);
-picus_core::impl_ui_component_template!(TodoListContainer, project_todo_list_container);
-picus_core::impl_ui_component_template!(TodoItem, project_todo_item);
-picus_core::impl_ui_component_template!(TodoFilterBar, project_filter_bar);
-picus_core::impl_ui_component_template!(FilterToggle, project_filter_toggle);
+picus::impl_ui_component_template!(TodoRootView, project_todo_root);
+picus::impl_ui_component_template!(TodoHeader, project_todo_header);
+picus::impl_ui_component_template!(TodoInputArea, project_todo_input_area);
+picus::impl_ui_component_template!(TodoListContainer, project_todo_list_container);
+picus::impl_ui_component_template!(TodoItem, project_todo_item);
+picus::impl_ui_component_template!(TodoFilterBar, project_filter_bar);
+picus::impl_ui_component_template!(FilterToggle, project_filter_toggle);
 
 fn build_bevy_todo_app() -> App {
     init_logging();
@@ -428,7 +428,7 @@ fn main() -> Result<(), EventLoopError> {
 mod tests {
     #[test]
     fn embedded_todo_theme_ron_parses() {
-        picus_core::parse_stylesheet_ron(include_str!("../assets/themes/todo_list.ron"))
+        picus::parse_stylesheet_ron(include_str!("../assets/themes/todo_list.ron"))
             .expect("embedded todo_list stylesheet should parse");
     }
 }

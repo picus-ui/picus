@@ -15,7 +15,7 @@ use crate::bevy_tween::{
 use crate::{
     AppI18n, AppPicusExt, ColorStyle, InteractionState, PicusPlugin, ProjectionCtx, Selector,
     StyleRule, StyleSetter, StyleSheet, SyncTextSource, UiEventQueue, UiProjectorRegistry, UiRoot,
-    UiView, bubble_ui_pointer_events, ecs_button, ensure_overlay_defaults, ensure_overlay_root,
+    UiView, bubble_ui_pointer_events, button_view, ensure_overlay_defaults, ensure_overlay_root,
     ensure_overlay_root_entity, handle_overlay_actions, register_builtin_projectors,
     reparent_overlay_entities, resolve_style, resolve_style_for_entity_classes,
     spawn_in_overlay_root, synthesize_roots_with_stats,
@@ -54,7 +54,7 @@ enum DialogCloseTestAction {
 }
 
 fn project_test_root(_: &TestRoot, ctx: ProjectionCtx<'_>) -> UiView {
-    Arc::new(ecs_button(ctx.entity, TestAction::Clicked, "Click"))
+    Arc::new(button_view(ctx.entity, TestAction::Clicked, "Click"))
 }
 
 fn project_toast_probe(_: &ToastProbe, ctx: ProjectionCtx<'_>) -> UiView {
@@ -3383,7 +3383,7 @@ fn dialog_dismiss_button_targets_dialog_entity() {
             .render_root
             .get_layer_root(0);
         let mut button_rects = Vec::new();
-        collect_widget_bounds_by_short_name(root, "EcsButtonWithChildWidget", &mut button_rects);
+        collect_widget_bounds_by_short_name(root, "ActionButtonWithChildWidget", &mut button_rects);
 
         button_rects
             .into_iter()
@@ -3423,7 +3423,7 @@ fn dialog_dismiss_button_targets_dialog_entity() {
             .unwrap_or_default()
     };
 
-    assert_eq!(hit_widget.as_str(), "EcsButtonWithChildWidget");
+    assert_eq!(hit_widget.as_str(), "ActionButtonWithChildWidget");
     assert_eq!(hit_debug_text, format!("entity={}", dialog.to_bits()));
 
     let content_width = content_rect.max.x - content_rect.min.x;
@@ -3474,7 +3474,7 @@ fn dialog_projects_single_dismiss_button_without_fullscreen_backdrop_button() {
             .render_root
             .get_layer_root(0);
         let mut button_rects = Vec::new();
-        collect_widget_bounds_by_short_name(root, "EcsButtonWithChildWidget", &mut button_rects);
+        collect_widget_bounds_by_short_name(root, "ActionButtonWithChildWidget", &mut button_rects);
         button_rects
     };
 
@@ -3698,7 +3698,7 @@ fn handle_global_overlay_clicks_closes_theme_picker_anchor_and_resets_open_state
 }
 
 #[test]
-fn ui_button_projects_to_ecs_button_with_child_widget() {
+fn ui_button_projects_to_action_button_with_child_widget() {
     let mut app = App::new();
     app.add_plugins(PicusPlugin);
 
@@ -3737,7 +3737,7 @@ fn ui_button_projects_to_ecs_button_with_child_widget() {
             .unwrap_or_default()
     };
 
-    assert_eq!(short_type, "EcsButtonWithChildWidget");
+    assert_eq!(short_type, "ActionButtonWithChildWidget");
 }
 
 #[test]
@@ -3900,7 +3900,7 @@ fn dropdown_item_text_region_hits_button_entity_instead_of_child_subwidget() {
             .unwrap_or_default()
     };
 
-    assert_eq!(hit_widget.as_str(), "EcsButtonWithChildWidget");
+    assert_eq!(hit_widget.as_str(), "ActionButtonWithChildWidget");
     assert_eq!(hit_debug_text, format!("entity={}", item_entity.to_bits()));
 }
 

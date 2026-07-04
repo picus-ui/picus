@@ -49,7 +49,7 @@ fn flush_pending_font_registrations(app: &mut App) {
     }
 }
 
-/// Fluent extension methods for registering `picus_core` projectors on a Bevy [`App`].
+/// Fluent extension methods for registering Picus projectors on a Bevy [`App`].
 ///
 /// # Example
 ///

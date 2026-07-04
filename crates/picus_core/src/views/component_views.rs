@@ -19,18 +19,18 @@ use xilem_core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 use crate::events::emit_ui_action;
 use crate::styling::DEFAULT_TEXT_SIZE;
 
-/// ECS-dispatching checkbox backed by Picus' retained widget backend.
-pub fn ecs_checkbox<A, F>(
+/// Picus action-dispatching checkbox backed by Picus' retained widget backend.
+pub fn checkbox_view<A, F>(
     entity: Entity,
     label: impl Into<ArcStr>,
     checked: bool,
     map_action: F,
-) -> EcsCheckboxView<A>
+) -> CheckboxView<A>
 where
     A: Send + Sync + 'static,
     F: Fn(bool) -> A + Send + Sync + 'static,
 {
-    EcsCheckboxView {
+    CheckboxView {
         entity,
         label: label.into(),
         checked,
@@ -43,15 +43,15 @@ where
     }
 }
 
-type EcsCheckboxCallback<A> = Box<dyn Fn(bool) -> A + Send + Sync + 'static>;
+type CheckboxCallback<A> = Box<dyn Fn(bool) -> A + Send + Sync + 'static>;
 
-/// ECS-dispatching checkbox view with label/checkmark styling support.
+/// Picus action-dispatching checkbox view with label/checkmark styling support.
 #[must_use = "View values do nothing unless returned into the synthesized UI tree."]
-pub struct EcsCheckboxView<A> {
+pub struct CheckboxView<A> {
     entity: Entity,
     label: ArcStr,
     checked: bool,
-    map_action: EcsCheckboxCallback<A>,
+    map_action: CheckboxCallback<A>,
     text_size: f32,
     font: FontFamily<'static>,
     text_color: Option<Color>,
@@ -59,7 +59,7 @@ pub struct EcsCheckboxView<A> {
     disabled: bool,
 }
 
-impl<A> EcsCheckboxView<A>
+impl<A> CheckboxView<A>
 where
     A: Send + Sync + 'static,
 {
@@ -90,9 +90,9 @@ where
     }
 }
 
-impl<A> ViewMarker for EcsCheckboxView<A> where A: Send + Sync + 'static {}
+impl<A> ViewMarker for CheckboxView<A> where A: Send + Sync + 'static {}
 
-impl<A> View<(), (), ViewCtx> for EcsCheckboxView<A>
+impl<A> View<(), (), ViewCtx> for CheckboxView<A>
 where
     A: Send + Sync + 'static,
 {
@@ -182,7 +182,7 @@ where
     ) -> MessageResult<()> {
         debug_assert!(
             message.remaining_path().is_empty(),
-            "id path should be empty in EcsCheckboxView::message"
+            "id path should be empty in CheckboxView::message"
         );
         match message.take_message::<CheckboxToggled>() {
             Some(checked) => {
@@ -194,17 +194,17 @@ where
     }
 }
 
-/// ECS-dispatching radio button backed by Picus' retained widget backend.
-pub fn ecs_radio_button<A>(
+/// Picus action-dispatching radio button backed by Picus' retained widget backend.
+pub fn radio_button_view<A>(
     entity: Entity,
     action: A,
     label: impl Into<ArcStr>,
     checked: bool,
-) -> EcsRadioButtonView<A>
+) -> RadioButtonView<A>
 where
     A: Clone + Send + Sync + 'static,
 {
-    EcsRadioButtonView {
+    RadioButtonView {
         entity,
         action,
         label: label.into(),
@@ -217,9 +217,9 @@ where
     }
 }
 
-/// ECS-dispatching radio button view with label styling support.
+/// Picus action-dispatching radio button view with label styling support.
 #[must_use = "View values do nothing unless returned into the synthesized UI tree."]
-pub struct EcsRadioButtonView<A> {
+pub struct RadioButtonView<A> {
     entity: Entity,
     action: A,
     label: ArcStr,
@@ -231,7 +231,7 @@ pub struct EcsRadioButtonView<A> {
     disabled: bool,
 }
 
-impl<A> EcsRadioButtonView<A>
+impl<A> RadioButtonView<A>
 where
     A: Clone + Send + Sync + 'static,
 {
@@ -257,9 +257,9 @@ where
     }
 }
 
-impl<A> ViewMarker for EcsRadioButtonView<A> where A: Clone + Send + Sync + 'static {}
+impl<A> ViewMarker for RadioButtonView<A> where A: Clone + Send + Sync + 'static {}
 
-impl<A> View<(), (), ViewCtx> for EcsRadioButtonView<A>
+impl<A> View<(), (), ViewCtx> for RadioButtonView<A>
 where
     A: Clone + Send + Sync + 'static,
 {
@@ -348,7 +348,7 @@ where
     ) -> MessageResult<()> {
         debug_assert!(
             message.remaining_path().is_empty(),
-            "id path should be empty in EcsRadioButtonView::message"
+            "id path should be empty in RadioButtonView::message"
         );
         match message.take_message::<RadioButtonSelected>() {
             Some(_) => {
@@ -360,32 +360,32 @@ where
     }
 }
 
-type EcsSliderCallback<A> = Box<dyn Fn(f64) -> A + Send + Sync + 'static>;
+type SliderCallback<A> = Box<dyn Fn(f64) -> A + Send + Sync + 'static>;
 
-/// ECS-dispatching slider view backed by Picus' retained widget backend.
+/// Picus action-dispatching slider view backed by Picus' retained widget backend.
 #[must_use = "View values do nothing unless returned into the synthesized UI tree."]
-pub struct EcsSliderView<A> {
+pub struct SliderView<A> {
     entity: Entity,
     min: f64,
     max: f64,
     value: f64,
-    map_action: EcsSliderCallback<A>,
+    map_action: SliderCallback<A>,
     step: Option<f64>,
     disabled: bool,
 }
 
-pub fn ecs_slider<A, F>(
+pub fn slider_view<A, F>(
     entity: Entity,
     min: f64,
     max: f64,
     value: f64,
     map_action: F,
-) -> EcsSliderView<A>
+) -> SliderView<A>
 where
     A: Send + Sync + 'static,
     F: Fn(f64) -> A + Send + Sync + 'static,
 {
-    EcsSliderView {
+    SliderView {
         entity,
         min,
         max,
@@ -396,7 +396,7 @@ where
     }
 }
 
-impl<A> EcsSliderView<A>
+impl<A> SliderView<A>
 where
     A: Send + Sync + 'static,
 {
@@ -415,9 +415,9 @@ where
     }
 }
 
-impl<A> ViewMarker for EcsSliderView<A> where A: Send + Sync + 'static {}
+impl<A> ViewMarker for SliderView<A> where A: Send + Sync + 'static {}
 
-impl<A> View<(), (), ViewCtx> for EcsSliderView<A>
+impl<A> View<(), (), ViewCtx> for SliderView<A>
 where
     A: Send + Sync + 'static,
 {
@@ -476,7 +476,7 @@ where
         _app_state: &mut (),
     ) -> MessageResult<()> {
         if message.take_first().is_some() {
-            tracing::warn!("Got unexpected id path in EcsSliderView::message");
+            tracing::warn!("Got unexpected id path in SliderView::message");
             return MessageResult::Stale;
         }
 
@@ -490,27 +490,27 @@ where
     }
 }
 
-type EcsSwitchCallback<A> = Box<dyn Fn(bool) -> A + Send + Sync + 'static>;
+type SwitchCallback<A> = Box<dyn Fn(bool) -> A + Send + Sync + 'static>;
 
-/// ECS-dispatching switch view backed by Picus' retained widget backend.
+/// Picus action-dispatching switch view backed by Picus' retained widget backend.
 #[must_use = "View values do nothing unless returned into the synthesized UI tree."]
-pub struct EcsSwitchView<A> {
+pub struct SwitchView<A> {
     entity: Entity,
     on: bool,
-    map_action: EcsSwitchCallback<A>,
+    map_action: SwitchCallback<A>,
     disabled: bool,
 }
 
-pub fn ecs_switch<A, F>(
+pub fn switch_view<A, F>(
     entity: Entity,
     on: bool,
     map_action: F,
-) -> EcsSwitchView<A>
+) -> SwitchView<A>
 where
     A: Send + Sync + 'static,
     F: Fn(bool) -> A + Send + Sync + 'static,
 {
-    EcsSwitchView {
+    SwitchView {
         entity,
         on,
         map_action: Box::new(map_action),
@@ -518,7 +518,7 @@ where
     }
 }
 
-impl<A> EcsSwitchView<A>
+impl<A> SwitchView<A>
 where
     A: Send + Sync + 'static,
 {
@@ -529,9 +529,9 @@ where
     }
 }
 
-impl<A> ViewMarker for EcsSwitchView<A> where A: Send + Sync + 'static {}
+impl<A> ViewMarker for SwitchView<A> where A: Send + Sync + 'static {}
 
-impl<A> View<(), (), ViewCtx> for EcsSwitchView<A>
+impl<A> View<(), (), ViewCtx> for SwitchView<A>
 where
     A: Send + Sync + 'static,
 {
@@ -581,7 +581,7 @@ where
     ) -> MessageResult<()> {
         debug_assert!(
             message.remaining_path().is_empty(),
-            "id path should be empty in EcsSwitchView::message"
+            "id path should be empty in SwitchView::message"
         );
         match message.take_message::<SwitchToggled>() {
             Some(switched) => {
@@ -593,8 +593,8 @@ where
     }
 }
 
-/// ECS-dispatching text input backed by Picus' native `TextInput` view.
-pub fn ecs_text_input<A, F>(entity: Entity, contents: String, map_action: F) -> TextInput<()>
+/// Picus action-dispatching text input backed by Picus' native `TextInput` view.
+pub fn text_input_view<A, F>(entity: Entity, contents: String, map_action: F) -> TextInput<()>
 where
     A: Send + Sync + 'static,
     F: Fn(String) -> A + Send + Sync + 'static,
@@ -658,10 +658,10 @@ mod tests {
     }
 
     #[test]
-    fn ecs_rebuild_does_not_reset_user_edit_when_bound_state_has_not_changed_yet() {
+    fn text_input_rebuild_does_not_reset_user_edit_when_bound_state_has_not_changed_yet() {
         let entity = World::new().spawn_empty().id();
-        let prev = ecs_text_input(entity, String::new(), |_: String| ());
-        let next = ecs_text_input(entity, String::new(), |_: String| ());
+        let prev = text_input_view(entity, String::new(), |_: String| ());
+        let next = text_input_view(entity, String::new(), |_: String| ());
         let mut view_ctx = test_view_ctx();
         let (element, mut view_state) =
             <TextInput<()> as View<(), (), ViewCtx>>::build(&prev, &mut view_ctx, &mut ());
@@ -690,10 +690,10 @@ mod tests {
     }
 
     #[test]
-    fn ecs_rebuild_applies_external_text_change_when_bound_state_updates() {
+    fn text_input_rebuild_applies_external_text_change_when_bound_state_updates() {
         let entity = World::new().spawn_empty().id();
-        let prev = ecs_text_input(entity, String::new(), |_: String| ());
-        let next = ecs_text_input(entity, "synced".to_string(), |_: String| ());
+        let prev = text_input_view(entity, String::new(), |_: String| ());
+        let next = text_input_view(entity, "synced".to_string(), |_: String| ());
         let mut view_ctx = test_view_ctx();
         let (element, mut view_state) =
             <TextInput<()> as View<(), (), ViewCtx>>::build(&prev, &mut view_ctx, &mut ());

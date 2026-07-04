@@ -3,40 +3,40 @@ use masonry_core::core::ArcStr;
 use picus_view::{Pod, ViewCtx};
 use xilem_core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 
-use crate::widgets::{EcsButtonWidget, EcsButtonWidgetAction};
+use crate::widgets::{ActionButtonWidget, ActionButtonWidgetAction};
 
-/// ECS-dispatched view backed by Masonry's native `Button` widget.
+/// Picus action-dispatched view backed by Masonry's native `Button` widget.
 #[must_use = "View values do nothing unless returned into the synthesized UI tree."]
-pub struct EcsButtonView<A> {
+pub struct ButtonView<A> {
     entity: Entity,
     action: A,
     label: ArcStr,
 }
 
-pub fn ecs_button<A>(entity: Entity, action: A, label: impl Into<ArcStr>) -> EcsButtonView<A>
+pub fn button_view<A>(entity: Entity, action: A, label: impl Into<ArcStr>) -> ButtonView<A>
 where
     A: Clone + Send + Sync + 'static,
 {
-    EcsButtonView {
+    ButtonView {
         entity,
         action,
         label: label.into(),
     }
 }
 
-impl<A> ViewMarker for EcsButtonView<A> where A: Clone + Send + Sync + 'static {}
+impl<A> ViewMarker for ButtonView<A> where A: Clone + Send + Sync + 'static {}
 
-impl<A> View<(), (), ViewCtx> for EcsButtonView<A>
+impl<A> View<(), (), ViewCtx> for ButtonView<A>
 where
     A: Clone + Send + Sync + 'static,
 {
-    type Element = Pod<EcsButtonWidget<A>>;
+    type Element = Pod<ActionButtonWidget<A>>;
     type ViewState = ();
 
     fn build(&self, ctx: &mut ViewCtx, _app_state: &mut ()) -> (Self::Element, Self::ViewState) {
         (
             ctx.with_action_widget(|ctx| {
-                ctx.create_pod(EcsButtonWidget::new(
+                ctx.create_pod(ActionButtonWidget::new(
                     self.entity,
                     self.action.clone(),
                     self.label.clone(),
@@ -55,13 +55,13 @@ where
         _app_state: &mut (),
     ) {
         if self.entity != prev.entity {
-            EcsButtonWidget::set_entity(&mut element, self.entity);
+            ActionButtonWidget::set_entity(&mut element, self.entity);
         }
 
-        EcsButtonWidget::set_action(&mut element, self.action.clone());
+        ActionButtonWidget::set_action(&mut element, self.action.clone());
 
         if self.label != prev.label {
-            EcsButtonWidget::set_label(&mut element, self.label.clone());
+            ActionButtonWidget::set_label(&mut element, self.label.clone());
         }
     }
 
@@ -82,7 +82,7 @@ where
         _app_state: &mut (),
     ) -> MessageResult<()> {
         match _message.take_first() {
-            None => match _message.take_message::<EcsButtonWidgetAction>() {
+            None => match _message.take_message::<ActionButtonWidgetAction>() {
                 Some(_) => MessageResult::Action(()),
                 None => MessageResult::Stale,
             },

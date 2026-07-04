@@ -13,7 +13,7 @@
 use std::sync::Arc;
 
 use bevy_window::Window;
-use picus_core::{
+use picus::{
     AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiMarkdown, UiRoot,
     UiStreamingMarkdown, UiView, UiWindow, WorldSceneExt, apply_widget_style,
     bevy_app::{App, PostStartup, PreUpdate, Startup},
@@ -268,12 +268,12 @@ fn spawn_about_window(world: &mut World) -> (Entity, Entity) {
     (about_entity, window_entity)
 }
 
-picus_core::impl_ui_component_template!(ChatRootView, project_chat_root);
-picus_core::impl_ui_component_template!(ChatTitleBarView, project_title_bar);
-picus_core::impl_ui_component_template!(TranscriptColumnView, project_transcript_column);
-picus_core::impl_ui_component_template!(ComposerView, project_composer);
-picus_core::impl_ui_component_template!(StatusLineView, project_status_line);
-picus_core::impl_ui_component_template!(AboutRootView, project_about_root);
+picus::impl_ui_component_template!(ChatRootView, project_chat_root);
+picus::impl_ui_component_template!(ChatTitleBarView, project_title_bar);
+picus::impl_ui_component_template!(TranscriptColumnView, project_transcript_column);
+picus::impl_ui_component_template!(ComposerView, project_composer);
+picus::impl_ui_component_template!(StatusLineView, project_status_line);
+picus::impl_ui_component_template!(AboutRootView, project_about_root);
 
 fn project_chat_root(_: &ChatRootView, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
@@ -283,7 +283,7 @@ fn project_chat_root(_: &ChatRootView, ctx: ProjectionCtx<'_>) -> UiView {
         .map(|child| child.into_any_flex())
         .collect::<Vec<_>>();
     Arc::new(apply_widget_style(
-        picus_core::xilem::view::flex_col(children)
+        picus::xilem::view::flex_col(children)
             .width(Dim::Stretch)
             .height(Dim::Stretch)
             .gap(Length::px(style.layout.gap)),
@@ -313,7 +313,7 @@ fn project_transcript_column(_: &TranscriptColumnView, ctx: ProjectionCtx<'_>) -
         .map(|child| child.into_any_flex())
         .collect::<Vec<_>>();
     Arc::new(apply_widget_style(
-        picus_core::xilem::view::sized_box(flex_col(children).gap(Length::px(12.0)))
+        picus::xilem::view::sized_box(flex_col(children).gap(Length::px(12.0)))
             .width(Dim::Stretch)
             .height(Dim::Stretch),
         &style,
@@ -505,7 +505,7 @@ fn handle_picuscode_actions(world: &mut World) {
         };
         if can_send {
             world.spawn((
-                picus_core::UiMarkdown::new(format!("**You:** {draft}")),
+                picus::UiMarkdown::new(format!("**You:** {draft}")),
                 ChildOf(transcript),
             ));
 
@@ -624,11 +624,11 @@ fn build_picuscode_app() -> App {
 }
 
 fn main() -> Result<(), EventLoopError> {
-    picus_core::run_app_with_window_options(
+    picus::run_app_with_window_options(
         build_picuscode_app(),
         "picuscode",
         |options| {
-            options.with_initial_inner_size(picus_core::xilem::winit::dpi::LogicalSize::new(
+            options.with_initial_inner_size(picus::xilem::winit::dpi::LogicalSize::new(
                 720.0,
                 640.0,
             ))
@@ -642,7 +642,7 @@ mod tests {
 
     #[test]
     fn embedded_picuscode_theme_ron_parses() {
-        picus_core::parse_stylesheet_ron(include_str!("../assets/themes/picuscode.ron"))
+        picus::parse_stylesheet_ron(include_str!("../assets/themes/picuscode.ron"))
             .expect("embedded picuscode stylesheet should parse");
     }
 

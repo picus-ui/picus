@@ -41,7 +41,8 @@ cross-cutting design decisions that code comments cannot express well.
 ## 2. Workspace
 
 `picus` is a Bevy-first UI framework that combines ECS state management with a
-retained Masonry Core UI runtime. `picus_core` depends directly on
+retained Masonry Core UI runtime. User applications depend on the public `picus`
+facade crate. `picus_core` is the implementation crate and depends directly on
 `masonry_core` and the Picus-owned local `picus_view` adapter.
 `picus_view` consumes `picus_widget` for the underlying widget, property, layer,
 and theme runtime. The higher-level upstream `masonry` and upstream `xilem`
@@ -49,8 +50,11 @@ crates are not dependencies and should not be reintroduced.
 
 Crates:
 
-- `picus_core`: ECS-driven UI projection, styling, overlays, built-in components,
-  fonts, icons, and runtime integration.
+- `picus`: application-facing facade with grouped public modules (`app`,
+  `components`, `views`, `styling`, `events`, `overlay`, `runtime`, `i18n`, and
+  `scene`) plus transitional root re-exports.
+- `picus_core`: implementation crate for ECS-driven UI projection, styling,
+  overlays, built-in components, fonts, icons, and runtime integration.
 - `picus_widget`: Picus-owned retained widget/property backend and the long-term
   home for incremental widget rewrites on top of `masonry_core`.
 - `picus_view`: Picus-owned Xilem-compatible view adapter on top of
@@ -147,7 +151,7 @@ compatibility widget appearance.
 
 Picus supports Bevy Scene Notation as the preferred Rust-embedded description
 language for static or mostly static ECS UI trees. `PicusPlugin` installs
-Bevy's `ScenePlugin`, and `picus_core::prelude::*` re-exports `bsn!`,
+Bevy's `ScenePlugin`, and `picus::prelude::*` re-exports `bsn!`,
 `bsn_list!`, `Scene`, `SceneList`, and scene spawning extension traits.
 
 Use BSN to describe entity hierarchy and component bundles. Do not treat `.bsn`
@@ -200,12 +204,14 @@ full-viewport top-left `zstack`, with overlays sorted last.
 
 Interactive controls use the ECS event route:
 
-- `EcsButtonView` and `EcsButtonWithChildView` emit pointer interaction events and
+- `ButtonView` and `ButtonWithChildView` emit pointer interaction events and
   typed actions through `UiEventQueue`.
-- `picus_core::views` exposes Picus ECS action helpers only (`button`, `text_input`,
-  `slider`, `switch`, `checkbox`, and related `ecs_*` forms). Do not re-export raw
-  retained widgets with `xilem_*` aliases from `picus_core`; projection internals
-  that need low-level widgets import them directly from `picus_view::view`.
+- `picus::views` and `picus_core::views` expose Picus action helpers only
+  (`button`, `button_with_child`, `text_input`, `slider`, `switch`, `checkbox`,
+  and internal projector helper names such as `button_view`). Do not re-export
+  raw retained widgets with `xilem_*` aliases from Picus-facing APIs; projection
+  internals that need low-level widgets import them directly from
+  `picus_view::view`.
 - Text input, slider, switch, and checkbox helpers map retained widget actions into
   `UiEventQueue`. Do not expose the old Xilem app-state callback model in
   Picus-facing view APIs.

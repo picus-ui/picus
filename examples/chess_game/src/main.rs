@@ -4,7 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use picus_core::{
+use picus::{
     AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot, UiThemePicker,
     UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
@@ -649,9 +649,9 @@ fn drain_events_and_tick(world: &mut World) {
     });
 }
 
-picus_core::impl_ui_component_template!(ChessRootView, project_chess_root);
-picus_core::impl_ui_component_template!(ChessUiComponentsPanel, project_chess_ui_components_panel,);
-picus_core::impl_ui_component_template!(ChessBoardPanel, project_chess_board_panel);
+picus::impl_ui_component_template!(ChessRootView, project_chess_root);
+picus::impl_ui_component_template!(ChessUiComponentsPanel, project_chess_ui_components_panel,);
+picus::impl_ui_component_template!(ChessBoardPanel, project_chess_board_panel);
 
 fn build_bevy_chess_app() -> App {
     init_logging();
@@ -756,7 +756,7 @@ fn main() -> Result<(), EventLoopError> {
 mod tests {
     #[test]
     fn embedded_chess_theme_ron_parses() {
-        picus_core::parse_stylesheet_ron(include_str!("../assets/themes/chess_game.ron"))
+        picus::parse_stylesheet_ron(include_str!("../assets/themes/chess_game.ron"))
             .expect("embedded chess stylesheet should parse");
     }
 }

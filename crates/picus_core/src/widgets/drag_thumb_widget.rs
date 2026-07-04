@@ -3,79 +3,99 @@ use std::any::TypeId;
 use bevy_ecs::entity::Entity;
 use masonry_core::{
     accesskit::{Node, Role},
-    core::keyboard::{Key, NamedKey},
     core::{
-        AccessCtx, AccessEvent, ChildrenIds, EventCtx, LayoutCtx, MeasureCtx, NewWidget, PaintCtx,
-        PointerButton, PointerButtonEvent, PointerEvent, PropertiesMut, PropertiesRef, Property,
-        RegisterCtx, TextEvent, Update, UpdateCtx, UsesProperty, Widget, WidgetMut, WidgetPod,
+        AccessCtx, AccessEvent, ArcStr, ChildrenIds, EventCtx, LayoutCtx, MeasureCtx, PaintCtx,
+        PointerButton, PointerButtonEvent, PointerEvent, PointerUpdate, PropertiesMut,
+        PropertiesRef, Property, RegisterCtx, TextEvent, Update, UpdateCtx, UsesProperty, Widget,
+        WidgetMut, WidgetPod,
     },
     imaging::Painter,
     kurbo::{Axis, Size},
     layout::{LayoutSize, LenReq, Length, SizeDef},
     properties::{Background, BorderColor, BorderWidth, CornerRadius, Padding},
 };
-use picus_view::picus_widget::properties::ContentColor;
+use picus_view::picus_widget::{properties::ContentColor, widgets::Label};
 
 use crate::{
+    ScrollAxis, WidgetUiAction,
     events::{UiEvent, push_global_ui_event},
     styling::UiInteractionEvent,
-    widgets::{EcsButtonWidgetAction, HitTransparentWidget},
 };
 
-/// Masonry button widget that hosts an arbitrary child while dispatching typed ECS actions.
-pub struct EcsButtonWithChildWidget<A> {
+/// Internal action used to force Xilem driver ticks for drag-thumb state changes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DragThumbWidgetAction {
+    StateChanged,
+}
+
+/// Masonry widget that emits thumb-drag deltas into the ECS event queue.
+pub struct DragThumbWidget {
     entity: Entity,
-    action: A,
-    child: WidgetPod<HitTransparentWidget>,
+    axis: ScrollAxis,
+    label: WidgetPod<Label>,
     hovered: bool,
     pressed: bool,
+    last_axis_position: Option<f64>,
 }
 
-impl<A> UsesProperty<ContentColor> for EcsButtonWithChildWidget<A> where
-    A: Clone + Send + Sync + 'static
-{
-}
+impl UsesProperty<ContentColor> for DragThumbWidget {}
 
-impl<A> EcsButtonWithChildWidget<A> {
+impl DragThumbWidget {
     #[must_use]
-    pub fn new(entity: Entity, action: A, child: NewWidget<impl Widget + ?Sized>) -> Self {
+    pub fn new(entity: Entity, axis: ScrollAxis, label: impl Into<ArcStr>) -> Self {
         Self {
             entity,
-            action,
-            child: NewWidget::new(HitTransparentWidget::new(child)).to_pod(),
+            axis,
+            label: Label::new(label).prepare().to_pod(),
             hovered: false,
             pressed: false,
+            last_axis_position: None,
         }
     }
 
-    #[must_use]
-    pub const fn entity(&self) -> Entity {
-        self.entity
-    }
-}
-
-impl<A> EcsButtonWithChildWidget<A>
-where
-    A: Clone + Send + Sync + 'static,
-{
     pub fn set_entity(this: &mut WidgetMut<'_, Self>, entity: Entity) {
         this.widget.entity = entity;
     }
 
-    pub fn set_action(this: &mut WidgetMut<'_, Self>, action: A) {
-        this.widget.action = action;
+    pub fn set_axis(this: &mut WidgetMut<'_, Self>, axis: ScrollAxis) {
+        this.widget.axis = axis;
     }
 
-    pub fn child_mut<'t>(this: &'t mut WidgetMut<'_, Self>) -> WidgetMut<'t, HitTransparentWidget> {
-        this.ctx.get_mut(&mut this.widget.child)
+    pub fn set_label(this: &mut WidgetMut<'_, Self>, label: impl Into<ArcStr>) {
+        Label::set_text(&mut this.ctx.get_mut(&mut this.widget.label), label);
     }
 
-    fn push_action(&self) {
-        push_global_ui_event(UiEvent::typed(self.entity, self.action.clone()));
+    fn axis_position(&self, update: &PointerUpdate) -> f64 {
+        match self.axis {
+            ScrollAxis::Horizontal => update.current.position.x,
+            ScrollAxis::Vertical => update.current.position.y,
+        }
+    }
+
+    fn axis_position_from_button_event(&self, event: &PointerButtonEvent) -> f64 {
+        match self.axis {
+            ScrollAxis::Horizontal => event.state.position.x,
+            ScrollAxis::Vertical => event.state.position.y,
+        }
     }
 
     fn push_interaction(&self, event: UiInteractionEvent) {
         push_global_ui_event(UiEvent::typed(self.entity, event));
+    }
+
+    fn push_drag_delta(&self, delta_pixels: f64) {
+        if delta_pixels.abs() <= f64::EPSILON {
+            return;
+        }
+
+        push_global_ui_event(UiEvent::typed(
+            self.entity,
+            WidgetUiAction::DragScrollThumb {
+                thumb: self.entity,
+                axis: self.axis,
+                delta_pixels,
+            },
+        ));
     }
 
     fn set_hovered(&mut self, hovered: bool) -> bool {
@@ -107,11 +127,8 @@ where
     }
 }
 
-impl<A> Widget for EcsButtonWithChildWidget<A>
-where
-    A: Clone + Send + Sync + 'static,
-{
-    type Action = EcsButtonWidgetAction;
+impl Widget for DragThumbWidget {
+    type Action = DragThumbWidgetAction;
 
     fn on_pointer_event(
         &mut self,
@@ -120,58 +137,59 @@ where
         event: &PointerEvent,
     ) {
         match event {
-            PointerEvent::Down(..) => {
-                ctx.request_focus();
-                ctx.capture_pointer();
-                ctx.request_render();
+            PointerEvent::Down(PointerButtonEvent { button, .. }) => {
+                if matches!(button, Some(PointerButton::Primary)) {
+                    ctx.request_focus();
+                    ctx.capture_pointer();
+                    self.set_pressed(true);
+                    ctx.request_render();
+                }
+            }
+            PointerEvent::Move(update) if ctx.is_active() => {
+                let axis_pos = self.axis_position(update);
+                if let Some(last) = self.last_axis_position {
+                    self.push_drag_delta(axis_pos - last);
+                    ctx.submit_action::<Self::Action>(DragThumbWidgetAction::StateChanged);
+                }
+                self.last_axis_position = Some(axis_pos);
             }
             PointerEvent::Up(PointerButtonEvent { button, .. }) => {
-                if matches!(button, Some(PointerButton::Primary))
-                    && ctx.is_active()
-                    && ctx.is_hovered()
-                {
-                    self.push_action();
-                    ctx.submit_action::<Self::Action>(EcsButtonWidgetAction::StateChanged);
+                if matches!(button, Some(PointerButton::Primary)) {
+                    self.set_pressed(false);
+                    self.last_axis_position = None;
+                    ctx.submit_action::<Self::Action>(DragThumbWidgetAction::StateChanged);
+                    ctx.request_render();
                 }
-                ctx.request_render();
             }
-            PointerEvent::Move(..) | PointerEvent::Leave(..) => {}
+            PointerEvent::Leave(..) => {
+                self.last_axis_position = None;
+            }
             _ => {}
+        }
+
+        if let PointerEvent::Down(button_event) = event {
+            self.last_axis_position = Some(self.axis_position_from_button_event(button_event));
         }
     }
 
     fn on_text_event(
         &mut self,
-        ctx: &mut EventCtx<'_>,
+        _ctx: &mut EventCtx<'_>,
         _props: &mut PropertiesMut<'_>,
-        event: &TextEvent,
+        _event: &TextEvent,
     ) {
-        if let TextEvent::Keyboard(event) = event
-            && event.state.is_up()
-            && (matches!(&event.key, Key::Character(c) if c == " ")
-                || event.key == Key::Named(NamedKey::Enter))
-        {
-            self.push_action();
-            ctx.submit_action::<Self::Action>(EcsButtonWidgetAction::StateChanged);
-            ctx.request_render();
-        }
     }
 
     fn on_access_event(
         &mut self,
-        ctx: &mut EventCtx<'_>,
+        _ctx: &mut EventCtx<'_>,
         _props: &mut PropertiesMut<'_>,
-        event: &AccessEvent,
+        _event: &AccessEvent,
     ) {
-        if matches!(event.action, masonry_core::accesskit::Action::Click) {
-            self.push_action();
-            ctx.submit_action::<Self::Action>(EcsButtonWidgetAction::StateChanged);
-            ctx.request_render();
-        }
     }
 
     fn register_children(&mut self, ctx: &mut RegisterCtx<'_>) {
-        ctx.register_child(&mut self.child);
+        ctx.register_child(&mut self.label);
     }
 
     fn update(&mut self, ctx: &mut UpdateCtx<'_>, _props: &mut PropertiesMut<'_>, event: &Update) {
@@ -188,6 +206,7 @@ where
                 if hover_changed || pressed_changed {
                     ctx.request_render();
                 }
+                self.last_axis_position = None;
             }
             _ => {}
         }
@@ -221,7 +240,7 @@ where
         let context_size = LayoutSize::maybe(axis.cross(), cross_length);
 
         ctx.compute_length(
-            &mut self.child,
+            &mut self.label,
             auto_length,
             context_size,
             axis,
@@ -230,12 +249,12 @@ where
     }
 
     fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, size: Size) {
-        let child_size = ctx.compute_size(&mut self.child, SizeDef::fit(size), size.into());
-        ctx.run_layout(&mut self.child, child_size);
+        let child_size = ctx.compute_size(&mut self.label, SizeDef::fit(size), size.into());
+        ctx.run_layout(&mut self.label, child_size);
 
         let child_origin = ((size - child_size).to_vec2() * 0.5).to_point();
-        ctx.place_child(&mut self.child, child_origin);
-        ctx.derive_baselines(&self.child);
+        ctx.place_child(&mut self.label, child_origin);
+        ctx.derive_baselines(&self.label);
     }
 
     fn paint(
@@ -247,20 +266,19 @@ where
     }
 
     fn accessibility_role(&self) -> Role {
-        Role::Button
+        Role::GenericContainer
     }
 
     fn accessibility(
         &mut self,
         _ctx: &mut AccessCtx<'_>,
         _props: &PropertiesRef<'_>,
-        node: &mut Node,
+        _node: &mut Node,
     ) {
-        node.add_action(masonry_core::accesskit::Action::Click);
     }
 
     fn children_ids(&self) -> ChildrenIds {
-        ChildrenIds::from_slice(&[self.child.id()])
+        ChildrenIds::from_slice(&[self.label.id()])
     }
 
     fn accepts_focus(&self) -> bool {

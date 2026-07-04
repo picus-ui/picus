@@ -1,6 +1,6 @@
 use crate::helpers::{card, class, grid, note};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
-use picus_core::{
+use picus::{
     UiButton, UiCheckbox, UiFlexColumn, UiGroupBox, UiLabel, UiListView, UiMultilineTextInput,
     UiSplitPane, UiTabBar, UiTextInput,
     scene::{CommandsSceneExt, bsn, template_value},

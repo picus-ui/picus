@@ -1,0 +1,9 @@
+[package]
+name = "picus"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+readme = "../../README.md"
+
+[dependencies]
+picus_core.workspace = true

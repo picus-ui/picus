@@ -5,39 +5,39 @@ use xilem_core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 
 use crate::{
     ScrollAxis,
-    widgets::{EcsDragThumbWidget, EcsDragThumbWidgetAction},
+    widgets::{DragThumbWidget, DragThumbWidgetAction},
 };
 
-/// ECS-dispatched view backed by a custom draggable thumb widget.
+/// Picus action-dispatched view backed by a custom draggable thumb widget.
 #[must_use = "View values do nothing unless returned into the synthesized UI tree."]
-pub struct EcsDragThumbView {
+pub struct DragThumbView {
     entity: Entity,
     axis: ScrollAxis,
     label: ArcStr,
 }
 
-pub fn ecs_drag_thumb(
+pub fn drag_thumb_view(
     entity: Entity,
     axis: ScrollAxis,
     label: impl Into<ArcStr>,
-) -> EcsDragThumbView {
-    EcsDragThumbView {
+) -> DragThumbView {
+    DragThumbView {
         entity,
         axis,
         label: label.into(),
     }
 }
 
-impl ViewMarker for EcsDragThumbView {}
+impl ViewMarker for DragThumbView {}
 
-impl View<(), (), ViewCtx> for EcsDragThumbView {
-    type Element = Pod<EcsDragThumbWidget>;
+impl View<(), (), ViewCtx> for DragThumbView {
+    type Element = Pod<DragThumbWidget>;
     type ViewState = ();
 
     fn build(&self, ctx: &mut ViewCtx, _app_state: &mut ()) -> (Self::Element, Self::ViewState) {
         (
             ctx.with_action_widget(|ctx| {
-                ctx.create_pod(EcsDragThumbWidget::new(
+                ctx.create_pod(DragThumbWidget::new(
                     self.entity,
                     self.axis,
                     self.label.clone(),
@@ -56,15 +56,15 @@ impl View<(), (), ViewCtx> for EcsDragThumbView {
         _app_state: &mut (),
     ) {
         if self.entity != prev.entity {
-            EcsDragThumbWidget::set_entity(&mut element, self.entity);
+            DragThumbWidget::set_entity(&mut element, self.entity);
         }
 
         if self.axis != prev.axis {
-            EcsDragThumbWidget::set_axis(&mut element, self.axis);
+            DragThumbWidget::set_axis(&mut element, self.axis);
         }
 
         if self.label != prev.label {
-            EcsDragThumbWidget::set_label(&mut element, self.label.clone());
+            DragThumbWidget::set_label(&mut element, self.label.clone());
         }
     }
 
@@ -85,7 +85,7 @@ impl View<(), (), ViewCtx> for EcsDragThumbView {
         _app_state: &mut (),
     ) -> MessageResult<()> {
         match message.take_first() {
-            None => match message.take_message::<EcsDragThumbWidgetAction>() {
+            None => match message.take_message::<DragThumbWidgetAction>() {
                 Some(_) => MessageResult::Action(()),
                 None => MessageResult::Stale,
             },

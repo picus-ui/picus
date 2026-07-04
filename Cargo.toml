@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+	"crates/picus",
 	"crates/picus_surface",
 	"crates/picus_core",
 	"crates/picus_widget",
@@ -72,6 +73,7 @@ sha2 = "0.11"
 webbrowser = "1"
 
 picus_core = { path = "crates/picus_core" }
+picus = { path = "crates/picus" }
 picus_surface = { path = "crates/picus_surface" }
 shared_utils = { path = "examples/shared_utils" }
 

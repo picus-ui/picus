@@ -6,7 +6,7 @@ use crate::{
         apply_direct_widget_style, apply_flex_alignment, apply_label_style, apply_widget_style,
         resolve_style, resolve_style_for_classes,
     },
-    views::{ecs_button_with_child, opaque_hitbox_for_entity},
+    views::{button_with_child_view, opaque_hitbox_for_entity},
 };
 use masonry_core::layout::{Dim, Length};
 use picus_view::view::{
@@ -379,7 +379,7 @@ pub(crate) fn project_combo_box(combo_box: &UiComboBox, ctx: ProjectionCtx<'_>) 
     .gap(Length::px(6.0));
 
     Arc::new(apply_direct_widget_style(
-        ecs_button_with_child(ctx.entity, OverlayUiAction::ToggleCombo, button_content),
+        button_with_child_view(ctx.entity, OverlayUiAction::ToggleCombo, button_content),
         &style,
     ))
 }
@@ -530,7 +530,7 @@ pub(crate) fn project_dropdown_item(item: &UiDropdownItem, ctx: ProjectionCtx<'_
     .gap(Length::px(8.0));
 
     Arc::new(apply_direct_widget_style(
-        ecs_button_with_child(
+        button_with_child_view(
             ctx.entity,
             OverlayUiAction::SelectComboItem {
                 dropdown: item.dropdown,

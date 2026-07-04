@@ -16,22 +16,23 @@ A Bevy-first UI framework that connects ECS state management with a retained Mas
 
 The workspace currently contains these crates:
 
-- **picus_core** — the main UI framework (this is the crate you depend on)
+- **picus** — the public application-facing facade (this is the crate you depend on)
+- **picus_core** — implementation crate for projection, styling, overlays, runtime integration, and built-ins
 - **picus_widget** — Picus-owned retained widget/property backend
 - **picus_view** — Picus-owned Xilem-compatible retained view adapter
 - **picus_surface** — Vello rendering bridge for window surfaces
 
-This README covers the `picus_core` crate, which provides the complete UI framework experience. The companion crates provide the retained runtime, rendering, and platform integration.
+This README covers the `picus` crate, which provides the complete UI framework experience through grouped public modules such as `picus::app`, `picus::components`, `picus::views`, `picus::styling`, and `picus::overlay`. The companion crates provide the retained runtime, rendering, and platform integration.
 
 ---
 
 ## Installation
 
-Add `picus_core` to your `Cargo.toml`:
+Add `picus` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-picus_core = "0.1"
+picus = "0.1"
 ```
 
 If you're working with this workspace directly, use path dependencies from the repository root.
@@ -45,12 +46,12 @@ Here's a minimal counter app that demonstrates the core pattern:
 ```rust,no_run
 use std::sync::Arc;
 
-use picus_core::{
+use picus::{
     AppPicusExt, PicusPlugin, ProjectionCtx, UiComponentTemplate, UiEventQueue, UiRoot,
     UiView,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::prelude::*,
-    run_app_with_window_options, text_button,
+    button, run_app_with_window_options,
     xilem::winit::{dpi::LogicalSize, error::EventLoopError},
 };
 
@@ -67,7 +68,7 @@ enum CounterEvent {
 
 impl UiComponentTemplate for CounterRoot {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-        Arc::new(text_button(ctx.entity, CounterEvent::Increment, "Increment"))
+        Arc::new(button(ctx.entity, CounterEvent::Increment, "Increment"))
     }
 }
 
@@ -120,7 +121,7 @@ The pattern is straightforward:
 ## BSN UI description
 
 Picus supports Bevy Scene Notation as a Rust-embedded UI description language.
-`PicusPlugin` installs Bevy's `ScenePlugin`, and `picus_core::prelude::*`
+`PicusPlugin` installs Bevy's `ScenePlugin`, and `picus::prelude::*`
 re-exports `bsn!`, `bsn_list!`, `Scene`, `SceneList`, and the scene spawning
 extension traits.
 
@@ -128,7 +129,7 @@ Use BSN when the shape of a UI tree is mostly static and you want to avoid
 manual `commands.spawn((..., ChildOf(parent)))` wiring:
 
 ```rust,no_run
-use picus_core::{
+use picus::{
     bevy_ecs::prelude::*,
     prelude::*,
 };
@@ -198,9 +199,22 @@ real entity reference when the value matters at runtime.
 
 ## Workspace crates
 
-### picus_core (primary)
+### picus (public facade)
 
-The main framework crate. It provides:
+The main application-facing crate. It provides grouped modules for clearer imports:
+
+- `picus::app` for plugins, runners, and Bevy re-exports
+- `picus::components` for ECS authoring components
+- `picus::views` for projector view helpers
+- `picus::styling` for style resolution and theme APIs
+- `picus::events` for `UiEventQueue`, typed events, and widget actions
+- `picus::overlay`, `picus::runtime`, `picus::i18n`, and `picus::scene` for focused subsystems
+
+The root also re-exports the established `picus_core` API during migration, but new code should prefer the grouped modules or `picus::prelude::*`.
+
+### picus_core
+
+The implementation crate. It provides:
 
 - The `PicusPlugin` that wires all core systems
 - UI component library and registration API
@@ -209,11 +223,11 @@ The main framework crate. It provides:
 - Font and i18n bridges
 - Run helpers for desktop applications
 
-**This is the crate most users depend on.**
+Most applications should depend on `picus` instead of `picus_core`.
 
 ### picus_surface
 
-A low-level bridge that attaches a Vello renderer to an external Bevy window. `picus_core` uses this internally for the `Last` paint pass. You typically won't interact with this crate directly unless you're customizing the rendering pipeline.
+A low-level bridge that attaches a Vello renderer to an external Bevy window. Picus uses this internally for the `Last` paint pass. You typically won't interact with this crate directly unless you're customizing the rendering pipeline.
 
 ### picus_widget and picus_view
 
@@ -248,7 +262,7 @@ cargo run -p example_gallery
 
 ## Styling system
 
-`picus_core` includes a complete styling pipeline inspired by CSS:
+Picus includes a complete styling pipeline inspired by CSS:
 
 - Define rules in a `StyleSheet` resource (loaded from RON files or set directly)
 - Attach classes to entities with `StyleClass`
@@ -261,12 +275,19 @@ See [AGENTS.md](./AGENTS.md#8-styling-contract) for the full guide on selectors,
 
 ## API conventions
 
-The crate exports two families of UI components:
+Application code depends on `picus`, not `picus_core`. Prefer grouped imports when you only need part of the framework:
 
-- **ECS adapters** (recommended) — `button`, `checkbox`, `slider`, `switch`, `text_button`, `text_input` — these emit typed actions directly into `UiEventQueue`
-- **Raw retained widgets** — `xilem_button`, `xilem_checkbox`, etc. — for cases where you need the low-level Picus/Xilem-compatible widget without ECS integration
+```rust
+use picus::{
+    app::{AppPicusExt, PicusPlugin, run_app},
+    components::{UiComponentTemplate, UiRoot, UiView},
+    events::UiEventQueue,
+    runtime::ProjectionCtx,
+    views::button,
+};
+```
 
-Legacy `ecs_*` names remain for backward compatibility.
+View helpers such as `button`, `checkbox`, `slider`, `switch`, and `text_input` are Picus-native helpers that emit typed actions into `UiEventQueue`. Raw retained widgets are internal implementation details imported from `picus_view::view` by projectors when needed.
 
 ---
 
@@ -277,7 +298,7 @@ The framework follows a clear pipeline each frame:
 1. UI components emit typed actions into `UiEventQueue`
 2. Your systems drain those actions in `PreUpdate`
 3. You mutate ECS state/resources based on events
-4. `picus_core` synthesizes the widget tree in `PostUpdate`
+4. Picus synthesizes the widget tree in `PostUpdate`
 5. The retained Masonry scene is painted and presented in `Last`
 
 This keeps interaction handling explicit and fully ECS-compatible.

@@ -5,7 +5,7 @@
 
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 use bevy_math::Vec2;
-use picus_core::{
+use picus::{
     StyleClass, UiAvatar, UiCanvas, UiCanvasCommand, UiCanvasPathCommand, UiDivider, UiFlexColumn,
     UiGrid, UiImage, UiLabel, avatar_sizes,
     scene::{CommandsSceneExt, bsn, template_value},

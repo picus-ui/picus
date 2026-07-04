@@ -3,7 +3,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use picus_core::masonry_core::{
+use picus::masonry_core::{
     accesskit::{Node, Role},
     core::{
         AccessCtx, AccessEvent, ChildrenIds, EventCtx, FromDynWidget, LayoutCtx, MeasureCtx,
@@ -16,7 +16,7 @@ use picus_core::masonry_core::{
     layout::{LenReq, Length},
     properties::Padding,
 };
-use picus_core::{
+use picus::{
     AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot, UiThemePicker,
     UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
@@ -1265,20 +1265,20 @@ fn apply_keyboard_game_input(world: &mut World) {
     }
 }
 
-picus_core::impl_ui_component_template!(GameRoot, project_game_root);
-picus_core::impl_ui_component_template!(HeaderBlock, project_header_block);
-picus_core::impl_ui_component_template!(ScoreStrip, project_score_strip);
-picus_core::impl_ui_component_template!(ScoreCard, project_score_card);
-picus_core::impl_ui_component_template!(StatusLine, project_status_line);
-picus_core::impl_ui_component_template!(GameFlowRow, project_game_flow_row);
-picus_core::impl_ui_component_template!(BoardContainer, project_board_container);
-picus_core::impl_ui_component_template!(BoardRow, project_board_row);
-picus_core::impl_ui_component_template!(TileCell, project_tile_cell);
-picus_core::impl_ui_component_template!(SidePanel, project_side_panel);
-picus_core::impl_ui_component_template!(UiComponentsPad, project_ui_components_pad);
-picus_core::impl_ui_component_template!(UiComponentsRow, project_ui_components_row);
-picus_core::impl_ui_component_template!(UiComponentButton, project_ui_component_button);
-picus_core::impl_ui_component_template!(HintLine, project_hint_line);
+picus::impl_ui_component_template!(GameRoot, project_game_root);
+picus::impl_ui_component_template!(HeaderBlock, project_header_block);
+picus::impl_ui_component_template!(ScoreStrip, project_score_strip);
+picus::impl_ui_component_template!(ScoreCard, project_score_card);
+picus::impl_ui_component_template!(StatusLine, project_status_line);
+picus::impl_ui_component_template!(GameFlowRow, project_game_flow_row);
+picus::impl_ui_component_template!(BoardContainer, project_board_container);
+picus::impl_ui_component_template!(BoardRow, project_board_row);
+picus::impl_ui_component_template!(TileCell, project_tile_cell);
+picus::impl_ui_component_template!(SidePanel, project_side_panel);
+picus::impl_ui_component_template!(UiComponentsPad, project_ui_components_pad);
+picus::impl_ui_component_template!(UiComponentsRow, project_ui_components_row);
+picus::impl_ui_component_template!(UiComponentButton, project_ui_component_button);
+picus::impl_ui_component_template!(HintLine, project_hint_line);
 
 fn build_2048_app() -> App {
     init_logging();
@@ -1480,7 +1480,7 @@ mod tests {
 
     #[test]
     fn embedded_theme_ron_parses() {
-        picus_core::parse_stylesheet_ron(include_str!("../assets/themes/game_2048.ron"))
+        picus::parse_stylesheet_ron(include_str!("../assets/themes/game_2048.ron"))
             .expect("embedded game_2048 stylesheet should parse");
     }
 }

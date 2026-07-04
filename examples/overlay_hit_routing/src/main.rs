@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use picus_core::{
+use picus::{
     AppPicusExt, BuiltinUiAction, PicusPlugin, ProjectionCtx, UiButton, UiComboBox, UiComboOption,
     UiEventQueue, UiFlexColumn, UiLabel, UiRoot, UiThemePicker, UiView,
     bevy_app::{App, PreUpdate, Startup},
@@ -27,7 +27,7 @@ fn project_ui_toast(toast: &UiToast, _ctx: ProjectionCtx<'_>) -> UiView {
     Arc::new(transformed(label(toast.message.clone())).translate((520.0, 40.0)))
 }
 
-picus_core::impl_ui_component_template!(UiToast, project_ui_toast);
+picus::impl_ui_component_template!(UiToast, project_ui_toast);
 
 fn setup_overlay_hit_routing_world(mut commands: Commands) {
     commands.spawn_scene(bsn! {
@@ -123,7 +123,7 @@ fn main() -> Result<(), EventLoopError> {
 mod tests {
     #[test]
     fn embedded_overlay_hit_routing_theme_ron_parses() {
-        picus_core::parse_stylesheet_ron(include_str!("../assets/themes/overlay_hit_routing.ron"))
+        picus::parse_stylesheet_ron(include_str!("../assets/themes/overlay_hit_routing.ron"))
             .expect("embedded overlay_hit_routing stylesheet should parse");
     }
 }

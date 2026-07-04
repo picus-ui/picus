@@ -25,7 +25,7 @@
 //! | Status bar events      | Storybook action logger            |
 //! | `gallery.ron` theme    | Fluent UI `makeStyles` tokens      |
 
-use picus_core::{
+use picus::{
     AppI18n, AppPicusExt, InlineStyle, LayoutStyle, NavigationViewItem, PicusPlugin,
     SyncAssetSource, SyncTextSource, UiAvatar, UiBadge, UiFlexColumn, UiFlexRow, UiLabel,
     UiNavigationView, UiRoot, UiScrollView, UiSearch, UiThemePicker, avatar_sizes,
@@ -306,8 +306,8 @@ fn spawn_page(
     build(commands, page_col)
 }
 
-picus_core::impl_ui_component_template!(GalleryRoot, views::project_gallery_root);
-picus_core::impl_ui_component_template!(GalleryStatus, views::project_gallery_status);
+picus::impl_ui_component_template!(GalleryRoot, views::project_gallery_root);
+picus::impl_ui_component_template!(GalleryStatus, views::project_gallery_status);
 
 /// Build the Bevy application with all gallery systems and resources.
 fn build_gallery_app() -> App {
@@ -348,8 +348,8 @@ fn build_gallery_app() -> App {
         .add_systems(
             Update,
             drain_gallery_events
-                .after(picus_core::handle_widget_actions)
-                .after(picus_core::handle_overlay_actions),
+                .after(picus::handle_widget_actions)
+                .after(picus::handle_overlay_actions),
         );
 
     app
@@ -367,11 +367,11 @@ fn main() -> Result<(), EventLoopError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use picus_core::bevy_window::{PrimaryWindow, Window, WindowResized};
+    use picus::bevy_window::{PrimaryWindow, Window, WindowResized};
 
     #[test]
     fn embedded_gallery_theme_ron_parses() {
-        picus_core::parse_stylesheet_ron(include_str!("../assets/themes/gallery.ron"))
+        picus::parse_stylesheet_ron(include_str!("../assets/themes/gallery.ron"))
             .expect("embedded gallery stylesheet should parse");
     }
 
@@ -427,20 +427,20 @@ mod tests {
             .expect("nav should have a body parent")
             .parent();
         assert_eq!(
-            picus_core::resolve_style(app.world(), body)
+            picus::resolve_style(app.world(), body)
                 .layout
                 .flex_grow,
             1.0
         );
         assert_eq!(
-            picus_core::resolve_style(app.world(), nav).layout.flex_grow,
+            picus::resolve_style(app.world(), nav).layout.flex_grow,
             1.0
         );
 
         resize_primary_window(&mut app, window_entity, 900.0, 320.0);
         assert_eq!(
             app.world()
-                .non_send::<picus_core::MasonryRuntime>()
+                .non_send::<picus::MasonryRuntime>()
                 .primary()
                 .expect("primary window runtime should exist")
                 .viewport_size(),
@@ -451,7 +451,7 @@ mod tests {
         resize_primary_window(&mut app, window_entity, 900.0, 640.0);
         assert_eq!(
             app.world()
-                .non_send::<picus_core::MasonryRuntime>()
+                .non_send::<picus::MasonryRuntime>()
                 .primary()
                 .expect("primary window runtime should exist")
                 .viewport_size(),
@@ -490,7 +490,7 @@ mod tests {
     }
 
     fn widget_height_for_entity(app: &mut App, entity: Entity) -> f64 {
-        let mut runtime = app.world_mut().non_send_mut::<picus_core::MasonryRuntime>();
+        let mut runtime = app.world_mut().non_send_mut::<picus::MasonryRuntime>();
         let window_runtime = runtime
             .primary_mut()
             .expect("primary window runtime should exist");
