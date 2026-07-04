@@ -5,8 +5,8 @@
 use crate::helpers::{card, grid, note, placeholder};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 use picus_core::{
-    scene::{CommandsSceneExt, bsn, template_value},
     UiButton, UiMenuBar, UiMenuBarItem, UiMenuItem,
+    scene::{CommandsSceneExt, bsn, template_value},
 };
 
 /// MenuBar and window menu component examples.

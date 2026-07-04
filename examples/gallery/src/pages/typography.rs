@@ -1,8 +1,8 @@
 use crate::helpers::{card, class, grid, note, placeholder};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 use picus_core::{
-    scene::{CommandsSceneExt, bsn, template_value},
     UiLabel, UiMultilineTextInput,
+    scene::{CommandsSceneExt, bsn, template_value},
 };
 
 /// Text scale, CJK/Unicode, and text wrapping component examples.

@@ -1,9 +1,9 @@
 use crate::helpers::{card, grid, placeholder};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 use picus_core::{
-    scene::{CommandsSceneExt, bsn, template_value},
     HasTooltip, UiButton, UiComboBox, UiComboOption, UiMultilineTextInput, UiPasswordInput,
     UiSlider, UiTextInput,
+    scene::{CommandsSceneExt, bsn, template_value},
 };
 
 /// Text input, password, multiline text, combo box, and tooltip component examples.

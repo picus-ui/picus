@@ -441,6 +441,8 @@ mod tests {
         assert_eq!(
             app.world()
                 .non_send::<picus_core::MasonryRuntime>()
+                .primary()
+                .expect("primary window runtime should exist")
                 .viewport_size(),
             (900.0, 320.0)
         );
@@ -450,6 +452,8 @@ mod tests {
         assert_eq!(
             app.world()
                 .non_send::<picus_core::MasonryRuntime>()
+                .primary()
+                .expect("primary window runtime should exist")
                 .viewport_size(),
             (900.0, 640.0)
         );
@@ -487,11 +491,14 @@ mod tests {
 
     fn widget_height_for_entity(app: &mut App, entity: Entity) -> f64 {
         let mut runtime = app.world_mut().non_send_mut::<picus_core::MasonryRuntime>();
-        let _ = runtime.render_root.redraw();
-        let widget_id = runtime
+        let window_runtime = runtime
+            .primary_mut()
+            .expect("primary window runtime should exist");
+        let _ = window_runtime.render_root.redraw();
+        let widget_id = window_runtime
             .find_widget_id_for_entity_bits(entity.to_bits(), false)
             .expect("entity should resolve to a Masonry widget");
-        runtime
+        window_runtime
             .render_root
             .get_widget(widget_id)
             .expect("widget id should resolve in render tree")

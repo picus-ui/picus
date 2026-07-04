@@ -2,8 +2,7 @@ use bevy_app::{App, Update};
 use bevy_asset::AssetServer;
 use bevy_ecs::prelude::Component;
 use fluent::{FluentResource, concurrent::FluentBundle};
-use masonry_core::peniko::Blob;
-use std::{fs, io, path::Path, sync::Arc};
+use std::{fs, io, path::Path};
 use unic_langid::LanguageIdentifier;
 
 use crate::{
@@ -46,9 +45,7 @@ fn flush_pending_font_registrations(app: &mut App) {
 
     let mut runtime = app.world_mut().non_send_mut::<MasonryRuntime>();
     for font_bytes in pending {
-        runtime
-            .render_root
-            .register_fonts(Blob::new(Arc::new(font_bytes)));
+        runtime.register_fonts_all(font_bytes);
     }
 }
 

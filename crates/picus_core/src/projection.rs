@@ -3,6 +3,7 @@ pub mod dialog;
 pub mod dropdown;
 pub mod elements;
 pub mod layout;
+pub mod markdown;
 pub mod overlay;
 pub mod popover;
 pub mod theme_picker;
@@ -10,6 +11,7 @@ pub mod utils;
 pub mod widgets;
 
 pub use core::*;
+pub use markdown::StreamingMarkdownParseCache;
 
 use crate::ecs::{
     UiBadge, UiButton, UiCanvas, UiCheckbox, UiColorPicker, UiColorPickerPanel, UiComboBox,

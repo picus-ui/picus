@@ -161,7 +161,7 @@ fn parse_entity_bits_from_debug(debug: &str) -> Option<u64> {
 }
 
 fn collect_scroll_view_targets_from_hit_path(
-    runtime: &MasonryRuntime,
+    window_runtime: &crate::runtime::WindowRuntime,
     hit_path: &[masonry_core::core::WidgetId],
     parents: &Query<&ChildOf>,
     scroll_markers: &Query<(), With<UiScrollView>>,
@@ -170,7 +170,7 @@ fn collect_scroll_view_targets_from_hit_path(
     let mut seen = HashSet::new();
 
     for widget_id in hit_path.iter().rev().copied() {
-        let Some(entity_bits) = runtime
+        let Some(entity_bits) = window_runtime
             .render_root
             .get_widget(widget_id)
             .and_then(|widget| widget.get_debug_text())
@@ -244,17 +244,20 @@ pub fn sync_scroll_view_layout_geometry(
     let Some(runtime) = runtime else {
         return;
     };
+    let Some(window_runtime) = runtime.primary() else {
+        return;
+    };
 
     for (entity, mut scroll_view) in &mut scroll_views {
-        let widget_id = runtime
+        let widget_id = window_runtime
             .find_widget_id_for_entity_bits(entity.to_bits(), false)
-            .or_else(|| runtime.find_widget_id_for_entity_bits(entity.to_bits(), true));
+            .or_else(|| window_runtime.find_widget_id_for_entity_bits(entity.to_bits(), true));
 
         let Some(widget_id) = widget_id else {
             continue;
         };
 
-        let Some(root_widget) = runtime.render_root.get_widget(widget_id) else {
+        let Some(root_widget) = window_runtime.render_root.get_widget(widget_id) else {
             continue;
         };
 
@@ -760,6 +763,9 @@ pub fn handle_scroll_view_wheel(
     let Some(runtime) = runtime else {
         return;
     };
+    let Some(window_runtime) = runtime.primary() else {
+        return;
+    };
 
     let Some((primary_window_entity, primary_window)) = primary_window_query.iter().next() else {
         return;
@@ -774,10 +780,11 @@ pub fn handle_scroll_view_wheel(
             continue;
         }
 
-        let hit_path = runtime.get_hit_path((cursor_pos.x as f64, cursor_pos.y as f64).into());
+        let hit_path =
+            window_runtime.get_hit_path((cursor_pos.x as f64, cursor_pos.y as f64).into());
 
         let scroll_targets = collect_scroll_view_targets_from_hit_path(
-            &runtime,
+            window_runtime,
             &hit_path,
             &parents,
             &scroll_markers,

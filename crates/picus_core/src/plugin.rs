@@ -35,11 +35,14 @@ use crate::{
         handle_overlay_actions, reparent_overlay_entities, sync_overlay_positions,
         sync_overlay_stack_lifecycle,
     },
+    projection::markdown::{
+        StreamingMarkdownParseCache, evict_streaming_markdown_cache,
+        update_streaming_markdown_cache,
+    },
     projection::{UiProjectorRegistry, register_core_projectors},
     runtime::{
-        MasonryRuntime, initialize_masonry_runtime_from_primary_window,
-        inject_bevy_input_into_masonry, paint_masonry_ui, rebuild_masonry_runtime,
-        sync_masonry_ime_state_to_bevy_window,
+        MasonryRuntime, initialize_masonry_runtime_from_windows, inject_bevy_input_into_masonry,
+        paint_masonry_ui, rebuild_masonry_runtime, sync_masonry_ime_state_to_bevy_window,
     },
     styling::{
         ActiveStyleSheet, ActiveStyleSheetAsset, ActiveStyleSheetSelectors,
@@ -126,6 +129,7 @@ impl Plugin for PicusPlugin {
             .init_resource::<CompositionState>()
             .init_resource::<DragState>()
             .init_resource::<ValidationRegistry>()
+            .init_resource::<StreamingMarkdownParseCache>()
             .init_non_send::<MasonryRuntime>()
             .add_message::<CursorMoved>()
             .add_message::<CursorLeft>()
@@ -143,7 +147,7 @@ impl Plugin for PicusPlugin {
                     track_window_size,
                     collect_bevy_font_assets,
                     sync_fonts_to_xilem,
-                    initialize_masonry_runtime_from_primary_window,
+                    initialize_masonry_runtime_from_windows,
                     track_drag_state,
                     dispatch_drag_events,
                     bubble_ui_pointer_events,
@@ -200,6 +204,8 @@ impl Plugin for PicusPlugin {
                     .before(TweenSystemSet::UpdateInterpolationValue),
             )
             .add_systems(Update, run_validation)
+            .add_systems(Update, update_streaming_markdown_cache)
+            .add_systems(Update, evict_streaming_markdown_cache)
             .add_systems(Update, handle_accessibility_actions)
             .add_systems(
                 PostUpdate,

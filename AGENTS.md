@@ -86,9 +86,15 @@ Bevy owns scheduling, windows, and input. Masonry Core runs as a retained runtim
 resource driven by Bevy systems; GUI apps use Bevy's native `App::run()` and
 `bevy_winit` lifecycle.
 
-`MasonryRuntime` is a `NonSend` resource containing a `masonry_core::app::RenderRoot`,
-retained view state, pointer state, primary-window metrics, `picus_surface` state,
-and Vello renderer state.
+`MasonryRuntime` is a `NonSend` resource keyed by Bevy window entity. It holds one
+`WindowRuntime` per attached window, each owning a `masonry_core::app::RenderRoot`,
+retained view state, pointer/keyboard state, IME channel, `picus_surface` state, and
+Vello renderer state. The primary window (Bevy `PrimaryWindow`) is auto-attached; other
+windows attach as secondary runtimes. Access the primary window via `primary()` /
+`primary_mut()`, or a specific window via `window(entity)` / `window_mut(entity)`. Use
+`ensure_window(entity, is_primary)` to create a runtime for a window on demand. A
+`UiWindow(Entity)` binding component on a `UiRoot` directs synthesis into a specific
+window; roots without it bind to the primary window.
 
 System stages:
 
@@ -102,18 +108,24 @@ System stages:
 Runtime invariants:
 
 - Initial primary-window attachment injects a logical resize before hit testing.
+- Secondary windows are auto-attached as they appear; headless contexts (tests
+  without a winit handle) create a fallback 1024×768 runtime so synthesis and
+  hit-testing still work.
 - Retained UI rendering does not depend on Bevy render-graph integration.
 - The paint pass redraws Masonry Core, renders through `picus_surface`, blits to the
-  swapchain, presents, and requests the next redraw.
+  swapchain, presents, and requests the next redraw, iterating every attached window.
+- Font registration broadcasts to all attached window runtimes.
 
 ## 4. Input, IME, and Hit Testing
 
 `inject_bevy_input_into_masonry` translates Bevy window/input messages into
-Masonry Core pointer, text, IME, focus, resize, and rescale events.
+Masonry Core pointer, text, IME, focus, resize, and rescale events. Events are
+routed to the per-window runtime identified by their `window` field; events for
+windows without an attached runtime are ignored.
 
 Pointer invariants:
 
-- `Window::physical_cursor_position()` on the primary window is the source of
+- `Window::physical_cursor_position()` on the event's window is the source of
   injected pointer coordinates.
 - Pointer injection is skipped when physical cursor data is unavailable.
 - Click injection sends a pointer move before down/up events.
@@ -143,7 +155,7 @@ with MewUI-style `UiGridLength` track intent and `UiGridCell` attached
 placement, `UiLabel`, `UiButton`, `UiCanvas`/`UiCanvasCommand` plus
 `UiCanvasPosition` child positioning, `UiImage`, `UiTextInput`,
 `UiPasswordInput`, `UiMultilineTextInput`, `UiListView`, `UiTable`,
-`UiDataTable`, and `LocalizeText`.
+`UiDataTable`, `UiMarkdown`, `UiStreamingMarkdown`, and `LocalizeText`.
 
 Priority built-ins (`UiButton`, `UiBadge`, `UiProgressBar`, `UiSwitch`, and
 `UiCheckbox`) own their Picus-composed visual structure instead of exposing raw
@@ -288,6 +300,29 @@ Overlay invariants:
   despawn when such a hook exists.
 - Overlay entities reparent under `UiOverlayRoot` to avoid normal layout clipping.
 - `UiToast` uses configurable placement and defaults to bottom-end behavior.
+
+## 9.1. Markdown and Streaming Text
+
+`UiMarkdown` renders a Markdown source string as a vertical stack of styled blocks
+(headings, paragraphs, lists, block quotes, fenced code blocks, thematic breaks).
+Inline emphasis (bold/italic/code/strikethrough/links) is flattened into per-run
+styled labels because picus labels carry one style per label; mixed-emphasis
+paragraphs lay out consecutive same-style runs in a wrapping flex row.
+
+- Parsing uses `pulldown-cmark` with CommonMark + GFM tables/strikethrough/task lists.
+- Fenced code blocks are syntax-highlighted with `syntect` (base16-ocean.dark theme)
+  when a language fence matches a loaded grammar; otherwise plain monospace text.
+- The highlight state (`SyntaxSet`/`Theme`) is lazily initialized once and reused.
+
+`UiStreamingMarkdown` is the append-only streaming variant optimized for LLM output:
+
+- Tokens are appended via `append`/`append_str` into an in-progress tail.
+- `flush_completed` promotes the tail into a cached completed prefix.
+- `finish` flushes any remaining tail and blocks further appends.
+- `StreamingMarkdownParseCache` (`Update` system `update_streaming_markdown_cache`)
+  caches parsed completed-prefix blocks keyed by entity + completed-source hash, so
+  only the in-progress tail is re-parsed each frame.
+- `evict_streaming_markdown_cache` removes cache entries for despawned entities.
 
 ## 10. Assets, Fonts, Icons, and I18n
 

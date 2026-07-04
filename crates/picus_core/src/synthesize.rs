@@ -1,20 +1,27 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use bevy_ecs::{hierarchy::Children, prelude::*};
+use bevy_window::PrimaryWindow;
 use picus_view::view::{FlexExt as _, flex_col, label};
 
 use crate::{
-    ecs::{UiOverlayRoot, UiRoot},
+    ecs::{UiOverlayRoot, UiRoot, UiWindow},
     projection::{UiProjectorRegistry, UiView},
     runtime::MasonryRuntime,
     styling::InteractionState,
     views::entity_scope,
 };
 
-/// Snapshot containing synthesized root views for the current frame.
+/// Snapshot containing synthesized views for the current frame, grouped by
+/// the Bevy window entity each root is bound to.
+///
+/// Roots without an explicit [`UiWindow`] binding are grouped under the
+/// primary window (or the first attached window runtime when no primary
+/// window exists).
 #[derive(Resource, Default)]
 pub struct SynthesizedUiViews {
-    pub roots: Vec<UiView>,
+    /// Per-window composed root views.
+    pub windows: HashMap<Entity, UiView>,
 }
 
 /// Snapshot metrics for the latest synthesis pass.
@@ -27,17 +34,69 @@ pub struct UiSynthesisStats {
     pub unhandled_count: usize,
 }
 
-/// Collect all entities marked with [`UiRoot`].
-pub fn gather_ui_roots(world: &mut World) -> Vec<Entity> {
-    let mut query = world.query_filtered::<(Entity, Option<&UiOverlayRoot>), With<UiRoot>>();
-    let mut roots = query
-        .iter(world)
-        .map(|(entity, overlay)| (entity, overlay.is_some()))
-        .collect::<Vec<_>>();
+/// Collect all entities marked with [`UiRoot`], grouped by their target window.
+///
+/// Returns a map of `window_entity -> Vec<root_entity>` with deterministic
+/// ordering: overlays are sorted after content roots within each window, and
+/// roots are ordered by entity bits.
+pub fn gather_ui_roots_by_window(world: &mut World) -> HashMap<Entity, Vec<Entity>> {
+    let runtime_window_entities: Vec<Entity> = world
+        .get_non_send::<MasonryRuntime>()
+        .map(|runtime| runtime.window_entities().collect::<Vec<_>>())
+        .unwrap_or_default();
 
-    // Keep deterministic ordering while ensuring overlays are synthesized last.
-    roots.sort_by_key(|(entity, is_overlay)| (*is_overlay, entity.to_bits()));
-    roots.into_iter().map(|(entity, _)| entity).collect()
+    let primary_window_entity = world
+        .query_filtered::<Entity, With<PrimaryWindow>>()
+        .iter(world)
+        .next();
+
+    let mut entries: Vec<(Entity, Entity, bool)> = {
+        let mut query = world
+            .query_filtered::<(Entity, Option<&UiOverlayRoot>, Option<&UiWindow>), With<UiRoot>>();
+        query
+            .iter(world)
+            .map(|(entity, overlay, binding)| {
+                let is_overlay = overlay.is_some();
+                let window = binding.map(|b| b.0).or(primary_window_entity).unwrap_or(
+                    runtime_window_entities
+                        .first()
+                        .copied()
+                        .unwrap_or(Entity::PLACEHOLDER),
+                );
+                (window, entity, is_overlay)
+            })
+            .collect::<Vec<_>>()
+    };
+
+    // Group by window.
+    let mut grouped: HashMap<Entity, Vec<(Entity, bool)>> = HashMap::new();
+    for (window, entity, is_overlay) in entries.drain(..) {
+        grouped
+            .entry(window)
+            .or_default()
+            .push((entity, is_overlay));
+    }
+
+    // Deterministic ordering within each window: overlays last, then by entity bits.
+    let mut result: HashMap<Entity, Vec<Entity>> = HashMap::new();
+    for (window, mut roots) in grouped {
+        roots.sort_by_key(|(entity, is_overlay)| (*is_overlay, entity.to_bits()));
+        result.insert(
+            window,
+            roots.into_iter().map(|(entity, _)| entity).collect(),
+        );
+    }
+
+    result
+}
+
+/// Collect all entities marked with [`UiRoot`] (flattened, for backward
+/// compatibility with callers that do not need per-window grouping).
+pub fn gather_ui_roots(world: &mut World) -> Vec<Entity> {
+    gather_ui_roots_by_window(world)
+        .into_values()
+        .flatten()
+        .collect()
 }
 
 /// Synthesize Xilem Masonry views and stats for provided roots.
@@ -137,30 +196,44 @@ fn synthesize_entity(
     view
 }
 
-/// Sync focused widget from Masonry runtime back to ECS InteractionState.
+/// Sync focused widget from each window's Masonry runtime back to ECS
+/// [`InteractionState`].
 pub fn sync_focus_state(world: &mut World) {
-    // Step 1: Get focused entity bits from runtime in a scope that drops the borrow.
-    let focused_entity_bits = {
+    let window_focused_bits: Vec<(Entity, Option<u64>)> = {
         let Some(mut runtime) = world.get_non_send_mut::<MasonryRuntime>() else {
             return;
         };
-        let focused_id = runtime.render_root.focused_widget();
-        runtime.populate_entity_map();
-        focused_id.and_then(|id| runtime.widget_id_to_entity.get(&id).copied())
+        let window_entities: Vec<Entity> = runtime.window_entities().collect();
+        window_entities
+            .into_iter()
+            .map(|window_entity| {
+                let Some(window_runtime) = runtime.window_mut(window_entity) else {
+                    return (window_entity, None);
+                };
+                let focused_id = window_runtime.render_root.focused_widget();
+                window_runtime.populate_entity_map();
+                let bits =
+                    focused_id.and_then(|id| window_runtime.widget_id_to_entity.get(&id).copied());
+                (window_entity, bits)
+            })
+            .collect()
     };
 
-    // Step 2: Update ECS InteractionState for all entities (runtime borrow is released).
     let entity_ids: Vec<Entity> = {
         let mut query = world.query_filtered::<Entity, With<InteractionState>>();
         query.iter(world).collect()
     };
 
-    // Clear focus on all entities that had it, set on the correct one
+    let all_focused_bits: Vec<u64> = window_focused_bits
+        .iter()
+        .filter_map(|(_, bits)| *bits)
+        .collect();
+
     for entity in entity_ids {
         if let Some(mut state) = world.get_mut::<InteractionState>(entity) {
-            let should_be_focused = focused_entity_bits
-                .map(|bits| entity.to_bits() == bits)
-                .unwrap_or(false);
+            let should_be_focused = all_focused_bits
+                .iter()
+                .any(|bits| entity.to_bits() == *bits);
             if state.focused != should_be_focused {
                 state.focused = should_be_focused;
             }
@@ -177,11 +250,33 @@ pub fn synthesize_ui(world: &mut World) {
         return;
     }
 
-    let roots = gather_ui_roots(world);
-    let (synthesized, stats) = world.resource_scope(|world, registry: Mut<UiProjectorRegistry>| {
-        synthesize_roots_with_stats(world, &registry, roots)
-    });
+    let roots_by_window = gather_ui_roots_by_window(world);
 
-    world.resource_mut::<SynthesizedUiViews>().roots = synthesized;
+    let mut stats = UiSynthesisStats::default();
+
+    let mut windows: HashMap<Entity, UiView> = HashMap::new();
+    for (window_entity, roots) in roots_by_window {
+        let (synthesized, window_stats) =
+            world.resource_scope(|world, registry: Mut<UiProjectorRegistry>| {
+                synthesize_roots_with_stats(world, &registry, roots)
+            });
+        windows.insert(window_entity, compose_window_root(&synthesized));
+        stats.root_count += window_stats.root_count;
+        stats.node_count += window_stats.node_count;
+        stats.cycle_count += window_stats.cycle_count;
+        stats.missing_entity_count += window_stats.missing_entity_count;
+        stats.unhandled_count += window_stats.unhandled_count;
+    }
+
+    world.resource_mut::<SynthesizedUiViews>().windows = windows;
     *world.resource_mut::<UiSynthesisStats>() = stats;
+}
+
+/// Compose a single window's root view from its set of synthesized roots.
+///
+/// Mirrors the previous single-window zstack composition so overlays sort
+/// last and content fills the viewport.
+fn compose_window_root(roots: &[UiView]) -> UiView {
+    use crate::runtime::compose_runtime_root as compose;
+    compose(roots)
 }

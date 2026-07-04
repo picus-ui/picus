@@ -39,6 +39,8 @@ ron.workspace = true
 lucide-icons.workspace = true
 wgpu.workspace = true
 image.workspace = true
+pulldown-cmark = { version = "0.13", default-features = false }
+syntect = { version = "5.2", default-features = false, features = ["default-fancy"] }
 
 [dev-dependencies]
 num-traits.workspace = true

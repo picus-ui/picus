@@ -4,13 +4,11 @@ use std::{
     hash::{Hash, Hasher},
     io,
     path::Path,
-    sync::Arc,
 };
 
 use bevy_asset::{AssetEvent, Assets};
 use bevy_ecs::{message::MessageReader, prelude::*, system::NonSendMut};
 use bevy_text::Font;
-use masonry_core::peniko::Blob;
 
 use crate::MasonryRuntime;
 
@@ -101,8 +99,6 @@ pub fn sync_fonts_to_xilem(
     }
 
     for font_bytes in pending {
-        runtime
-            .render_root
-            .register_fonts(Blob::new(Arc::new(font_bytes)));
+        runtime.register_fonts_all(font_bytes);
     }
 }

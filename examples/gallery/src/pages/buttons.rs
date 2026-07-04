@@ -1,8 +1,8 @@
 use crate::helpers::{card, class, grid, note, placeholder};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 use picus_core::{
-    scene::{CommandsSceneExt, bsn, template_value},
     UiButton, UiCheckbox, UiProgressBar, UiSlider, UiSwitch,
+    scene::{CommandsSceneExt, bsn, template_value},
 };
 
 /// Button, Switch, Checkbox, ProgressBar, and Slider component examples.

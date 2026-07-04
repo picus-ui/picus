@@ -292,8 +292,8 @@ fn plugin_wires_synthesis_and_runtime() {
 
     app.update();
 
-    let synthesized = app.world().resource::<crate::SynthesizedUiViews>();
-    assert_eq!(synthesized.roots.len(), 2);
+    let stats = app.world().resource::<crate::UiSynthesisStats>();
+    assert_eq!(stats.root_count, 2);
 
     let _runtime = app.world().non_send::<crate::MasonryRuntime>();
 }
@@ -674,7 +674,10 @@ fn input_bridge_uses_primary_window_cursor_for_click_and_emits_move_before_down_
 
     {
         let mut runtime = app.world_mut().non_send_mut::<crate::MasonryRuntime>();
-        runtime.clear_pointer_trace_for_tests();
+        runtime
+            .primary_mut()
+            .unwrap()
+            .clear_pointer_trace_for_tests();
     }
 
     app.world_mut().write_message(MouseButtonInput {
@@ -692,11 +695,11 @@ fn input_bridge_uses_primary_window_cursor_for_click_and_emits_move_before_down_
 
     let runtime = app.world().non_send::<crate::MasonryRuntime>();
     assert_eq!(
-        runtime.pointer_position_for_tests(),
+        runtime.primary().unwrap().pointer_position_for_tests(),
         Vec2::new(320.0, 180.0)
     );
     assert_eq!(
-        runtime.pointer_trace_for_tests(),
+        runtime.primary().unwrap().pointer_trace_for_tests(),
         &[
             crate::runtime::PointerTraceEvent::Move,
             crate::runtime::PointerTraceEvent::Down,
@@ -727,7 +730,10 @@ fn input_bridge_uses_primary_window_cursor_for_mouse_wheel_events() {
 
     {
         let mut runtime = app.world_mut().non_send_mut::<crate::MasonryRuntime>();
-        runtime.clear_pointer_trace_for_tests();
+        runtime
+            .primary_mut()
+            .unwrap()
+            .clear_pointer_trace_for_tests();
     }
 
     app.world_mut().write_message(MouseWheel {
@@ -741,9 +747,12 @@ fn input_bridge_uses_primary_window_cursor_for_mouse_wheel_events() {
     app.update();
 
     let runtime = app.world().non_send::<crate::MasonryRuntime>();
-    assert_eq!(runtime.pointer_position_for_tests(), Vec2::new(144.0, 96.0));
     assert_eq!(
-        runtime.pointer_trace_for_tests(),
+        runtime.primary().unwrap().pointer_position_for_tests(),
+        Vec2::new(144.0, 96.0)
+    );
+    assert_eq!(
+        runtime.primary().unwrap().pointer_trace_for_tests(),
         &[
             crate::runtime::PointerTraceEvent::Move,
             crate::runtime::PointerTraceEvent::Scroll,
@@ -781,7 +790,7 @@ fn input_bridge_uses_primary_window_logical_size_for_resize_events() {
     app.update();
 
     let runtime = app.world().non_send::<crate::MasonryRuntime>();
-    assert_eq!(runtime.viewport_size(), (1280.0, 720.0));
+    assert_eq!(runtime.primary().unwrap().viewport_size(), (1280.0, 720.0));
 }
 
 #[test]
@@ -827,6 +836,13 @@ fn clicking_text_input_enables_window_ime() {
 fn navigation_view_tracks_flex_column_window_height() {
     let mut app = App::new();
     app.add_plugins(PicusPlugin);
+
+    let mut window = Window {
+        visible: false,
+        ..Default::default()
+    };
+    window.resolution.set(480.0, 320.0);
+    let _window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
 
     let nav = spawn_navigation_height_probe(&mut app);
 
@@ -2416,7 +2432,11 @@ fn overlay_click_inside_computed_overlay_position_not_dismissed_on_hidpi() {
     let opaque_debug = format!("opaque_hitbox_entity={}", dialog.to_bits());
     let opaque_widget_id = {
         let runtime = app.world().non_send::<crate::MasonryRuntime>();
-        let root = runtime.render_root.get_layer_root(0);
+        let root = runtime
+            .primary()
+            .expect("primary window runtime should exist")
+            .render_root
+            .get_layer_root(0);
         find_widget_id_by_debug_text(root, &opaque_debug)
             .expect("dialog should project an entity-tagged OpaqueHitboxWidget")
     };
@@ -2891,8 +2911,11 @@ fn hit_path_for_position(app: &mut App, window_entity: Entity, position: Vec2) -
     set_window_cursor_position(app, window_entity, position);
 
     let mut runtime = app.world_mut().non_send_mut::<crate::MasonryRuntime>();
-    let _ = runtime.render_root.redraw();
-    runtime.get_hit_path((position.x as f64, position.y as f64).into())
+    let window_runtime = runtime
+        .primary_mut()
+        .expect("primary window runtime should exist after app.update()");
+    let _ = window_runtime.render_root.redraw();
+    window_runtime.get_hit_path((position.x as f64, position.y as f64).into())
 }
 
 fn find_widget_id_by_debug_text(
@@ -2910,7 +2933,10 @@ fn find_widget_id_by_debug_text(
 
 fn widget_center_for_widget_id(app: &App, widget_id: WidgetId) -> Vec2 {
     let runtime = app.world().non_send::<crate::MasonryRuntime>();
-    let widget = runtime
+    let window_runtime = runtime
+        .primary()
+        .expect("primary window runtime should exist");
+    let widget = window_runtime
         .render_root
         .get_widget(widget_id)
         .expect("widget id should resolve in render tree");
@@ -2926,7 +2952,10 @@ fn widget_center_for_widget_id(app: &App, widget_id: WidgetId) -> Vec2 {
 
 fn widget_inset_point_for_widget_id(app: &App, widget_id: WidgetId, inset: f64) -> Vec2 {
     let runtime = app.world().non_send::<crate::MasonryRuntime>();
-    let widget = runtime
+    let window_runtime = runtime
+        .primary()
+        .expect("primary window runtime should exist");
+    let widget = window_runtime
         .render_root
         .get_widget(widget_id)
         .expect("widget id should resolve in render tree");
@@ -2938,9 +2967,12 @@ fn widget_inset_point_for_widget_id(app: &App, widget_id: WidgetId, inset: f64) 
 
 fn widget_center_for_entity(app: &App, entity: Entity) -> Vec2 {
     let runtime = app.world().non_send::<crate::MasonryRuntime>();
-    let widget_id = runtime
+    let window_runtime = runtime
+        .primary()
+        .expect("primary window runtime should exist");
+    let widget_id = window_runtime
         .find_widget_id_for_entity_bits(entity.to_bits(), true)
-        .or_else(|| runtime.find_widget_id_for_entity_bits(entity.to_bits(), false))
+        .or_else(|| window_runtime.find_widget_id_for_entity_bits(entity.to_bits(), false))
         .expect("entity should resolve to a Masonry widget");
     widget_center_for_widget_id(app, widget_id)
 }
@@ -3035,10 +3067,13 @@ fn spawn_navigation_clipping_probe(app: &mut App) -> Entity {
 
 fn widget_rect_for_entity(app: &App, entity: Entity) -> Rect {
     let runtime = app.world().non_send::<crate::MasonryRuntime>();
-    let widget_id = runtime
+    let window_runtime = runtime
+        .primary()
+        .expect("primary window runtime should exist");
+    let widget_id = window_runtime
         .find_widget_id_for_entity_bits(entity.to_bits(), false)
         .expect("entity should resolve to a Masonry widget");
-    let widget = runtime
+    let widget = window_runtime
         .render_root
         .get_widget(widget_id)
         .expect("widget id should resolve in render tree");
@@ -3057,10 +3092,13 @@ fn widget_rect_for_entity(app: &App, entity: Entity) -> Rect {
 
 fn widget_height_for_entity(app: &App, entity: Entity) -> f64 {
     let runtime = app.world().non_send::<crate::MasonryRuntime>();
-    let widget_id = runtime
+    let window_runtime = runtime
+        .primary()
+        .expect("primary window runtime should exist");
+    let widget_id = window_runtime
         .find_widget_id_for_entity_bits(entity.to_bits(), false)
         .expect("entity should resolve to a Masonry widget");
-    runtime
+    window_runtime
         .render_root
         .get_widget(widget_id)
         .expect("widget id should resolve in render tree")
@@ -3089,10 +3127,13 @@ fn resize_primary_window(app: &mut App, window_entity: Entity, width: f32, heigh
 
 fn resize_masonry_runtime(app: &mut App, width: u32, height: u32) {
     let mut runtime = app.world_mut().non_send_mut::<crate::MasonryRuntime>();
-    let _ = runtime
+    let window_runtime = runtime
+        .primary_mut()
+        .expect("primary window runtime should exist");
+    let _ = window_runtime
         .render_root
         .handle_window_event(WindowEvent::Resize(PhysicalSize::new(width, height)));
-    let _ = runtime.render_root.redraw();
+    let _ = window_runtime.render_root.redraw();
 }
 
 fn widget_ids_for_entity_subtree(app: &App, entity: Entity) -> Vec<WidgetId> {
@@ -3109,10 +3150,13 @@ fn widget_ids_for_entity_subtree(app: &App, entity: Entity) -> Vec<WidgetId> {
     }
 
     let runtime = app.world().non_send::<crate::MasonryRuntime>();
-    let widget_id = runtime
+    let window_runtime = runtime
+        .primary()
+        .expect("primary window runtime should exist");
+    let widget_id = window_runtime
         .find_widget_id_for_entity_bits(entity.to_bits(), false)
         .expect("entity should resolve to a Masonry widget");
-    let widget = runtime
+    let widget = window_runtime
         .render_root
         .get_widget(widget_id)
         .expect("widget id should resolve in render tree");
@@ -3146,10 +3190,13 @@ fn portal_rects_for_entity(app: &App, entity: Entity) -> Vec<Rect> {
     }
 
     let runtime = app.world().non_send::<crate::MasonryRuntime>();
-    let widget_id = runtime
+    let window_runtime = runtime
+        .primary()
+        .expect("primary window runtime should exist");
+    let widget_id = window_runtime
         .find_widget_id_for_entity_bits(entity.to_bits(), false)
         .expect("entity should resolve to a Masonry widget");
-    let widget = runtime
+    let widget = window_runtime
         .render_root
         .get_widget(widget_id)
         .expect("widget id should resolve in render tree");
@@ -3283,7 +3330,11 @@ fn dialog_padding_click_is_in_overlay_hit_path_and_does_not_dismiss() {
     let opaque_debug = format!("opaque_hitbox_entity={}", dialog.to_bits());
     let opaque_widget_id = {
         let runtime = app.world().non_send::<crate::MasonryRuntime>();
-        let root = runtime.render_root.get_layer_root(0);
+        let root = runtime
+            .primary()
+            .expect("primary window runtime should exist")
+            .render_root
+            .get_layer_root(0);
         find_widget_id_by_debug_text(root, &opaque_debug)
             .expect("dialog should project an entity-tagged OpaqueHitboxWidget")
     };
@@ -3326,7 +3377,11 @@ fn dialog_dismiss_button_targets_dialog_entity() {
 
     let button_rect = {
         let runtime = app.world().non_send::<crate::MasonryRuntime>();
-        let root = runtime.render_root.get_layer_root(0);
+        let root = runtime
+            .primary()
+            .expect("primary window runtime should exist")
+            .render_root
+            .get_layer_root(0);
         let mut button_rects = Vec::new();
         collect_widget_bounds_by_short_name(root, "EcsButtonWithChildWidget", &mut button_rects);
 
@@ -3353,7 +3408,11 @@ fn dialog_dismiss_button_targets_dialog_entity() {
 
     let (hit_widget, hit_debug_text) = {
         let runtime = app.world().non_send::<crate::MasonryRuntime>();
-        let root = runtime.render_root.get_layer_root(0);
+        let root = runtime
+            .primary()
+            .expect("primary window runtime should exist")
+            .render_root
+            .get_layer_root(0);
         root.find_widget_under_pointer((click_position.x as f64, click_position.y as f64).into())
             .map(|widget| {
                 (
@@ -3409,7 +3468,11 @@ fn dialog_projects_single_dismiss_button_without_fullscreen_backdrop_button() {
 
     let button_rects = {
         let runtime = app.world().non_send::<crate::MasonryRuntime>();
-        let root = runtime.render_root.get_layer_root(0);
+        let root = runtime
+            .primary()
+            .expect("primary window runtime should exist")
+            .render_root
+            .get_layer_root(0);
         let mut button_rects = Vec::new();
         collect_widget_bounds_by_short_name(root, "EcsButtonWithChildWidget", &mut button_rects);
         button_rects
@@ -3654,7 +3717,11 @@ fn ui_button_projects_to_ecs_button_with_child_widget() {
     let debug = format!("entity={}", button.to_bits());
     let widget_id = {
         let runtime = app.world().non_send::<crate::MasonryRuntime>();
-        let root = runtime.render_root.get_layer_root(0);
+        let root = runtime
+            .primary()
+            .expect("primary window runtime should exist")
+            .render_root
+            .get_layer_root(0);
         find_widget_id_by_debug_text(root, &debug)
             .expect("UiButton should project an entity-tagged action button widget")
     };
@@ -3662,6 +3729,8 @@ fn ui_button_projects_to_ecs_button_with_child_widget() {
     let short_type = {
         let runtime = app.world().non_send::<crate::MasonryRuntime>();
         runtime
+            .primary()
+            .expect("primary window runtime should exist")
             .render_root
             .get_widget(widget_id)
             .map(|widget| widget.short_type_name().to_string())
@@ -3747,7 +3816,11 @@ fn dropdown_padding_click_is_in_overlay_hit_path_and_does_not_dismiss() {
     let opaque_debug = format!("opaque_hitbox_entity={}", dropdown.to_bits());
     let opaque_widget_id = {
         let runtime = app.world().non_send::<crate::MasonryRuntime>();
-        let root = runtime.render_root.get_layer_root(0);
+        let root = runtime
+            .primary()
+            .expect("primary window runtime should exist")
+            .render_root
+            .get_layer_root(0);
         find_widget_id_by_debug_text(root, &opaque_debug)
             .expect("dropdown should project an entity-tagged OpaqueHitboxWidget")
     };
@@ -3801,14 +3874,22 @@ fn dropdown_item_text_region_hits_button_entity_instead_of_child_subwidget() {
     let hit_position = {
         let debug = format!("entity={}", item_entity.to_bits());
         let runtime = app.world().non_send::<crate::MasonryRuntime>();
-        let root = runtime.render_root.get_layer_root(0);
+        let root = runtime
+            .primary()
+            .expect("primary window runtime should exist")
+            .render_root
+            .get_layer_root(0);
         let widget_id = find_widget_id_by_debug_text(root, &debug)
             .expect("dropdown item button should expose an entity-tagged widget");
         widget_center_for_widget_id(&app, widget_id)
     };
     let (hit_widget, hit_debug_text) = {
         let runtime = app.world().non_send::<crate::MasonryRuntime>();
-        let root = runtime.render_root.get_layer_root(0);
+        let root = runtime
+            .primary()
+            .expect("primary window runtime should exist")
+            .render_root
+            .get_layer_root(0);
         root.find_widget_under_pointer((hit_position.x as f64, hit_position.y as f64).into())
             .map(|widget| {
                 (
@@ -4686,21 +4767,24 @@ fn scroll_view_left_aligns_narrow_content_after_viewport_stretch() {
     app.update();
 
     let runtime = app.world().non_send::<crate::MasonryRuntime>();
-    let scroll_widget_id = runtime
+    let window_runtime = runtime
+        .primary()
+        .expect("primary window runtime should exist");
+    let scroll_widget_id = window_runtime
         .find_widget_id_for_entity_bits(scroll_view.to_bits(), true)
-        .or_else(|| runtime.find_widget_id_for_entity_bits(scroll_view.to_bits(), false))
+        .or_else(|| window_runtime.find_widget_id_for_entity_bits(scroll_view.to_bits(), false))
         .expect("scroll view should resolve to a Masonry widget");
     let label_widget_id = find_widget_id_by_debug_text(
-        runtime.render_root.get_layer_root(0),
+        window_runtime.render_root.get_layer_root(0),
         "Left aligned scroll content",
     )
     .expect("label widget should exist in render tree");
 
-    let scroll_widget = runtime
+    let scroll_widget = window_runtime
         .render_root
         .get_widget(scroll_widget_id)
         .expect("scroll widget id should resolve");
-    let label_widget = runtime
+    let label_widget = window_runtime
         .render_root
         .get_widget(label_widget_id)
         .expect("label widget id should resolve");

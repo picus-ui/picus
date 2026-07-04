@@ -1820,7 +1820,10 @@ pub fn sync_overlay_positions(world: &mut World) {
         let Some(runtime) = world.get_non_send::<MasonryRuntime>() else {
             return;
         };
-        let root = runtime.render_root.get_layer_root(0);
+        let Some(window_runtime) = runtime.primary() else {
+            return;
+        };
+        let root = window_runtime.render_root.get_layer_root(0);
         let mut boxes = Vec::new();
         collect_entity_hit_boxes(root, &mut boxes);
         boxes
@@ -2076,12 +2079,15 @@ pub fn handle_global_overlay_clicks(world: &mut World) {
         let Some(runtime) = world.get_non_send::<MasonryRuntime>() else {
             return;
         };
+        let Some(window_runtime) = runtime.primary() else {
+            return;
+        };
 
-        let all = runtime.find_widget_ids_for_entity_bits(top_overlay_entity.to_bits());
-        let preferred = runtime
+        let all = window_runtime.find_widget_ids_for_entity_bits(top_overlay_entity.to_bits());
+        let preferred = window_runtime
             .find_widget_id_for_entity_bits(top_overlay_entity.to_bits(), true)
             .or_else(|| {
-                runtime.find_widget_id_for_entity_bits(top_overlay_entity.to_bits(), false)
+                window_runtime.find_widget_id_for_entity_bits(top_overlay_entity.to_bits(), false)
             });
 
         (all, preferred)
@@ -2093,12 +2099,15 @@ pub fn handle_global_overlay_clicks(world: &mut World) {
 
     let (anchor_widget_ids, anchor_widget_id) = anchor_entity
         .and_then(|anchor| {
-            world.get_non_send::<MasonryRuntime>().map(|runtime| {
-                let all = runtime.find_widget_ids_for_entity_bits(anchor.to_bits());
-                let preferred = runtime
+            world.get_non_send::<MasonryRuntime>().and_then(|runtime| {
+                let window_runtime = runtime.primary()?;
+                let all = window_runtime.find_widget_ids_for_entity_bits(anchor.to_bits());
+                let preferred = window_runtime
                     .find_widget_id_for_entity_bits(anchor.to_bits(), true)
-                    .or_else(|| runtime.find_widget_id_for_entity_bits(anchor.to_bits(), false));
-                (all, preferred)
+                    .or_else(|| {
+                        window_runtime.find_widget_id_for_entity_bits(anchor.to_bits(), false)
+                    });
+                Some((all, preferred))
             })
         })
         .unwrap_or_default();
@@ -2107,11 +2116,14 @@ pub fn handle_global_overlay_clicks(world: &mut World) {
         let Some(mut runtime) = world.get_non_send_mut::<MasonryRuntime>() else {
             return;
         };
+        let Some(window_runtime) = runtime.primary_mut() else {
+            return;
+        };
 
         let pointer = (cursor_pos.x as f64, cursor_pos.y as f64).into();
-        let _ = runtime.render_root.redraw();
-        let hit_path = runtime.get_hit_path(pointer);
-        let (top_hit_widget_id, top_hit_entity) = runtime
+        let _ = window_runtime.render_root.redraw();
+        let hit_path = window_runtime.get_hit_path(pointer);
+        let (top_hit_widget_id, top_hit_entity) = window_runtime
             .render_root
             .get_layer_root(0)
             .find_widget_under_pointer(pointer)
@@ -2129,11 +2141,12 @@ pub fn handle_global_overlay_clicks(world: &mut World) {
 
     let hit_entities = world
         .get_non_send::<MasonryRuntime>()
-        .map(|runtime| {
+        .and_then(|runtime| runtime.primary())
+        .map(|window_runtime| {
             hit_path
                 .iter()
                 .filter_map(|widget_id| {
-                    runtime
+                    window_runtime
                         .render_root
                         .get_widget(*widget_id)
                         .and_then(|widget| widget.get_debug_text())
@@ -2179,7 +2192,8 @@ pub fn handle_global_overlay_clicks(world: &mut World) {
         .and_then(|widget_id| {
             world
                 .get_non_send::<MasonryRuntime>()
-                .and_then(|runtime| runtime.get_widget_bounding_box(widget_id))
+                .and_then(|runtime| runtime.primary())
+                .and_then(|window_runtime| window_runtime.get_widget_bounding_box(widget_id))
         })
         .is_some_and(|bounds| {
             let cursor_x = cursor_pos.x as f64;
@@ -2237,6 +2251,7 @@ pub fn handle_global_overlay_clicks(world: &mut World) {
                 .copied();
             let (masonry_sf, subtree) = world
                 .get_non_send::<MasonryRuntime>()
+                .and_then(|runtime| runtime.primary())
                 .map(|r| {
                     let subtree = preferred_overlay_widget_id
                         .map(|widget_id| r.get_overlay_subtree_info(widget_id))
@@ -2378,13 +2393,19 @@ pub fn handle_context_menu_right_clicks(world: &mut World) {
         let Some(mut runtime) = world.get_non_send_mut::<MasonryRuntime>() else {
             return;
         };
-        let _ = runtime.render_root.redraw();
+        let Some(window_runtime) = runtime.primary_mut() else {
+            return;
+        };
+        let _ = window_runtime.render_root.redraw();
         let pointer = (cursor_x, cursor_y).into();
-        let hit_path = runtime.get_hit_path(pointer);
+        let hit_path = window_runtime.get_hit_path(pointer);
         hit_path
             .iter()
             .filter_map(|id| {
-                let debug = runtime.render_root.get_widget(*id)?.get_debug_text()?;
+                let debug = window_runtime
+                    .render_root
+                    .get_widget(*id)?
+                    .get_debug_text()?;
                 debug
                     .strip_prefix("entity=")
                     .or_else(|| debug.strip_prefix("opaque_hitbox_entity="))

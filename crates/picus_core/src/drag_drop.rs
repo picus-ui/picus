@@ -146,13 +146,15 @@ fn entity_at_physical_position(
     physical_x: f64,
     physical_y: f64,
 ) -> Option<Entity> {
+    let window_runtime = runtime.primary()?;
     // get_hit_path accepts physical coordinates and converts to logical
     // using the runtime's internal scale factor.
-    let hit_path = runtime.get_hit_path(masonry_core::kurbo::Point::new(physical_x, physical_y));
+    let hit_path =
+        window_runtime.get_hit_path(masonry_core::kurbo::Point::new(physical_x, physical_y));
 
     // The last element in the hit path is the deepest widget under the pointer.
     hit_path.last().and_then(|widget_id| {
-        runtime
+        window_runtime
             .render_root
             .get_widget(*widget_id)
             .and_then(|widget| widget.get_debug_text())

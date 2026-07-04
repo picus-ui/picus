@@ -5,6 +5,19 @@ use bevy_time::{Timer, TimerMode};
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub struct UiRoot;
 
+/// Binds a [`UiRoot`] (or [`UiOverlayRoot`]) to a specific Bevy window entity.
+///
+/// When absent, the root binds to the primary window (or the first attached
+/// window runtime). Attach this to render a UI tree into a secondary window.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UiWindow(pub Entity);
+
+impl Default for UiWindow {
+    fn default() -> Self {
+        Self(Entity::PLACEHOLDER)
+    }
+}
+
 /// Marker component for the global overlay/portal root.
 ///
 /// Overlay entities (dialogs, dropdowns, tooltips, etc.) should be attached as

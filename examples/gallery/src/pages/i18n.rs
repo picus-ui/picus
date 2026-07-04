@@ -6,9 +6,9 @@
 use crate::helpers::{card, class, grid, note};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 use picus_core::{
-    scene::{CommandsSceneExt, bsn, template_value},
     LocalizeText, UiButton, UiComboBox, UiComboOption, UiFlexColumn, UiFlexRow, UiLabel,
     UiMultilineTextInput,
+    scene::{CommandsSceneExt, bsn, template_value},
 };
 
 /// Locale combo and CJK font fallback component examples.

@@ -25,6 +25,7 @@ mod group_box;
 mod image;
 mod link;
 mod list_view;
+mod markdown;
 mod menu;
 mod message_bar;
 mod multiline_text_input;
@@ -39,6 +40,7 @@ mod search;
 mod slider;
 mod spinner;
 mod split_pane;
+mod streaming_markdown;
 mod switch;
 mod tab_bar;
 mod table;
@@ -72,6 +74,7 @@ pub use group_box::*;
 pub use image::*;
 pub use link::*;
 pub use list_view::*;
+pub use markdown::*;
 pub use menu::*;
 pub use message_bar::*;
 pub use multiline_text_input::*;
@@ -86,6 +89,7 @@ pub use search::*;
 pub use slider::*;
 pub use spinner::*;
 pub use split_pane::*;
+pub use streaming_markdown::*;
 pub use switch::*;
 pub use tab_bar::*;
 pub use table::*;
@@ -207,10 +211,12 @@ pub fn register_builtin_ui_components(app: &mut App) {
         .register_ui_component::<grid::UiGrid>()
         .register_ui_component::<tab_bar::UiTabBar>()
         .register_ui_component::<list_view::UiListView>()
+        .register_ui_component::<markdown::UiMarkdown>()
         .register_ui_component::<tree_node::UiTreeNode>()
         .register_ui_component::<split_pane::UiSplitPane>()
         .register_ui_component::<group_box::UiGroupBox>()
         .register_ui_component::<spinner::UiSpinner>()
+        .register_ui_component::<streaming_markdown::UiStreamingMarkdown>()
         .register_ui_component::<table::UiTable>()
         .register_ui_component::<data_table::UiDataTable>()
         .register_ui_component::<menu::UiMenuBar>()

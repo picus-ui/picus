@@ -5,8 +5,8 @@
 use crate::helpers::{card, class, generated_image, grid, note, placeholder, sample_canvas};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 use picus_core::{
-    scene::{CommandsSceneExt, bsn, template_value},
     UiImage,
+    scene::{CommandsSceneExt, bsn, template_value},
 };
 
 /// Image, Canvas media, and video/animated image component examples.

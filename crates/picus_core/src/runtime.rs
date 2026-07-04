@@ -84,18 +84,19 @@ pub(crate) enum PointerTraceEvent {
     Scroll,
 }
 
-/// Headless Masonry runtime owned by Bevy.
+/// Per-window retained Masonry runtime state.
 ///
-/// This runtime keeps ownership of the retained Masonry tree and drives it via
-/// explicit Bevy-system input injection + synthesis-time rebuilds.
-pub struct MasonryRuntime {
+/// One [`WindowRuntime`] exists for each Bevy window entity attached to the
+/// UI runtime. It owns the retained `RenderRoot`, view state, pointer/keyboard
+/// state, IME channel, wgpu surface, and Vello renderer for that window.
+pub struct WindowRuntime {
     pub root_widget_id: WidgetId,
     pub render_root: RenderRoot,
     view_ctx: ViewCtx,
     pub widget_id_to_entity: HashMap<WidgetId, u64>,
     view_state: RuntimeViewState,
     current_view: UiView,
-    active_window: Option<Entity>,
+    window_entity: Entity,
     window_scale_factor: f64,
     pointer_info: PointerInfo,
     pointer_state: PointerState,
@@ -109,19 +110,14 @@ pub struct MasonryRuntime {
     pointer_trace: Vec<PointerTraceEvent>,
 }
 
-impl FromWorld for MasonryRuntime {
-    fn from_world(world: &mut World) -> Self {
-        world.init_resource::<UiEventQueue>();
-        let queue = world.resource::<UiEventQueue>().shared_queue();
-        install_global_ui_event_queue(queue);
-
+impl WindowRuntime {
+    fn new(window_entity: Entity, initial_view: UiView) -> Self {
         let mut view_ctx = ViewCtx::new(
             Arc::new(NoopProxy),
             Arc::new(tokio::runtime::Runtime::new().expect("tokio runtime should initialize")),
         );
         let (ime_signal_sender, ime_signal_receiver) = mpsc::channel::<ImeWindowSignal>();
 
-        let initial_view: UiView = Arc::new(label("picus_core: waiting for synthesized root"));
         let (initial_root_widget, view_state) = <UiAnyView as View<(), (), ViewCtx>>::build(
             initial_view.as_ref(),
             &mut view_ctx,
@@ -171,7 +167,7 @@ impl FromWorld for MasonryRuntime {
             widget_id_to_entity: HashMap::new(),
             view_state,
             current_view: initial_view,
-            active_window: None,
+            window_entity,
             window_scale_factor: 1.0,
             pointer_info: PointerInfo {
                 pointer_id: Some(PointerId::new(1).expect("pointer id 1 should be valid")),
@@ -189,78 +185,23 @@ impl FromWorld for MasonryRuntime {
             pointer_trace: Vec::new(),
         }
     }
-}
 
-fn focus_fallback_widget(render_root: &RenderRoot) -> Option<WidgetId> {
-    render_root
-        .get_layer_root(0)
-        .downcast::<Passthrough>()
-        .map(|root| root.inner().inner_id())
-}
-
-fn existing_window_metrics(window: &XilemWinitWindow) -> ExistingWindowMetrics {
-    let physical_size = window.inner_size();
-    let scale_factor = window.scale_factor();
-    let logical_size = physical_size.to_logical(scale_factor);
-
-    ExistingWindowMetrics {
-        physical_width: physical_size.width,
-        physical_height: physical_size.height,
-        logical_width: logical_size.width,
-        logical_height: logical_size.height,
-        scale_factor,
-    }
-}
-
-fn build_widget_path(
-    widget: WidgetRef<'_, dyn Widget>,
-    target: WidgetId,
-    path: &mut Vec<WidgetId>,
-) -> bool {
-    if widget.ctx().is_stashed() {
-        return false;
+    fn initial_placeholder_view() -> UiView {
+        Arc::new(label("picus_core: waiting for synthesized root"))
     }
 
-    path.push(widget.id());
-    if widget.id() == target {
-        return true;
-    }
-
-    for child in widget.children() {
-        if build_widget_path(child, target, path) {
-            return true;
-        }
-    }
-
-    path.pop();
-    false
-}
-
-fn parse_entity_debug_binding(debug: &str) -> Option<(u64, bool)> {
-    if let Some(bits) = debug.strip_prefix("opaque_hitbox_entity=") {
-        return Some((bits.parse::<u64>().ok()?, true));
-    }
-
-    if let Some(bits) = debug.strip_prefix("entity_scope=") {
-        return Some((bits.parse::<u64>().ok()?, false));
-    }
-
-    None
-}
-
-impl MasonryRuntime {
     #[must_use]
-    pub fn is_attached_to_window(&self, window: Entity) -> bool {
-        self.active_window == Some(window)
-    }
-
-    pub fn attach_to_window(&mut self, window: Entity, metrics: ExistingWindowMetrics) {
-        self.sync_window_metrics(window, metrics);
+    pub fn window_entity(&self) -> Entity {
+        self.window_entity
     }
 
     #[must_use]
-    pub fn active_window(&self) -> Option<Entity> {
-        self.active_window
+    pub fn is_attached_to_window(&self, window: Entity) -> bool {
+        self.window_entity == window
+    }
+
+    pub fn attach_to_window(&mut self, metrics: ExistingWindowMetrics) {
+        self.sync_window_metrics(metrics);
     }
 
     #[must_use]
@@ -472,21 +413,7 @@ impl MasonryRuntime {
         }
     }
 
-    fn accepts_window(&mut self, window: Entity) -> bool {
-        match self.active_window {
-            Some(active) => active == window,
-            None => {
-                self.active_window = Some(window);
-                true
-            }
-        }
-    }
-
-    pub fn handle_cursor_moved(&mut self, window: Entity, x: f32, y: f32) -> Handled {
-        if !self.accepts_window(window) {
-            return Handled::No;
-        }
-
+    pub fn handle_cursor_moved(&mut self, x: f32, y: f32) -> Handled {
         self.pointer_state.position = PhysicalPosition {
             x: x as f64,
             y: y as f64,
@@ -504,11 +431,7 @@ impl MasonryRuntime {
             }))
     }
 
-    pub fn handle_cursor_left(&mut self, window: Entity) -> Handled {
-        if !self.accepts_window(window) {
-            return Handled::No;
-        }
-
+    pub fn handle_cursor_left(&mut self) -> Handled {
         #[cfg(test)]
         self.pointer_trace.push(PointerTraceEvent::Leave);
 
@@ -516,16 +439,7 @@ impl MasonryRuntime {
             .handle_pointer_event(PointerEvent::Leave(self.pointer_info))
     }
 
-    pub fn handle_mouse_button(
-        &mut self,
-        window: Entity,
-        button: MouseButton,
-        state: ButtonState,
-    ) -> Handled {
-        if !self.accepts_window(window) {
-            return Handled::No;
-        }
-
+    pub fn handle_mouse_button(&mut self, button: MouseButton, state: ButtonState) -> Handled {
         let Some(button) = map_mouse_button(button) else {
             return Handled::No;
         };
@@ -556,17 +470,7 @@ impl MasonryRuntime {
         }
     }
 
-    pub fn handle_mouse_wheel(
-        &mut self,
-        window: Entity,
-        unit: MouseScrollUnit,
-        x: f32,
-        y: f32,
-    ) -> Handled {
-        if !self.accepts_window(window) {
-            return Handled::No;
-        }
-
+    pub fn handle_mouse_wheel(&mut self, unit: MouseScrollUnit, x: f32, y: f32) -> Handled {
         let factor = if unit == MouseScrollUnit::Line {
             MouseScrollUnit::SCROLL_UNIT_CONVERSION_FACTOR
         } else {
@@ -587,19 +491,11 @@ impl MasonryRuntime {
             }))
     }
 
-    pub fn handle_text_event(&mut self, window: Entity, event: TextEvent) -> Handled {
-        if !self.accepts_window(window) {
-            return Handled::No;
-        }
-
+    pub fn handle_text_event(&mut self, event: TextEvent) -> Handled {
         self.render_root.handle_text_event(event)
     }
 
-    pub fn handle_window_resized(&mut self, window: Entity, width: f32, height: f32) -> Handled {
-        if !self.accepts_window(window) {
-            return Handled::No;
-        }
-
+    pub fn handle_window_resized(&mut self, width: f32, height: f32) -> Handled {
         self.viewport_width = width.max(1.0) as f64;
         self.viewport_height = height.max(1.0) as f64;
 
@@ -614,15 +510,7 @@ impl MasonryRuntime {
             )))
     }
 
-    pub fn handle_window_scale_factor_changed(
-        &mut self,
-        window: Entity,
-        scale_factor: f64,
-    ) -> Handled {
-        if !self.accepts_window(window) {
-            return Handled::No;
-        }
-
+    pub fn handle_window_scale_factor_changed(&mut self, scale_factor: f64) -> Handled {
         self.window_scale_factor = scale_factor.max(f64::EPSILON);
         let _ = self
             .render_root
@@ -721,14 +609,7 @@ impl MasonryRuntime {
         self.ime_signal_receiver.try_iter().collect()
     }
 
-    fn sync_window_metrics(&mut self, window: Entity, metrics: ExistingWindowMetrics) {
-        let window_changed = self.active_window != Some(window);
-        if window_changed {
-            self.active_window = Some(window);
-            self.window_surface = None;
-            self.renderer = Renderer::new();
-        }
-
+    fn sync_window_metrics(&mut self, metrics: ExistingWindowMetrics) {
         let next_scale = metrics.scale_factor.max(f64::EPSILON);
         let next_viewport_width = metrics.logical_width.max(1.0);
         let next_viewport_height = metrics.logical_height.max(1.0);
@@ -740,13 +621,13 @@ impl MasonryRuntime {
         self.viewport_width = next_viewport_width;
         self.viewport_height = next_viewport_height;
 
-        if window_changed || needs_rescale {
+        if needs_rescale {
             let _ = self
                 .render_root
                 .handle_window_event(WindowEvent::Rescale(self.window_scale_factor));
         }
 
-        if window_changed || needs_resize || needs_rescale {
+        if needs_resize || needs_rescale {
             let _ = self
                 .render_root
                 .handle_window_event(WindowEvent::Resize(PhysicalSize::new(
@@ -755,9 +636,186 @@ impl MasonryRuntime {
                 )));
         }
     }
+
+    /// Register a batch of font bytes into this window's retained font database.
+    pub fn register_fonts(&mut self, font_bytes: Vec<u8>) {
+        self.render_root
+            .register_fonts(masonry_core::peniko::Blob::new(Arc::new(font_bytes)));
+    }
 }
 
-fn compose_runtime_root(roots: &[UiView]) -> UiView {
+fn focus_fallback_widget(render_root: &RenderRoot) -> Option<WidgetId> {
+    render_root
+        .get_layer_root(0)
+        .downcast::<Passthrough>()
+        .map(|root| root.inner().inner_id())
+}
+
+fn existing_window_metrics(window: &XilemWinitWindow) -> ExistingWindowMetrics {
+    let physical_size = window.inner_size();
+    let scale_factor = window.scale_factor();
+    let logical_size = physical_size.to_logical(scale_factor);
+
+    ExistingWindowMetrics {
+        physical_width: physical_size.width,
+        physical_height: physical_size.height,
+        logical_width: logical_size.width,
+        logical_height: logical_size.height,
+        scale_factor,
+    }
+}
+
+fn build_widget_path(
+    widget: WidgetRef<'_, dyn Widget>,
+    target: WidgetId,
+    path: &mut Vec<WidgetId>,
+) -> bool {
+    if widget.ctx().is_stashed() {
+        return false;
+    }
+
+    path.push(widget.id());
+    if widget.id() == target {
+        return true;
+    }
+
+    for child in widget.children() {
+        if build_widget_path(child, target, path) {
+            return true;
+        }
+    }
+
+    path.pop();
+    false
+}
+
+fn parse_entity_debug_binding(debug: &str) -> Option<(u64, bool)> {
+    if let Some(bits) = debug.strip_prefix("opaque_hitbox_entity=") {
+        return Some((bits.parse::<u64>().ok()?, true));
+    }
+
+    if let Some(bits) = debug.strip_prefix("entity_scope=") {
+        return Some((bits.parse::<u64>().ok()?, false));
+    }
+
+    None
+}
+
+/// Headless Masonry runtime owned by Bevy, keyed by window entity.
+///
+/// This runtime keeps ownership of one [`WindowRuntime`] per attached Bevy
+/// window and drives each via explicit Bevy-system input injection +
+/// synthesis-time per-window rebuilds.
+///
+/// Use [`Self::ensure_window`] to create a runtime for a window entity,
+/// [`Self::window`] / [`Self::window_mut`] to access a specific window, and
+/// [`Self::primary`] / [`Self::primary_mut`] to access the primary window's
+/// runtime (the window marked with Bevy's [`PrimaryWindow`] component, or the
+/// first attached window when no primary is present).
+pub struct MasonryRuntime {
+    pub windows: HashMap<Entity, WindowRuntime>,
+    primary_window: Option<Entity>,
+}
+
+impl FromWorld for MasonryRuntime {
+    fn from_world(world: &mut World) -> Self {
+        world.init_resource::<UiEventQueue>();
+        let queue = world.resource::<UiEventQueue>().shared_queue();
+        install_global_ui_event_queue(queue);
+
+        Self {
+            windows: HashMap::new(),
+            primary_window: None,
+        }
+    }
+}
+
+impl MasonryRuntime {
+    /// Returns the entity of the primary window, if any.
+    ///
+    /// The primary window is the one marked with Bevy's [`PrimaryWindow`]
+    /// component when it was attached, or the first attached window otherwise.
+    #[must_use]
+    pub fn primary_window(&self) -> Option<Entity> {
+        self.primary_window
+            .or_else(|| self.windows.keys().next().copied())
+    }
+
+    /// Borrow the primary window's runtime.
+    #[must_use]
+    pub fn primary(&self) -> Option<&WindowRuntime> {
+        self.primary_window()
+            .and_then(|entity| self.windows.get(&entity))
+    }
+
+    /// Mutably borrow the primary window's runtime.
+    #[must_use]
+    pub fn primary_mut(&mut self) -> Option<&mut WindowRuntime> {
+        self.primary_window()
+            .and_then(|entity| self.windows.get_mut(&entity))
+    }
+
+    /// Borrow a specific window's runtime.
+    #[must_use]
+    pub fn window(&self, entity: Entity) -> Option<&WindowRuntime> {
+        self.windows.get(&entity)
+    }
+
+    /// Mutably borrow a specific window's runtime.
+    #[must_use]
+    pub fn window_mut(&mut self, entity: Entity) -> Option<&mut WindowRuntime> {
+        self.windows.get_mut(&entity)
+    }
+
+    /// Create a window runtime for `entity` if one does not already exist.
+    ///
+    /// If `is_primary` is `true`, the entity is recorded as the primary window.
+    /// Returns the new (or existing) window runtime.
+    pub fn ensure_window(&mut self, entity: Entity, is_primary: bool) -> &mut WindowRuntime {
+        if is_primary && self.primary_window.is_none() {
+            self.primary_window = Some(entity);
+        }
+
+        self.windows.entry(entity).or_insert_with(|| {
+            WindowRuntime::new(entity, WindowRuntime::initial_placeholder_view())
+        })
+    }
+
+    /// Mark `entity` as the primary window if no primary is set yet.
+    pub fn set_primary_if_unset(&mut self, entity: Entity) {
+        if self.primary_window.is_none() {
+            self.primary_window = Some(entity);
+        }
+    }
+
+    /// Remove a window's runtime when the window is destroyed.
+    pub fn remove_window(&mut self, entity: Entity) {
+        self.windows.remove(&entity);
+        if self.primary_window == Some(entity) {
+            self.primary_window = None;
+        }
+    }
+
+    /// Iterate over all attached window entities.
+    pub fn window_entities(&self) -> impl Iterator<Item = Entity> + '_ {
+        self.windows.keys().copied()
+    }
+
+    /// Returns `true` if a runtime exists for `entity`.
+    #[must_use]
+    pub fn has_window(&self, entity: Entity) -> bool {
+        self.windows.contains_key(&entity)
+    }
+
+    /// Register font bytes into every attached window's retained font database.
+    pub fn register_fonts_all(&mut self, font_bytes: Vec<u8>) {
+        for window in self.windows.values_mut() {
+            window.register_fonts(font_bytes.clone());
+        }
+    }
+}
+
+pub fn compose_runtime_root(roots: &[UiView]) -> UiView {
     fn viewport_child(root: UiView) -> UiView {
         Arc::new(sized_box(root).dims(Dimensions::STRETCH))
     }
@@ -785,6 +843,8 @@ fn compose_runtime_root(roots: &[UiView]) -> UiView {
     }
 }
 
+/// Sync pending IME signals from every window runtime into the corresponding
+/// Bevy window's `ime_enabled` / `ime_position` state.
 pub fn sync_masonry_ime_state_to_bevy_window(
     runtime: Option<NonSendMut<MasonryRuntime>>,
     primary_window_query: Query<Entity, With<PrimaryWindow>>,
@@ -794,37 +854,47 @@ pub fn sync_masonry_ime_state_to_bevy_window(
         return;
     };
 
-    let pending = runtime.take_pending_ime_signals();
-    if pending.is_empty() {
-        return;
-    }
+    let window_entities: Vec<Entity> = runtime.window_entities().collect();
+    let primary_entity = primary_window_query.iter().next();
 
-    let target_window = runtime
-        .active_window()
-        .or_else(|| primary_window_query.iter().next());
-    let Some(target_window) = target_window else {
-        return;
-    };
+    for window_entity in window_entities {
+        let Some(window_runtime) = runtime.window_mut(window_entity) else {
+            continue;
+        };
+        let pending = window_runtime.take_pending_ime_signals();
+        if pending.is_empty() {
+            continue;
+        }
 
-    let Ok(mut window) = window_query.get_mut(target_window) else {
-        return;
-    };
+        let target_window = if runtime.has_window(window_entity) {
+            Some(window_entity)
+        } else {
+            primary_entity
+        };
+        let Some(target_window) = target_window else {
+            continue;
+        };
 
-    for signal in pending {
-        match signal {
-            ImeWindowSignal::Start => {
-                if !window.ime_enabled {
-                    window.ime_enabled = true;
+        let Ok(mut window) = window_query.get_mut(target_window) else {
+            continue;
+        };
+
+        for signal in pending {
+            match signal {
+                ImeWindowSignal::Start => {
+                    if !window.ime_enabled {
+                        window.ime_enabled = true;
+                    }
                 }
-            }
-            ImeWindowSignal::End => {
-                if window.ime_enabled {
-                    window.ime_enabled = false;
+                ImeWindowSignal::End => {
+                    if window.ime_enabled {
+                        window.ime_enabled = false;
+                    }
                 }
-            }
-            ImeWindowSignal::Move(position) => {
-                if window.ime_position != position {
-                    window.ime_position = position;
+                ImeWindowSignal::Move(position) => {
+                    if window.ime_position != position {
+                        window.ime_position = position;
+                    }
                 }
             }
         }
@@ -897,7 +967,11 @@ fn update_modifiers_from_logical_key(modifiers: &mut Modifiers, key: &BevyKey, s
     }
 }
 
-/// PreUpdate input bridge: consume Bevy window/input messages and inject them into Masonry.
+/// PreUpdate input bridge: consume Bevy window/input messages and inject them
+/// into the matching per-window Masonry runtime.
+///
+/// Events are routed to the window runtime identified by their `window` field.
+/// Events for windows without an attached runtime are ignored.
 #[expect(
     clippy::too_many_arguments,
     reason = "Bevy system functions naturally take multiple queries and readers"
@@ -905,7 +979,7 @@ fn update_modifiers_from_logical_key(modifiers: &mut Modifiers, key: &BevyKey, s
 pub fn inject_bevy_input_into_masonry(
     runtime: Option<NonSendMut<MasonryRuntime>>,
     mut overlay_routing: ResMut<OverlayPointerRoutingState>,
-    primary_window_query: Query<&Window, With<PrimaryWindow>>,
+    window_query: Query<&Window>,
     primary_window_entity_query: Query<Entity, With<PrimaryWindow>>,
     mut keyboard_input: MessageReader<KeyboardInput>,
     mut ime_events: MessageReader<BevyIme>,
@@ -921,52 +995,44 @@ pub fn inject_bevy_input_into_masonry(
         return;
     };
 
-    let Some(primary_window_entity) = primary_window_entity_query.iter().next() else {
-        return;
-    };
-
-    let Ok(primary_window) = primary_window_query.get(primary_window_entity) else {
-        return;
-    };
+    let primary_window_entity = primary_window_entity_query.iter().next();
 
     for event in cursor_moved.read() {
-        if event.window != primary_window_entity {
+        let target = event.window;
+        let Some(window) = window_query.get(target).ok() else {
             continue;
-        }
-
-        let Some(pointer_position) = primary_window.physical_cursor_position() else {
+        };
+        let Some(window_runtime) = runtime.window_mut(target) else {
             continue;
         };
 
-        runtime.handle_cursor_moved(
-            primary_window_entity,
+        let Some(pointer_position) = window.physical_cursor_position() else {
+            continue;
+        };
+
+        window_runtime.handle_cursor_moved(pointer_position.x, pointer_position.y);
+        tracing::trace!(
+            "Input Injection - Bevy Physical Cursor Moved: ({}, {}). Injected into Masonry window {:?}.",
             pointer_position.x,
             pointer_position.y,
-        );
-        tracing::trace!(
-            "Input Injection - Bevy Physical Cursor Moved: ({}, {}). Injected into Masonry.",
-            pointer_position.x,
-            pointer_position.y
+            target
         );
     }
 
     for event in cursor_left.read() {
-        if event.window != primary_window_entity {
+        let target = event.window;
+        let Some(window_runtime) = runtime.window_mut(target) else {
             continue;
-        }
-
-        runtime.handle_cursor_left(primary_window_entity);
+        };
+        window_runtime.handle_cursor_left();
     }
 
     for event in window_focused.read() {
-        if event.window != primary_window_entity {
+        let target = event.window;
+        let Some(window_runtime) = runtime.window_mut(target) else {
             continue;
-        }
-
-        runtime.handle_text_event(
-            primary_window_entity,
-            TextEvent::WindowFocusChange(event.focused),
-        );
+        };
+        window_runtime.handle_text_event(TextEvent::WindowFocusChange(event.focused));
     }
 
     for event in ime_events.read() {
@@ -991,20 +1057,20 @@ pub fn inject_bevy_input_into_masonry(
             }
         };
 
-        if window != primary_window_entity {
+        let Some(window_runtime) = runtime.window_mut(window) else {
             continue;
-        }
-
-        runtime.handle_text_event(primary_window_entity, text_event);
+        };
+        window_runtime.handle_text_event(text_event);
     }
 
     for event in keyboard_input.read() {
-        if event.window != primary_window_entity {
+        let target = event.window;
+        let Some(window_runtime) = runtime.window_mut(target) else {
             continue;
-        }
+        };
 
         update_modifiers_from_logical_key(
-            &mut runtime.keyboard_modifiers,
+            &mut window_runtime.keyboard_modifiers,
             &event.logical_key,
             event.state,
         );
@@ -1013,17 +1079,16 @@ pub fn inject_bevy_input_into_masonry(
             .map(Key::Named)
             .or_else(|| map_text_key_from_logical_key(&event.logical_key))
         {
-            let keyboard_modifiers = runtime.keyboard_modifiers;
-            runtime.handle_text_event(
-                primary_window_entity,
-                TextEvent::Keyboard(masonry_core::core::KeyboardEvent {
+            let keyboard_modifiers = window_runtime.keyboard_modifiers;
+            window_runtime.handle_text_event(TextEvent::Keyboard(
+                masonry_core::core::KeyboardEvent {
                     state: map_button_state_to_key_state(event.state),
                     key,
                     repeat: event.repeat,
                     modifiers: keyboard_modifiers,
                     ..Default::default()
-                }),
-            );
+                },
+            ));
             continue;
         }
 
@@ -1031,236 +1096,267 @@ pub fn inject_bevy_input_into_masonry(
             && let Some(text) = event.text.as_ref()
             && !text.is_empty()
         {
-            runtime.handle_text_event(
-                primary_window_entity,
-                TextEvent::Ime(masonry_core::core::Ime::Commit(text.to_string())),
-            );
+            window_runtime.handle_text_event(TextEvent::Ime(masonry_core::core::Ime::Commit(
+                text.to_string(),
+            )));
         }
     }
 
     for event in mouse_button_input.read() {
-        if event.window != primary_window_entity {
+        let target = event.window;
+        let Some(window) = window_query.get(target).ok() else {
             continue;
-        }
+        };
 
         let suppressed = match event.state {
-            ButtonState::Pressed => {
-                overlay_routing.take_suppressed_press(primary_window_entity, event.button)
-            }
-            ButtonState::Released => {
-                overlay_routing.take_suppressed_release(primary_window_entity, event.button)
-            }
+            ButtonState::Pressed => overlay_routing.take_suppressed_press(target, event.button),
+            ButtonState::Released => overlay_routing.take_suppressed_release(target, event.button),
         };
 
         if suppressed {
             continue;
         }
 
-        let Some(pointer_position) = primary_window.physical_cursor_position() else {
+        let Some(window_runtime) = runtime.window_mut(target) else {
+            continue;
+        };
+
+        let Some(pointer_position) = window.physical_cursor_position() else {
             tracing::debug!(
-                "skipping mouse button input because primary cursor is outside window {:?}",
-                primary_window_entity
+                "skipping mouse button input because cursor is outside window {:?}",
+                target
             );
             continue;
         };
 
-        runtime.handle_cursor_moved(
-            primary_window_entity,
-            pointer_position.x,
-            pointer_position.y,
-        );
-
-        runtime.handle_mouse_button(primary_window_entity, event.button, event.state);
+        window_runtime.handle_cursor_moved(pointer_position.x, pointer_position.y);
+        window_runtime.handle_mouse_button(event.button, event.state);
         tracing::trace!(
-            "Input Injection - Mouse Button: {:?} {:?} at Physical ({}, {})",
+            "Input Injection - Mouse Button: {:?} {:?} at Physical ({}, {}) window {:?}",
             event.button,
             event.state,
             pointer_position.x,
-            pointer_position.y
+            pointer_position.y,
+            target
         );
     }
 
     for event in mouse_wheel.read() {
-        if event.window != primary_window_entity {
+        let target = event.window;
+        let Some(window) = window_query.get(target).ok() else {
             continue;
-        }
+        };
+        let Some(window_runtime) = runtime.window_mut(target) else {
+            continue;
+        };
 
-        let Some(pointer_position) = primary_window.physical_cursor_position() else {
+        let Some(pointer_position) = window.physical_cursor_position() else {
             tracing::debug!(
-                "skipping mouse wheel input because primary cursor is outside window {:?}",
-                primary_window_entity
+                "skipping mouse wheel input because cursor is outside window {:?}",
+                target
             );
             continue;
         };
 
-        runtime.handle_cursor_moved(
-            primary_window_entity,
-            pointer_position.x,
-            pointer_position.y,
-        );
-        runtime.handle_mouse_wheel(primary_window_entity, event.unit, event.x, event.y);
+        window_runtime.handle_cursor_moved(pointer_position.x, pointer_position.y);
+        window_runtime.handle_mouse_wheel(event.unit, event.x, event.y);
         tracing::trace!(
-            "Input Injection - Mouse Wheel: {:?} ({}, {}) at Physical cursor ({}, {})",
+            "Input Injection - Mouse Wheel: {:?} ({}, {}) at Physical cursor ({}, {}) window {:?}",
             event.unit,
             event.x,
             event.y,
             pointer_position.x,
-            pointer_position.y
+            pointer_position.y,
+            target
         );
     }
 
     for event in window_resized.read() {
-        if event.window != primary_window_entity {
+        let target = event.window;
+        let Some(window) = window_query.get(target).ok() else {
             continue;
-        }
-
-        runtime.handle_window_resized(
-            primary_window_entity,
-            primary_window.width(),
-            primary_window.height(),
-        );
+        };
+        let Some(window_runtime) = runtime.window_mut(target) else {
+            continue;
+        };
+        window_runtime.handle_window_resized(window.width(), window.height());
         tracing::trace!(
-            "Window Resize - Bevy Logical Size: {}x{}, Injected into Masonry.",
-            primary_window.width(),
-            primary_window.height()
+            "Window Resize - Bevy Logical Size: {}x{}, window {:?}.",
+            window.width(),
+            window.height(),
+            target
         );
     }
 
     for event in window_scale_factor_changed.read() {
-        if event.window != primary_window_entity {
+        let target = event.window;
+        let Some(window) = window_query.get(target).ok() else {
             continue;
-        }
-
-        runtime.handle_window_scale_factor_changed(
-            primary_window_entity,
-            primary_window.scale_factor() as f64,
-        );
+        };
+        let Some(window_runtime) = runtime.window_mut(target) else {
+            continue;
+        };
+        window_runtime.handle_window_scale_factor_changed(window.scale_factor() as f64);
         tracing::trace!(
-            "Window Scale Factor - Bevy Scale: {}, Injected into Masonry.",
-            primary_window.scale_factor()
+            "Window Scale Factor - Bevy Scale: {}, window {:?}.",
+            window.scale_factor(),
+            target
         );
     }
+
+    let _ = primary_window_entity;
 }
 
-/// Attach Masonry runtime viewport state to the primary Bevy winit window once available.
-pub fn initialize_masonry_runtime_from_primary_window(
+/// Attach a Masonry window runtime to each Bevy window once it appears.
+///
+/// The primary window (marked with [`PrimaryWindow`]) is auto-attached. Other
+/// windows are auto-attached as secondary windows.
+pub fn initialize_masonry_runtime_from_windows(
     runtime: Option<NonSendMut<MasonryRuntime>>,
-    added_primary_window_query: Query<Entity, (With<PrimaryWindow>, Added<PrimaryWindow>)>,
-    primary_window_query: Query<Entity, With<PrimaryWindow>>,
+    added_window_query: Query<(Entity, Option<&PrimaryWindow>), Added<Window>>,
+    window_query: Query<(Entity, Option<&PrimaryWindow>), With<Window>>,
 ) {
     let Some(mut runtime) = runtime else {
         return;
     };
 
-    let primary_window_entity = added_primary_window_query
-        .iter()
-        .next()
-        .or_else(|| primary_window_query.iter().next());
-
-    let Some(primary_window_entity) = primary_window_entity else {
-        return;
+    // Gather candidate windows: newly-added windows, or any existing window if
+    // the runtime currently has none attached.
+    let candidates: Vec<(Entity, bool)> = if runtime.windows.is_empty() {
+        window_query
+            .iter()
+            .map(|(entity, primary)| (entity, primary.is_some()))
+            .collect()
+    } else {
+        added_window_query
+            .iter()
+            .map(|(entity, primary)| (entity, primary.is_some()))
+            .collect()
     };
 
-    if runtime.is_attached_to_window(primary_window_entity) {
-        return;
+    for (window_entity, is_primary) in candidates {
+        if runtime.has_window(window_entity) {
+            if is_primary {
+                runtime.set_primary_if_unset(window_entity);
+            }
+            continue;
+        }
+
+        let metrics = bevy_winit::WINIT_WINDOWS.with(|winit_windows| {
+            let winit_windows = winit_windows.borrow();
+            winit_windows
+                .get_window(window_entity)
+                .map(|window| existing_window_metrics(window))
+        });
+
+        let window_runtime = runtime.ensure_window(window_entity, is_primary);
+
+        if let Some(metrics) = metrics {
+            window_runtime.attach_to_window(metrics);
+
+            tracing::trace!(
+                "Runtime Init - Window {:?} ({}) Logic Size: {}x{}, Scale: {}",
+                window_entity,
+                if is_primary { "primary" } else { "secondary" },
+                metrics.logical_width,
+                metrics.logical_height,
+                metrics.scale_factor
+            );
+
+            // Prime Masonry's layout root with an explicit initial logical resize so hit-testing
+            // never starts from a zero-sized root, even before the first window-resize message.
+            window_runtime
+                .handle_window_resized(metrics.logical_width as f32, metrics.logical_height as f32);
+        } else {
+            // No winit handle available (e.g. headless tests). Still create the
+            // runtime so synthesis/rebuild/hit-testing work without a real window.
+            let fallback = ExistingWindowMetrics {
+                physical_width: 1024,
+                physical_height: 768,
+                logical_width: 1024.0,
+                logical_height: 768.0,
+                scale_factor: 1.0,
+            };
+            window_runtime.attach_to_window(fallback);
+            window_runtime.handle_window_resized(1024.0, 768.0);
+            tracing::trace!(
+                "Runtime Init - Window {:?} ({}) created without winit handle (fallback 1024x768)",
+                window_entity,
+                if is_primary { "primary" } else { "secondary" }
+            );
+        }
     }
-
-    let Some(metrics) = bevy_winit::WINIT_WINDOWS.with(|winit_windows| {
-        let winit_windows = winit_windows.borrow();
-        winit_windows
-            .get_window(primary_window_entity)
-            .map(|window| existing_window_metrics(window))
-    }) else {
-        return;
-    };
-
-    runtime.attach_to_window(primary_window_entity, metrics);
-
-    tracing::trace!(
-        "Runtime Init - Primary Window Logic Size: {}x{}, Scale: {}",
-        metrics.logical_width,
-        metrics.logical_height,
-        metrics.scale_factor
-    );
-
-    // Prime Masonry's layout root with an explicit initial logical resize so hit-testing
-    // never starts from a zero-sized root, even before the first window-resize message.
-    runtime.handle_window_resized(
-        primary_window_entity,
-        metrics.logical_width as f32,
-        metrics.logical_height as f32,
-    );
-    tracing::trace!(
-        "Runtime Init - Priming Masonry Resize: {}x{}",
-        metrics.logical_width,
-        metrics.logical_height
-    );
 }
 
-/// PostUpdate rebuild step: diff synthesized root against retained Masonry tree.
+/// PostUpdate rebuild step: diff each window's synthesized root against its
+/// retained Masonry tree.
 pub fn rebuild_masonry_runtime(world: &mut World) {
-    let Some(roots) = world
+    let window_views: Vec<(Entity, UiView)> = world
         .get_resource::<SynthesizedUiViews>()
-        .map(|views| views.roots.clone())
-    else {
-        return;
-    };
-
-    let next_root = compose_runtime_root(&roots);
+        .map(|views| views.windows.iter().map(|(e, v)| (*e, v.clone())).collect())
+        .unwrap_or_default();
 
     let Some(mut runtime) = world.get_non_send_mut::<MasonryRuntime>() else {
         return;
     };
 
-    runtime.rebuild_root_view(next_root);
+    for (window_entity, window_view) in window_views {
+        let Some(window_runtime) = runtime.window_mut(window_entity) else {
+            continue;
+        };
+        window_runtime.rebuild_root_view(window_view);
+    }
 }
 
-/// Last-stage paint pass: submit Masonry scene through Vello and present to the primary window.
-pub fn paint_masonry_ui(
-    runtime: Option<NonSendMut<MasonryRuntime>>,
-    primary_window_query: Query<Entity, With<PrimaryWindow>>,
-    time: Res<Time>,
-) {
+/// Last-stage paint pass: submit each window's Masonry scene through Vello and
+/// present to the corresponding Bevy window.
+pub fn paint_masonry_ui(runtime: Option<NonSendMut<MasonryRuntime>>, time: Res<Time>) {
     let Some(mut runtime) = runtime else {
         return;
     };
 
-    let Some(primary_window_entity) = primary_window_query.iter().next() else {
-        return;
-    };
+    let window_entities: Vec<Entity> = runtime.window_entities().collect();
 
-    let Some(metrics) = bevy_winit::WINIT_WINDOWS.with(|winit_windows| {
-        let winit_windows = winit_windows.borrow();
-        winit_windows
-            .get_window(primary_window_entity)
-            .map(|window| existing_window_metrics(window))
-    }) else {
-        return;
-    };
-
-    runtime.attach_to_window(primary_window_entity, metrics);
-
-    let has_surface = bevy_winit::WINIT_WINDOWS.with(|winit_windows| {
-        let winit_windows = winit_windows.borrow();
-        let Some(window) = winit_windows.get_window(primary_window_entity) else {
-            return false;
+    for window_entity in window_entities {
+        let Some(metrics) = bevy_winit::WINIT_WINDOWS.with(|winit_windows| {
+            let winit_windows = winit_windows.borrow();
+            winit_windows
+                .get_window(window_entity)
+                .map(|window| existing_window_metrics(window))
+        }) else {
+            continue;
         };
 
-        runtime.ensure_external_surface(window, metrics)
-    });
+        let has_surface = {
+            let Some(window_runtime) = runtime.window_mut(window_entity) else {
+                continue;
+            };
+            window_runtime.attach_to_window(metrics);
+            bevy_winit::WINIT_WINDOWS.with(|winit_windows| {
+                let winit_windows = winit_windows.borrow();
+                let Some(window) = winit_windows.get_window(window_entity) else {
+                    return false;
+                };
+                window_runtime.ensure_external_surface(window, metrics)
+            })
+        };
 
-    if !has_surface {
-        return;
-    }
-
-    runtime.paint_frame(time.delta());
-
-    bevy_winit::WINIT_WINDOWS.with(|winit_windows| {
-        let winit_windows = winit_windows.borrow();
-        if let Some(window) = winit_windows.get_window(primary_window_entity) {
-            window.request_redraw();
+        if !has_surface {
+            continue;
         }
-    });
+
+        let Some(window_runtime) = runtime.window_mut(window_entity) else {
+            continue;
+        };
+        window_runtime.paint_frame(time.delta());
+
+        bevy_winit::WINIT_WINDOWS.with(|winit_windows| {
+            let winit_windows = winit_windows.borrow();
+            if let Some(window) = winit_windows.get_window(window_entity) {
+                window.request_redraw();
+            }
+        });
+    }
 }
 
 #[cfg(test)]
@@ -1288,5 +1384,34 @@ mod tests {
 
         update_modifiers_from_logical_key(&mut modifiers, &BevyKey::Super, ButtonState::Released);
         assert!(!modifiers.meta());
+    }
+
+    #[test]
+    fn multi_window_runtime_isolates_windows() {
+        let mut runtime = MasonryRuntime {
+            windows: HashMap::new(),
+            primary_window: None,
+        };
+
+        let a = Entity::from_bits(1);
+        let b = Entity::from_bits(2);
+
+        let wa = runtime.ensure_window(a, true);
+        assert_eq!(wa.window_entity(), a);
+
+        let wb = runtime.ensure_window(b, false);
+        assert_eq!(wb.window_entity(), b);
+
+        assert_eq!(runtime.primary_window(), Some(a));
+        assert!(runtime.has_window(a));
+        assert!(runtime.has_window(b));
+
+        assert_eq!(runtime.windows.len(), 2);
+
+        runtime.remove_window(a);
+        assert!(!runtime.has_window(a));
+        // `primary_window` field is cleared, but `primary_window()` falls back
+        // to the first remaining window when no explicit primary is set.
+        assert_eq!(runtime.primary_window(), Some(b));
     }
 }

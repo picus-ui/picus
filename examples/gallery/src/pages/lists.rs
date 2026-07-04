@@ -1,8 +1,8 @@
 use crate::helpers::{card, class, grid};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 use picus_core::{
-    scene::{CommandsSceneExt, bsn, template_value},
     UiButton, UiListView, UiTable, UiTreeNode,
+    scene::{CommandsSceneExt, bsn, template_value},
 };
 
 /// ListView, TreeView, and Table component examples.

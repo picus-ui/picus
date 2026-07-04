@@ -1,8 +1,8 @@
 use crate::helpers::{card, grid, note, placeholder};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 use picus_core::{
-    scene::{CommandsSceneExt, bsn, template_value},
     UiButton,
+    scene::{CommandsSceneExt, bsn, template_value},
 };
 
 /// Dialog and message box component examples.
