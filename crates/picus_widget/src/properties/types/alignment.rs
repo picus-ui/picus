@@ -1,6 +1,3 @@
-// Copyright 2025 the Xilem Authors
-// SPDX-License-Identifier: Apache-2.0
-
 /// Arrangement of widgets on a container's main axis.
 ///
 /// If there is surplus space on the main axis after laying out children, this

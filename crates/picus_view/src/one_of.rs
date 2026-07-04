@@ -1,6 +1,3 @@
-// Copyright 2024 the Xilem Authors
-// SPDX-License-Identifier: Apache-2.0
-
 //! Statically typed alternatives to the type-erased [`AnyWidgetView`](`crate::any_view::AnyWidgetView`).
 
 use picus_widget::accesskit::{Node, Role};

@@ -1,6 +1,3 @@
-// Copyright 2025 the Xilem Authors
-// SPDX-License-Identifier: Apache-2.0
-
 use crate::core::Property;
 use crate::kurbo::{Affine, Axis, Rect, Size};
 use crate::layout::{LenReq, Length};

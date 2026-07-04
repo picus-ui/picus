@@ -1,6 +1,3 @@
-// Copyright 2019 the Xilem Authors and the Druid Authors
-// SPDX-License-Identifier: Apache-2.0
-
 use std::cmp::Ordering;
 
 /// An `f32` value which can move towards a target value at a linear rate over time.

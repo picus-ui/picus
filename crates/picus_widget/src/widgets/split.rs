@@ -1,6 +1,3 @@
-// Copyright 2019 the Xilem Authors and the Druid Authors
-// SPDX-License-Identifier: Apache-2.0
-
 use accesskit::{ActionData, Node, Role};
 use tracing::{Span, trace_span};
 

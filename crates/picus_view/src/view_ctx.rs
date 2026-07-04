@@ -1,6 +1,3 @@
-// Copyright 2025 the Xilem Authors
-// SPDX-License-Identifier: Apache-2.0
-
 use std::any::TypeId;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;

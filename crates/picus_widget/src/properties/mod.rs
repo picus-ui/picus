@@ -1,6 +1,3 @@
-// Copyright 2025 the Xilem Authors
-// SPDX-License-Identifier: Apache-2.0
-
 //! Types and logic commonly used across widgets.
 //!
 //! See [properties documentation](crate::doc::widget_properties) for details.

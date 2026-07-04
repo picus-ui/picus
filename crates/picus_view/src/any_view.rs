@@ -1,6 +1,3 @@
-// Copyright 2024 the Xilem Authors
-// SPDX-License-Identifier: Apache-2.0
-
 use picus_widget::core::{FromDynWidget, Widget};
 use picus_widget::properties::Dimensions;
 use picus_widget::widgets::Passthrough;

@@ -1,6 +1,3 @@
-// Copyright 2025 the Xilem Authors
-// SPDX-License-Identifier: Apache-2.0
-
 use picus_widget::core::{FromDynWidget, NewWidget, PropertySet, Widget, WidgetMut};
 
 use crate::ViewCtx;

@@ -1,6 +1,3 @@
-// Copyright 2025 the Xilem Authors
-// SPDX-License-Identifier: Apache-2.0
-
 //! Value types used in properties.
 //!
 //! The types in this modules aren't properties themselves: they're types that the fields

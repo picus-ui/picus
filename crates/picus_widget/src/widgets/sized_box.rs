@@ -1,6 +1,3 @@
-// Copyright 2019 the Xilem Authors and the Druid Authors
-// SPDX-License-Identifier: Apache-2.0
-
 use std::any::TypeId;
 
 use accesskit::{Node, Role};

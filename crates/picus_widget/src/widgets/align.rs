@@ -1,6 +1,3 @@
-// Copyright 2018 the Xilem Authors and the Druid Authors
-// SPDX-License-Identifier: Apache-2.0
-
 // TODO - Improve the ergonomics of widget layout. The Align widget is a bandaid
 // that has several problem; in particular, the fact that Align will pass "loosened"
 // size constraints to its child means that "aligning" a widget may actually change

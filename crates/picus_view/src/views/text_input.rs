@@ -1,6 +1,3 @@
-// Copyright 2024 the Xilem Authors
-// SPDX-License-Identifier: Apache-2.0
-
 use picus_widget::core::{ArcStr, NewWidget, PropertySet};
 use picus_widget::parley::style::FontWeight;
 use picus_widget::parley::{FontFamily, StyleProperty};

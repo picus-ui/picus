@@ -1,6 +1,3 @@
-// Copyright 2025 the Xilem Authors
-// SPDX-License-Identifier: Apache-2.0
-
 //! Traits used to set custom styles on views.
 
 use picus_widget::core::UsesProperty;

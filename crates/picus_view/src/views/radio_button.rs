@@ -1,6 +1,3 @@
-// Copyright 2026 the Xilem Authors
-// SPDX-License-Identifier: Apache-2.0
-
 use crate::core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 use crate::{Pod, ViewCtx};
 
