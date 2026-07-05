@@ -8,10 +8,11 @@ use picus::{
         hierarchy::{ChildOf, Children},
         prelude::*,
     },
-    button, checkbox, emit_ui_action, text_input,
+    button, checkbox, emit_ui_action,
     masonry_core::layout::Length,
     resolve_style, resolve_style_for_classes, resolve_style_for_entity_classes, run_app,
     scene::{Scene, WorldSceneExt, bsn, template_value},
+    text_input,
     xilem::{
         InsertNewline,
         view::{
@@ -117,11 +118,11 @@ fn project_todo_input_area(_: &TodoInputArea, ctx: ProjectionCtx<'_>) -> UiView 
         flex_row((
             apply_text_input_style(
                 text_input(input_entity, draft, TodoEvent::SetDraft)
-                .placeholder("What needs to be done?")
-                .insert_newline(InsertNewline::OnShiftEnter)
-                .on_enter(move |_| {
-                    emit_ui_action(entity_for_enter, TodoEvent::SubmitDraft);
-                }),
+                    .placeholder("What needs to be done?")
+                    .insert_newline(InsertNewline::OnShiftEnter)
+                    .on_enter(move |_| {
+                        emit_ui_action(entity_for_enter, TodoEvent::SubmitDraft);
+                    }),
                 &input_style,
             )
             .flex(1.0),

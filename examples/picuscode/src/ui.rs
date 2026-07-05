@@ -6,15 +6,16 @@ use chrono::{DateTime, Utc};
 use picus::{
     ProjectionCtx, UiView, apply_label_style, apply_widget_style,
     bevy_ecs::hierarchy::Children,
-    button_with_child, emit_ui_action, icon::icon, icons::PicusIcon, text_input,
+    button_with_child, emit_ui_action,
+    icon::icon,
+    icons::PicusIcon,
     masonry_core::{
         layout::{Dim, Length},
         properties::Dimensions,
     },
-    resolve_style, resolve_style_for_classes,
+    resolve_style, resolve_style_for_classes, text_input,
     xilem::{
-        Color,
-        InsertNewline,
+        Color, InsertNewline,
         style::Style as _,
         view::{
             CrossAxisAlignment, FlexExt as _, MainAxisAlignment, flex_col, flex_item, flex_row,
@@ -61,8 +62,8 @@ pub fn project_title_bar(_: &ChatTitleBarView, ctx: ProjectionCtx<'_>) -> UiView
     let snapshot = HeaderSnapshot::from_state(&ctx);
     let title = text_view(&ctx, ["picuscode.title"], "picuscode");
     let subtitle = text_view(&ctx, ["picuscode.subtitle"], snapshot.subtitle);
-    let brand = flex_col(vec![title.into_any_flex(), subtitle.into_any_flex()])
-        .gap(Length::px(1.0));
+    let brand =
+        flex_col(vec![title.into_any_flex(), subtitle.into_any_flex()]).gap(Length::px(1.0));
 
     let chips = flex_row(vec![
         chip_view(&ctx, snapshot.provider_chip, ChipTone::Neutral).into_any_flex(),
@@ -141,8 +142,12 @@ pub fn project_sidebar_column(_: &SidebarColumnView, ctx: ProjectionCtx<'_>) -> 
     items.push(header.into_any_flex());
 
     items.push(
-        text_view(&ctx, ["picuscode.sidebar.caption"], "Recent CodeWhale state")
-            .into_any_flex(),
+        text_view(
+            &ctx,
+            ["picuscode.sidebar.caption"],
+            "Recent CodeWhale state",
+        )
+        .into_any_flex(),
     );
 
     if threads.is_empty() {
@@ -209,8 +214,7 @@ pub fn project_sidebar_column(_: &SidebarColumnView, ctx: ProjectionCtx<'_>) -> 
     }
 
     Arc::new(apply_widget_style(
-        sized_box(flex_col(items).gap(Length::px(4.0)))
-            .width(Length::px(220.0)),
+        sized_box(flex_col(items).gap(Length::px(4.0))).width(Length::px(220.0)),
         &style,
     ))
 }
@@ -226,10 +230,7 @@ pub fn project_transcript_column(_: &TranscriptColumnView, ctx: ProjectionCtx<'_
         rows.push(transcript_empty_state(&ctx, &summary).into_any_flex());
     }
 
-    rows.extend(ctx
-        .children
-        .into_iter()
-        .map(|child| child.into_any_flex()));
+    rows.extend(ctx.children.into_iter().map(|child| child.into_any_flex()));
 
     Arc::new(apply_widget_style(
         flex_col(rows)
@@ -253,16 +254,12 @@ pub fn project_composer(_: &ComposerView, ctx: ProjectionCtx<'_>) -> UiView {
     let draft_count = draft_len(&draft);
     let input_entity = ctx.entity;
     let enter_entity = ctx.entity;
-    let input = text_input(
-        input_entity,
-        draft,
-        PicusCodeAction::ComposerChanged,
-    )
+    let input = text_input(input_entity, draft, PicusCodeAction::ComposerChanged)
         .placeholder("Message CodeWhale...")
-    .insert_newline(InsertNewline::OnShiftEnter)
-    .on_enter(move |_| {
-        emit_ui_action(enter_entity, PicusCodeAction::Send);
-    });
+        .insert_newline(InsertNewline::OnShiftEnter)
+        .on_enter(move |_| {
+            emit_ui_action(enter_entity, PicusCodeAction::Send);
+        });
     let action_btn = if streaming {
         toolbar_button(
             &ctx,
@@ -296,7 +293,9 @@ pub fn project_composer(_: &ComposerView, ctx: ProjectionCtx<'_>) -> UiView {
             .into_any_flex(),
             flex_row(vec![
                 text_view(&ctx, ["picuscode.composer.helper"], helper).into_any_flex(),
-                sized_box(draft_meter(&ctx, draft_count)).flex(1.0).into_any_flex(),
+                sized_box(draft_meter(&ctx, draft_count))
+                    .flex(1.0)
+                    .into_any_flex(),
             ])
             .cross_axis_alignment(CrossAxisAlignment::Center)
             .gap(Length::px(8.0))
@@ -443,10 +442,7 @@ pub fn project_settings_form(_: &SettingsFormView, ctx: ProjectionCtx<'_>) -> Ui
     if let Some(s) = state
         && let Some(status) = &s.config_status
     {
-        rows.push(
-            text_view(&ctx, ["picuscode.settings.status"], status.as_str())
-                .into_any_flex(),
-        );
+        rows.push(text_view(&ctx, ["picuscode.settings.status"], status.as_str()).into_any_flex());
     }
 
     Arc::new(apply_widget_style(
@@ -524,12 +520,21 @@ fn chip_view(ctx: &ProjectionCtx<'_>, text: impl Into<String>, tone: ChipTone) -
 
 fn empty_sidebar_state(ctx: &ProjectionCtx<'_>) -> UiView {
     let style = resolve_style_for_classes(ctx.world, ["picuscode.empty.panel"]);
-    let action = toolbar_button(ctx, PicusCodeAction::NewThread, "New thread", PicusIcon::Plus);
+    let action = toolbar_button(
+        ctx,
+        PicusCodeAction::NewThread,
+        "New thread",
+        PicusIcon::Plus,
+    );
     Arc::new(apply_widget_style(
         flex_col(vec![
             text_view(ctx, ["picuscode.empty.title"], "No threads").into_any_flex(),
-            text_view(ctx, ["picuscode.empty.body"], "Create a thread to start chatting.")
-                .into_any_flex(),
+            text_view(
+                ctx,
+                ["picuscode.empty.body"],
+                "Create a thread to start chatting.",
+            )
+            .into_any_flex(),
             action.into_any_flex(),
         ])
         .cross_axis_alignment(CrossAxisAlignment::Stretch)
@@ -561,7 +566,12 @@ impl HeaderSnapshot {
             .as_deref()
             .and_then(|id| state.threads.iter().find(|thread| thread.id == id));
         let subtitle = active
-            .map(|thread| fallback_thread_title(thread.name.as_deref().unwrap_or(&thread.preview), &thread.id))
+            .map(|thread| {
+                fallback_thread_title(
+                    thread.name.as_deref().unwrap_or(&thread.preview),
+                    &thread.id,
+                )
+            })
             .unwrap_or_else(|| "No active thread".to_string());
         let provider_chip = config_summary_value(state, "provider", "provider unset");
         let model_chip = config_summary_value(state, "model", "model unset");
@@ -645,21 +655,33 @@ fn transcript_header(ctx: &ProjectionCtx<'_>, summary: &TranscriptSummary) -> Ui
     let state_chip = if summary.streaming {
         chip_view(ctx, "streaming", ChipTone::Success)
     } else {
-        chip_view(ctx, format!("{} messages", summary.message_count), ChipTone::Neutral)
+        chip_view(
+            ctx,
+            format!("{} messages", summary.message_count),
+            ChipTone::Neutral,
+        )
     };
     Arc::new(apply_widget_style(
         flex_row(vec![
             flex_col(vec![
                 text_view(ctx, ["picuscode.transcript.title"], summary.title.clone())
                     .into_any_flex(),
-                text_view(ctx, ["picuscode.transcript.subtitle"], summary.subtitle.clone())
-                    .into_any_flex(),
+                text_view(
+                    ctx,
+                    ["picuscode.transcript.subtitle"],
+                    summary.subtitle.clone(),
+                )
+                .into_any_flex(),
             ])
             .gap(Length::px(2.0))
             .into_any_flex(),
             sized_box(flex_row(vec![
-                chip_view(ctx, format!("{} user", summary.user_count), ChipTone::Accent)
-                    .into_any_flex(),
+                chip_view(
+                    ctx,
+                    format!("{} user", summary.user_count),
+                    ChipTone::Accent,
+                )
+                .into_any_flex(),
                 chip_view(
                     ctx,
                     format!("{} assistant", summary.assistant_count),
@@ -680,11 +702,19 @@ fn transcript_header(ctx: &ProjectionCtx<'_>, summary: &TranscriptSummary) -> Ui
 fn transcript_empty_state(ctx: &ProjectionCtx<'_>, summary: &TranscriptSummary) -> UiView {
     let style = resolve_style_for_classes(ctx.world, ["picuscode.empty.panel"]);
     let (title, body) = if summary.active_thread.is_none() {
-        ("Ready when you are", "Select an existing thread or create a fresh one.")
+        (
+            "Ready when you are",
+            "Select an existing thread or create a fresh one.",
+        )
     } else {
         ("Fresh thread", "Send the first message from the composer.")
     };
-    let new_btn = toolbar_button(ctx, PicusCodeAction::NewThread, "New thread", PicusIcon::Plus);
+    let new_btn = toolbar_button(
+        ctx,
+        PicusCodeAction::NewThread,
+        "New thread",
+        PicusIcon::Plus,
+    );
     Arc::new(apply_widget_style(
         flex_col(vec![
             text_view(ctx, ["picuscode.empty.title"], title).into_any_flex(),
@@ -851,7 +881,10 @@ mod tests {
     #[test]
     fn preview_truncation_is_ascii_and_trimmed() {
         assert_eq!(truncate_preview("  hello world  ", 20), "hello world");
-        assert_eq!(truncate_preview("abcdefghijklmnopqrstuvwxyz", 5), "abcde...");
+        assert_eq!(
+            truncate_preview("abcdefghijklmnopqrstuvwxyz", 5),
+            "abcde..."
+        );
     }
 
     #[test]

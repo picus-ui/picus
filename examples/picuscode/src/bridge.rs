@@ -24,20 +24,20 @@
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use anyhow::{Result, anyhow};
 use codewhale_agent::ModelRegistry;
 use codewhale_config::{CliRuntimeOverrides, ConfigStore, provider::WireFormat};
 use codewhale_core::{InitialHistory, Runtime};
+use codewhale_execpolicy::ExecPolicyEngine;
 use codewhale_hooks::{HookDispatcher, JsonlHookSink, StdoutHookSink};
 use codewhale_mcp::McpManager;
 use codewhale_protocol::{Thread, ThreadStatus};
 use codewhale_state::{StateStore, ThreadListFilters};
 use codewhale_tools::ToolRegistry;
 use crossbeam_channel::{Receiver, Sender, unbounded};
-use codewhale_execpolicy::ExecPolicyEngine;
 use serde_json::{Value, json};
 use tokio::runtime::Runtime as TokioRuntime;
 use tracing::warn;
@@ -87,7 +87,10 @@ pub enum BridgeEvent {
     /// A new thread was created.
     ThreadCreated { thread: Thread },
     /// A streaming turn started.
-    TurnStarted { thread_id: String, response_id: String },
+    TurnStarted {
+        thread_id: String,
+        response_id: String,
+    },
     /// An incremental assistant delta.
     TurnDelta {
         thread_id: String,
@@ -457,9 +460,7 @@ async fn start_turn(
     // lock briefly, then release it for the streaming HTTP call.
     let (response_id, resolved, history) = {
         let mut s = state.lock().await;
-        s.runtime
-            .thread_manager
-            .touch_message(&thread_id, &input)?;
+        s.runtime.thread_manager.touch_message(&thread_id, &input)?;
         s.runtime
             .thread_manager
             .state_store()
@@ -479,7 +480,8 @@ async fn start_turn(
             .list_messages(&thread_id, Some(500))?;
 
         let response_id = format!("resp-{}", uuid::Uuid::new_v4());
-        s.active_turns.insert(thread_id.clone(), response_id.clone());
+        s.active_turns
+            .insert(thread_id.clone(), response_id.clone());
         (response_id, (resolved, resolved_model), history)
     };
 
@@ -545,12 +547,9 @@ async fn start_turn(
                 "model": resolved_model,
                 "response_id": response_id_stream,
             });
-            if let Err(e) = store.append_message(
-                &thread_id_stream,
-                "assistant",
-                text,
-                Some(payload),
-            ) {
+            if let Err(e) =
+                store.append_message(&thread_id_stream, "assistant", text, Some(payload))
+            {
                 warn!("failed to persist assistant message: {e:#}");
             }
             s.active_turns.remove(&thread_id_stream);
@@ -783,14 +782,20 @@ mod tests {
         });
         let set_result = wait_event(&handle, |e| matches!(e, BridgeEvent::ConfigResult { .. }));
         assert!(
-            matches!(&set_result, Some(BridgeEvent::ConfigResult { ok: true, .. })),
+            matches!(
+                &set_result,
+                Some(BridgeEvent::ConfigResult { ok: true, .. })
+            ),
             "config set should succeed: {set_result:?}"
         );
 
         let _ = handle.tx.send(BridgeRequest::ConfigList);
         let listed = wait_event(&handle, |e| matches!(e, BridgeEvent::ConfigListed(_)));
         if let Some(BridgeEvent::ConfigListed(values)) = listed {
-            assert_eq!(values.get("model").map(String::as_str), Some("deepseek-chat"));
+            assert_eq!(
+                values.get("model").map(String::as_str),
+                Some("deepseek-chat")
+            );
         } else {
             panic!("expected ConfigListed event");
         }

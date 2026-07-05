@@ -20,12 +20,10 @@
           padding: Var("space-md"),
           gap: Var("gap-md"),
           corner_radius: Var("radius-lg"),
-          border_width: Var("border-thin"),
           align_items: Center,
         ),
         colors: (
           bg: Var("surface-panel"),
-          border: Var("border-default"),
           text: Var("text-primary"),
         ),
       ),
@@ -60,17 +58,13 @@
           padding: Var("space-md"),
           gap: Var("gap-sm"),
           corner_radius: Var("radius-md"),
-          border_width: Var("border-thin"),
           align_items: Center,
         ),
         colors: (
           bg: Var("surface-subtle"),
-          border: Var("border-default"),
           text: Var("text-primary"),
           hover_bg: Var("surface-subtle-hover"),
-          hover_border: Var("border-default-hover"),
           pressed_bg: Var("surface-subtle-pressed"),
-          pressed_border: Var("border-default-pressed"),
         ),
       ),
     ),
@@ -92,7 +86,6 @@
         layout: (
           padding: Var("space-xs"),
           corner_radius: Var("radius-sm"),
-          border_width: Var("border-thin"),
         ),
         text: (
           size: Var("font-size-caption1"),
@@ -100,7 +93,6 @@
         ),
         colors: (
           bg: Var("surface-subtle"),
-          border: Var("border-default"),
           text: Var("text-secondary"),
         ),
       ),
@@ -110,7 +102,6 @@
       setter: (
         colors: (
           bg: Var("status-info-bg"),
-          border: Var("status-info-border"),
           text: Var("status-info-fg"),
         ),
       ),
@@ -120,7 +111,6 @@
       setter: (
         colors: (
           bg: Var("status-success-bg"),
-          border: Var("status-success-border"),
           text: Var("status-success-fg"),
         ),
       ),
@@ -130,7 +120,6 @@
       setter: (
         colors: (
           bg: Var("status-error-bg"),
-          border: Var("status-error-border"),
           text: Var("status-error-fg"),
         ),
       ),
@@ -157,11 +146,9 @@
           padding: Var("space-md"),
           gap: Var("gap-md"),
           corner_radius: Var("radius-lg"),
-          border_width: Var("border-thin"),
         ),
         colors: (
           bg: Var("surface-panel"),
-          border: Var("border-default"),
           text: Var("text-primary"),
         ),
       ),
@@ -174,11 +161,9 @@
           gap: Var("space-none"),
           flex_grow: 1.0,
           corner_radius: Var("radius-lg"),
-          border_width: Var("border-thin"),
         ),
         colors: (
           bg: Var("surface-panel"),
-          border: Var("border-default"),
         ),
       ),
     ),
@@ -212,16 +197,12 @@
           padding: Var("space-md"),
           gap: Var("gap-sm"),
           corner_radius: Var("radius-md"),
-          border_width: Var("border-thin"),
         ),
         colors: (
           bg: Var("surface-subtle"),
-          border: Var("border-default"),
           text: Var("text-primary"),
           hover_bg: Var("surface-subtle-hover"),
-          hover_border: Var("border-default-hover"),
           pressed_bg: Var("surface-subtle-pressed"),
-          pressed_border: Var("border-default-pressed"),
         ),
       ),
     ),
@@ -230,7 +211,6 @@
       setter: (
         colors: (
           bg: Var("status-info-bg"),
-          border: Var("status-info-border"),
         ),
       ),
     ),
@@ -285,11 +265,9 @@
           gap: Var("space-none"),
           flex_grow: 1.0,
           corner_radius: Var("radius-lg"),
-          border_width: Var("border-thin"),
         ),
         colors: (
           bg: Var("surface-bg"),
-          border: Var("border-default"),
         ),
       ),
     ),
@@ -313,11 +291,9 @@
           padding: Var("space-md"),
           gap: Var("gap-md"),
           corner_radius: Var("radius-lg"),
-          border_width: Var("border-thin"),
         ),
         colors: (
           bg: Var("surface-panel"),
-          border: Var("border-default"),
           text: Var("text-primary"),
         ),
       ),
@@ -352,11 +328,9 @@
           padding: Var("space-xl"),
           gap: Var("gap-md"),
           corner_radius: Var("radius-lg"),
-          border_width: Var("border-thin"),
         ),
         colors: (
           bg: Var("surface-panel"),
-          border: Var("border-default"),
           text: Var("text-primary"),
         ),
       ),
@@ -404,11 +378,9 @@
           padding: Var("space-md"),
           gap: Var("gap-sm"),
           corner_radius: Var("radius-lg"),
-          border_width: Var("border-thin"),
         ),
         colors: (
           bg: Var("surface-panel"),
-          border: Var("border-default"),
         ),
       ),
     ),
@@ -430,11 +402,9 @@
           padding: Var("space-sm"),
           gap: Var("gap-sm"),
           corner_radius: Var("radius-md"),
-          border_width: Var("border-thin"),
         ),
         colors: (
           bg: Var("surface-panel"),
-          border: Var("border-default"),
         ),
       ),
     ),
@@ -519,11 +489,9 @@
           padding: Var("space-md"),
           gap: Var("gap-sm"),
           corner_radius: Var("radius-lg"),
-          border_width: Var("border-thin"),
         ),
         colors: (
           bg: Var("surface-panel"),
-          border: Var("border-default"),
         ),
       ),
     ),
@@ -557,11 +525,9 @@
           padding: Var("space-md"),
           gap: Var("gap-md"),
           corner_radius: Var("radius-lg"),
-          border_width: Var("border-thin"),
         ),
         colors: (
           bg: Var("surface-panel"),
-          border: Var("border-default"),
           text: Var("text-primary"),
         ),
       ),
@@ -596,14 +562,12 @@
         layout: (
           padding: Var("space-md"),
           corner_radius: Var("radius-md"),
-          border_width: Var("border-thin"),
         ),
         text: (
           size: Var("font-size-caption1"),
         ),
         colors: (
           bg: Var("status-info-bg"),
-          border: Var("status-info-border"),
           text: Var("status-info-fg"),
         ),
       ),

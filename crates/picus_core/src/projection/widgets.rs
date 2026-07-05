@@ -33,13 +33,13 @@ use crate::{
     },
     icons::LUCIDE_FONT_FAMILY,
     overlay::OverlayUiAction,
+    retained_bridge::{
+        button_view, button_with_child_view, drag_thumb_view, opaque_hitbox_for_entity,
+        radio_button_view, scroll_portal,
+    },
     styling::{
         ResolvedStyle, apply_direct_widget_style, apply_flex_alignment, apply_label_style,
         apply_widget_style, font_stack_from_style, resolve_style, resolve_style_for_classes,
-    },
-    retained_bridge::{
-        button_view, button_with_child_view, drag_thumb_view, radio_button_view,
-        opaque_hitbox_for_entity, scroll_portal,
     },
     widget_actions::WidgetUiAction,
 };
@@ -1473,18 +1473,12 @@ pub(crate) fn project_color_picker_panel(
 // ---------------------------------------------------------------------------
 
 pub(crate) fn project_group_box(group_box: &UiGroupBox, ctx: ProjectionCtx<'_>) -> UiView {
-    let mut style = resolve_style(ctx.world, ctx.entity);
-    if style.layout.border_width <= 0.0 {
-        style.layout.border_width = 1.0;
-    }
-    if style.colors.border.is_none() {
-        style.colors.border = Some(Color::from_rgb8(0x3F, 0x3F, 0x3F));
-    }
-    if style.layout.padding <= 0.0 {
-        style.layout.padding = 10.0;
-    }
+    let style = resolve_style(ctx.world, ctx.entity);
 
-    let title_style = resolve_style_for_classes(ctx.world, ["widget.group_box.title"]);
+    let mut title_style = resolve_style_for_classes(ctx.world, ["widget.group_box.title"]);
+    if title_style.colors.text.is_none() {
+        title_style.colors.text = style.colors.text;
+    }
     let title_view = apply_label_style(label(group_box.title.clone()), &title_style);
 
     let mut content_items = vec![title_view.into_any_flex()];

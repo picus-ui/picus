@@ -7,9 +7,9 @@ use picus_view::view::{FlexExt as _, flex_col, label};
 use crate::{
     ecs::{UiOverlayRoot, UiRoot, UiWindow},
     projection::{UiProjectorRegistry, UiView},
+    retained_bridge::entity_scope,
     runtime::MasonryRuntime,
     styling::InteractionState,
-    retained_bridge::entity_scope,
 };
 
 /// Snapshot containing synthesized views for the current frame, grouped by

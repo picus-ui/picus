@@ -6,16 +6,18 @@ use picus::{
     scene::{CommandsSceneExt, bsn, template_value},
 };
 
-/// GroupBox, SplitPane, TabBar, and Popover component examples.
+/// Grouping, SplitPane, TabBar, and Popover component examples.
 ///
-/// Corresponds to Fluent UI's GroupBox, SplitPane, Pivot/Tabs, and Popover components.
+/// SplitPane, Pivot/Tabs, and Popover mirror Fluent patterns; GroupBox is a
+/// Picus-owned grouping helper styled locally by the gallery.
 pub fn spawn_panels_page(commands: &mut Commands, parent: Entity) -> Entity {
     let g = grid(commands, parent, 2);
 
-    let group_box = card(commands, g, "GroupBox / Cards");
+    let group_box = card(commands, g, "Grouping / Cards");
     let inner = commands
         .spawn_scene(bsn! {
             template_value(UiGroupBox::new("Nested group"))
+            template_value(class("gallery.group_box"))
             ChildOf(group_box)
         })
         .id();

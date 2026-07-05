@@ -19,8 +19,8 @@ use bevy_input::{
 use bevy_math::Vec2;
 use bevy_time::Time;
 use bevy_window::{
-    ClosingWindow, CursorLeft, CursorMoved, Ime as BevyIme, PrimaryWindow, RawHandleWrapper, Window,
-    WindowFocused, WindowResized, WindowScaleFactorChanged, WindowWrapper,
+    ClosingWindow, CursorLeft, CursorMoved, Ime as BevyIme, PrimaryWindow, RawHandleWrapper,
+    Window, WindowFocused, WindowResized, WindowScaleFactorChanged, WindowWrapper,
 };
 use masonry_core::{
     app::{RenderRoot, RenderRootOptions, RenderRootSignal, VisualLayerKind, WindowSizePolicy},
@@ -438,7 +438,8 @@ impl WindowRuntime {
     /// systems run, so that callback-emitted UI actions are visible in the same
     /// frame.
     pub fn route_pending_view_messages(&mut self) {
-        let actions: Vec<(ErasedAction, WidgetId)> = self.action_signal_receiver.try_iter().collect();
+        let actions: Vec<(ErasedAction, WidgetId)> =
+            self.action_signal_receiver.try_iter().collect();
         if actions.is_empty() {
             return;
         }
@@ -1547,7 +1548,9 @@ mod tests {
 
         {
             let mut synthesized = app.world_mut().resource_mut::<SynthesizedUiViews>();
-            synthesized.windows.insert(active, Arc::new(label("active")));
+            synthesized
+                .windows
+                .insert(active, Arc::new(label("active")));
             synthesized
                 .windows
                 .insert(closing, Arc::new(label("closing")));

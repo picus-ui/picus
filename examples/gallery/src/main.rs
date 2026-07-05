@@ -427,15 +427,10 @@ mod tests {
             .expect("nav should have a body parent")
             .parent();
         assert_eq!(
-            picus::resolve_style(app.world(), body)
-                .layout
-                .flex_grow,
+            picus::resolve_style(app.world(), body).layout.flex_grow,
             1.0
         );
-        assert_eq!(
-            picus::resolve_style(app.world(), nav).layout.flex_grow,
-            1.0
-        );
+        assert_eq!(picus::resolve_style(app.world(), nav).layout.flex_grow, 1.0);
 
         resize_primary_window(&mut app, window_entity, 900.0, 320.0);
         assert_eq!(

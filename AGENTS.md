@@ -321,6 +321,10 @@ Built-in Fluent theming is a multi-variant bundle at
 `crates/picus_core/src/theme/fluent_theme.ron` with `dark`, `light`, and
 `high-contrast` variants. Runtime selection uses `ActiveStyleVariant` and
 `set_active_style_variant_by_name(...)`.
+Picus-only helpers that do not correspond to Fluent UI components, such as
+`UiGroupBox`, must not receive default box styling from this built-in Fluent
+bundle; examples or applications that want a visible group box provide their own
+class or inline style.
 
 Projectors should resolve style through the styling helpers, then apply it with the
 widget, label, or text-input style helpers. Use

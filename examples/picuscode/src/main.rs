@@ -296,12 +296,10 @@ fn poll_bridge_events(world: &mut World) {
                 response_id,
                 delta,
             } => {
-                let active_ok = world
-                    .get_resource::<PicusState>()
-                    .is_some_and(|s| {
-                        s.active_thread.as_deref() == Some(thread_id.as_str())
-                            && s.active_response_id.as_deref() == Some(response_id.as_str())
-                    });
+                let active_ok = world.get_resource::<PicusState>().is_some_and(|s| {
+                    s.active_thread.as_deref() == Some(thread_id.as_str())
+                        && s.active_response_id.as_deref() == Some(response_id.as_str())
+                });
                 if active_ok {
                     let entity = world.resource::<PicusState>().streaming_entity;
                     if let Some(mut streaming) = world.get_mut::<UiStreamingMarkdown>(entity) {
@@ -317,12 +315,10 @@ fn poll_bridge_events(world: &mut World) {
                 response_id,
                 ok,
             } => {
-                let is_active = world
-                    .get_resource::<PicusState>()
-                    .is_some_and(|s| {
-                        s.active_thread.as_deref() == Some(thread_id.as_str())
-                            && s.active_response_id.as_deref() == Some(response_id.as_str())
-                    });
+                let is_active = world.get_resource::<PicusState>().is_some_and(|s| {
+                    s.active_thread.as_deref() == Some(thread_id.as_str())
+                        && s.active_response_id.as_deref() == Some(response_id.as_str())
+                });
                 if is_active {
                     let entity = world.resource::<PicusState>().streaming_entity;
                     if let Some(mut streaming) = world.get_mut::<UiStreamingMarkdown>(entity) {
@@ -342,9 +338,10 @@ fn poll_bridge_events(world: &mut World) {
                     // error before first delta).
                     if let Some(s) = world.get_resource::<PicusState>() {
                         if let Some(tid) = s.active_thread.clone() {
-                            let _ = s.bridge.tx.send(BridgeRequest::ReadThread {
-                                thread_id: tid,
-                            });
+                            let _ = s
+                                .bridge
+                                .tx
+                                .send(BridgeRequest::ReadThread { thread_id: tid });
                         }
                     }
                 }
@@ -562,7 +559,10 @@ fn handle_picuscode_actions(world: &mut World) {
     if to_cancel {
         if let Some(s) = world.get_resource::<PicusState>() {
             if let Some(tid) = s.active_thread.clone() {
-                let _ = s.bridge.tx.send(BridgeRequest::CancelTurn { thread_id: tid });
+                let _ = s
+                    .bridge
+                    .tx
+                    .send(BridgeRequest::CancelTurn { thread_id: tid });
             }
         }
     }
@@ -602,7 +602,10 @@ fn start_send_turn(world: &mut World) {
         bevy_ecs::hierarchy::ChildOf(transcript),
     ));
     let streaming_entity = world
-        .spawn((UiStreamingMarkdown::new(), bevy_ecs::hierarchy::ChildOf(transcript)))
+        .spawn((
+            UiStreamingMarkdown::new(),
+            bevy_ecs::hierarchy::ChildOf(transcript),
+        ))
         .id();
 
     {
@@ -615,10 +618,10 @@ fn start_send_turn(world: &mut World) {
     }
 
     if let Some(s) = world.get_resource::<PicusState>() {
-        let _ = s
-            .bridge
-            .tx
-            .send(BridgeRequest::SendMessage { thread_id, input: draft });
+        let _ = s.bridge.tx.send(BridgeRequest::SendMessage {
+            thread_id,
+            input: draft,
+        });
     }
 }
 
@@ -759,22 +762,18 @@ fn build_picuscode_app() -> App {
                 .chain()
                 .after(picus::core::route_masonry_view_messages),
         )
-        .add_systems(PreUpdate, refresh_thread_list(std::time::Duration::from_secs(3)));
+        .add_systems(
+            PreUpdate,
+            refresh_thread_list(std::time::Duration::from_secs(3)),
+        );
 
     app
 }
 
 fn main() -> Result<(), EventLoopError> {
-    picus::run_app_with_window_options(
-        build_picuscode_app(),
-        "picuscode",
-        |options| {
-            options.with_initial_inner_size(picus::xilem::winit::dpi::LogicalSize::new(
-                960.0,
-                720.0,
-            ))
-        },
-    )
+    picus::run_app_with_window_options(build_picuscode_app(), "picuscode", |options| {
+        options.with_initial_inner_size(picus::xilem::winit::dpi::LogicalSize::new(960.0, 720.0))
+    })
 }
 
 #[cfg(test)]

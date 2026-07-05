@@ -17,7 +17,10 @@ use masonry_core::{
 };
 use picus_view::picus_widget::{properties::ContentColor, widgets::Label};
 
-use crate::{events::{push_global_ui_event, UiEvent}, styling::UiInteractionEvent};
+use crate::{
+    events::{UiEvent, push_global_ui_event},
+    styling::UiInteractionEvent,
+};
 
 use super::HitTransparentWidget;
 

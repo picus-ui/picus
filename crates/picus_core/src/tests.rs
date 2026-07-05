@@ -378,6 +378,27 @@ fn embedded_fluent_theme_defines_priority_control_visual_styles() {
 }
 
 #[test]
+fn embedded_fluent_theme_does_not_style_picus_only_group_box() {
+    let mut app = App::new();
+    app.add_plugins(PicusPlugin);
+    app.update();
+
+    let group_box = app
+        .world_mut()
+        .spawn((crate::UiGroupBox::new("Nested group"),))
+        .id();
+
+    let group_style = resolve_style(app.world(), group_box);
+    assert_eq!(group_style.layout.padding, 0.0);
+    assert_eq!(group_style.layout.border_width, 0.0);
+    assert!(group_style.colors.bg.is_none());
+    assert!(group_style.colors.border.is_none());
+
+    let title_style = crate::resolve_style_for_classes(app.world(), ["widget.group_box.title"]);
+    assert!(title_style.colors.text.is_none());
+}
+
+#[test]
 fn active_style_variant_switches_automatically_without_install_calls() {
     let mut app = App::new();
     app.add_plugins(PicusPlugin);
@@ -4816,17 +4837,18 @@ enum CallbackTextInputAction {
     Changed(String),
 }
 
-fn project_callback_text_input_probe(
-    _: &CallbackTextInputProbe,
-    ctx: ProjectionCtx<'_>,
-) -> UiView {
-    Arc::new(crate::retained_bridge::text_input(
-        ctx.entity,
-        String::new(),
-        CallbackTextInputAction::Changed,
+fn project_callback_text_input_probe(_: &CallbackTextInputProbe, ctx: ProjectionCtx<'_>) -> UiView {
+    Arc::new(
+        crate::retained_bridge::text_input(
+            ctx.entity,
+            String::new(),
+            CallbackTextInputAction::Changed,
+        )
+        .placeholder("Type here"),
     )
-    .placeholder("Type here"))
 }
+
+crate::impl_ui_component_template!(CallbackTextInputProbe, project_callback_text_input_probe);
 
 /// Verifies that widget actions emitted by callback-based views (such as the
 /// `text_input` helper) are routed back to the view's `message` handler by
@@ -4837,15 +4859,9 @@ fn project_callback_text_input_probe(
 /// never fired and the composer draft stayed empty (see picuscode issue 4).
 #[test]
 fn route_masonry_view_messages_dispatches_text_input_on_changed() {
-
     let mut app = App::new();
     app.add_plugins(PicusPlugin)
         .register_ui_component::<CallbackTextInputProbe>();
-
-    crate::impl_ui_component_template!(
-        CallbackTextInputProbe,
-        project_callback_text_input_probe
-    );
 
     let mut window = Window::default();
     window.resolution.set(480.0, 320.0);
@@ -4887,14 +4903,15 @@ fn route_masonry_view_messages_dispatches_text_input_on_changed() {
     // Type a character via a keyboard input event. The runtime forwards
     // Character keys as TextEvent::Keyboard, which the TextArea turns into an
     // inserted glyph and a TextAction::Changed.
-    app.world_mut().write_message(bevy_input::keyboard::KeyboardInput {
-        key_code: bevy_input::keyboard::KeyCode::KeyH,
-        logical_key: bevy_input::keyboard::Key::Character("h".into()),
-        state: bevy_input::ButtonState::Pressed,
-        text: None,
-        repeat: false,
-        window: window_entity,
-    });
+    app.world_mut()
+        .write_message(bevy_input::keyboard::KeyboardInput {
+            key_code: bevy_input::keyboard::KeyCode::KeyH,
+            logical_key: bevy_input::keyboard::Key::Character("h".into()),
+            state: bevy_input::ButtonState::Pressed,
+            text: None,
+            repeat: false,
+            window: window_entity,
+        });
     app.update();
     app.update();
 

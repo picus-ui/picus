@@ -273,6 +273,22 @@
       ),
     ),
     (
+      selector: Class("gallery.group_box"),
+      setter: (
+        layout: (
+          padding: Var("space-lg"),
+          gap: Var("gap-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
       selector: Class("gallery.note"),
       setter: (
         colors: (

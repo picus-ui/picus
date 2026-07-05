@@ -111,6 +111,10 @@ pub use overlay::*;
 pub use plugin::*;
 pub use projection::*;
 pub use resize::*;
+pub use retained_bridge::{
+    ButtonView, ButtonWithChildView, CheckboxView, SliderView, SwitchView, button,
+    button_with_child, checkbox, slider, switch, text_input,
+};
 pub use runner::*;
 pub use runtime::*;
 pub use scene::*;
@@ -120,10 +124,6 @@ pub use templates::*;
 pub use titlebar_system::*;
 pub use validation::*;
 pub use widget_actions::*;
-pub use retained_bridge::{
-    ButtonView, ButtonWithChildView, CheckboxView, SliderView, SwitchView, button,
-    button_with_child, checkbox, slider, switch, text_input,
-};
 
 pub mod prelude {
     //! Convenience exports for Picus internals and legacy `picus_core` users.
@@ -133,16 +133,15 @@ pub mod prelude {
 
     pub use crate::{
         AppBreakpoints, AppI18n, AppPicusExt, AutoDismiss, AvatarShape, BevyWindowOptions,
-        BuiltinUiAction, ButtonAppearance, ButtonIconPosition, ButtonShape, ButtonSize,
-        ButtonView, CheckboxView, ColorStyle, ComputedStyle, CurrentColorStyle, SliderView,
-        SwitchView, HasTooltip,
-        InlineStyle, InteractionState, LayoutStyle, LocalizeText, MasonryRuntime, MessageBarKind,
+        BuiltinUiAction, ButtonAppearance, ButtonIconPosition, ButtonShape, ButtonSize, ButtonView,
+        CheckboxView, ColorStyle, ComputedStyle, CurrentColorStyle, HasTooltip, InlineStyle,
+        InteractionState, LayoutStyle, LocalizeText, MasonryRuntime, MessageBarKind,
         NavigationViewItem, ObjectFit, OverlayComputedPosition, OverlayConfig,
         OverlayMouseButtonCursor, OverlayPlacement, OverlayPointerRoutingState, OverlayStack,
         OverlayState, OverlayUiAction, PicusBuiltinsPlugin, PicusPlugin, ProjectionCtx,
-        PseudoClass, RatingColor, RatingSize, ScrollAxis, Selector, SplitDirection,
+        PseudoClass, RatingColor, RatingSize, ScrollAxis, Selector, SliderView, SplitDirection,
         StopUiPointerPropagation, StreamingMarkdownParseCache, StyleClass, StyleDirty, StyleRule,
-        StyleSetter, StyleSheet, StyleTransition, SyncAssetSource, SyncTextSource,
+        StyleSetter, StyleSheet, StyleTransition, SwitchView, SyncAssetSource, SyncTextSource,
         SynthesizedUiViews, TargetColorStyle, TextStyle, TitleBarAction, TitleBarIcon,
         TitleBarState, ToastKind, TypedUiEvent, UiAnyView, UiAvatar, UiBadge, UiBreadcrumb,
         UiBreadcrumbItem, UiButton, UiCanvas, UiCanvasCommand, UiCanvasPathCommand,
@@ -169,15 +168,14 @@ pub mod prelude {
         UiThemePickerOption, UiTitleBar, UiToast, UiToolbar, UiTooltip, UiTreeNode,
         UiTreeNodeToggled, UiView, UiVisibleResponsive, UiWindow, WidgetUiAction, WindowRuntime,
         WindowSize, XilemFontBridge, bubble_ui_pointer_events, button, button_with_child, checkbox,
-        collect_bevy_font_assets, dismiss_overlays_on_click, emit_ui_action,
-        ensure_overlay_root, ensure_overlay_root_entity, ensure_template_part,
-        expand_builtin_ui_component_templates, find_template_part, gather_ui_roots,
-        handle_global_overlay_clicks, handle_overlay_actions, handle_tooltip_hovers,
-        handle_widget_actions, inject_bevy_input_into_masonry, mark_style_dirty,
-        rebuild_masonry_runtime, register_builtin_projectors, register_builtin_style_type_aliases,
-        register_builtin_ui_components, resolve_localized_text, resolve_style,
-        resolve_style_for_classes, resolve_style_for_entity_classes, route_masonry_view_messages,
-        run_app,
+        collect_bevy_font_assets, dismiss_overlays_on_click, emit_ui_action, ensure_overlay_root,
+        ensure_overlay_root_entity, ensure_template_part, expand_builtin_ui_component_templates,
+        find_template_part, gather_ui_roots, handle_global_overlay_clicks, handle_overlay_actions,
+        handle_tooltip_hovers, handle_widget_actions, inject_bevy_input_into_masonry,
+        mark_style_dirty, rebuild_masonry_runtime, register_builtin_projectors,
+        register_builtin_style_type_aliases, register_builtin_ui_components,
+        resolve_localized_text, resolve_style, resolve_style_for_classes,
+        resolve_style_for_entity_classes, route_masonry_view_messages, run_app,
         run_app_with_window_options, slider, spawn_in_overlay_root, spawn_popover_in_overlay_root,
         sync_dropdown_positions, sync_fonts_to_xilem, sync_overlay_positions,
         sync_overlay_stack_lifecycle, synthesize_roots, synthesize_roots_with_stats, synthesize_ui,

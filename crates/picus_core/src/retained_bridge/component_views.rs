@@ -501,11 +501,7 @@ pub struct SwitchView<A> {
     disabled: bool,
 }
 
-pub fn switch_view<A, F>(
-    entity: Entity,
-    on: bool,
-    map_action: F,
-) -> SwitchView<A>
+pub fn switch_view<A, F>(entity: Entity, on: bool, map_action: F) -> SwitchView<A>
 where
     A: Send + Sync + 'static,
     F: Fn(bool) -> A + Send + Sync + 'static,

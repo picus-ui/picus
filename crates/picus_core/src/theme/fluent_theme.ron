@@ -850,23 +850,6 @@
     ),
 
     (
-      selector: Type("UiGroupBox"),
-      setter: (
-        layout: (
-          padding: Var("space-lg"),
-          corner_radius: Var("radius-md"),
-          border_width: Var("border-thin"),
-          gap: Var("gap-sm"),
-        ),
-        colors: (
-          bg: Var("surface-panel"),
-          border: Var("border-default"),
-          text: Var("text-primary"),
-        ),
-      ),
-    ),
-
-    (
       selector: Type("UiSplitPane"),
       setter: (
         layout: (
@@ -1511,18 +1494,6 @@
           bg: Var("surface-panel"),
           border: Var("border-muted"),
           text: Var("text-secondary"),
-        ),
-      ),
-    ),
-
-    (
-      selector: Class("widget.group_box.title"),
-      setter: (
-        text: (
-          size: Var("text-sm"),
-        ),
-        colors: (
-          text: Var("text-primary"),
         ),
       ),
     ),

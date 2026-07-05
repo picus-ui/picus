@@ -43,8 +43,7 @@ use crate::{
     runtime::{
         MasonryRuntime, initialize_masonry_runtime_from_windows, inject_bevy_input_into_masonry,
         paint_masonry_ui, rebuild_masonry_runtime, route_masonry_view_messages,
-        sync_masonry_ime_state_to_bevy_window,
-        sync_masonry_window_lifecycle,
+        sync_masonry_ime_state_to_bevy_window, sync_masonry_window_lifecycle,
     },
     styling::{
         ActiveStyleSheet, ActiveStyleSheetAsset, ActiveStyleSheetSelectors,

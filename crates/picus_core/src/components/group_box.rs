@@ -2,9 +2,10 @@ use bevy_ecs::prelude::*;
 
 use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 
-/// A titled group box that visually groups related content.
+/// A titled grouping container for related content.
 ///
-/// Place content entities as ECS children.
+/// Place content entities as ECS children. Visual treatment is supplied by
+/// theme rules or inline/app-specific styles.
 #[derive(Component, Debug, Clone, Default, PartialEq, Eq)]
 pub struct UiGroupBox {
     /// Title displayed at the top of the group box.

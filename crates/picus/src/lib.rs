@@ -37,16 +37,16 @@ pub mod components {
         UiInteractionEvent, UiLabel, UiLink, UiLinkAction, UiListSelectionMode, UiListView,
         UiListViewSelectionChanged, UiMarkdown, UiMenuBar, UiMenuBarItem, UiMenuItem,
         UiMenuItemPanel, UiMenuItemSelected, UiMessageBar, UiMultilineTextInput,
-        UiMultilineTextInputChanged, UiNavigationSelectionChanged, UiNavigationView,
-        UiOverlayRoot, UiPasswordInput, UiPasswordInputChanged, UiPointerEvent, UiPointerHitEvent,
-        UiPointerPhase, UiPopover, UiProgressBar, UiRadioGroup, UiRadioGroupChanged, UiRating,
-        UiRatingChanged, UiResponsiveGrid, UiResponsiveRow, UiRoot, UiScrollView,
-        UiScrollViewChanged, UiSearch, UiSlider, UiSliderChanged, UiSortDirection, UiSpinner,
-        UiSplitPane, UiStreamingMarkdown, UiSwitch, UiSwitchChanged, UiTabBar, UiTabChanged,
-        UiTable, UiText, UiTextInput, UiTextInputChanged, UiThemePicker, UiThemePickerChanged,
-        UiThemePickerMenu, UiThemePickerOption, UiTitleBar, UiToast, UiToolbar, UiTooltip,
-        UiTreeNode, UiTreeNodeToggled, UiView, UiVisibleResponsive, UiWindow, button,
-        button_with_child, checkbox, icon, slider, switch, text_input,
+        UiMultilineTextInputChanged, UiNavigationSelectionChanged, UiNavigationView, UiOverlayRoot,
+        UiPasswordInput, UiPasswordInputChanged, UiPointerEvent, UiPointerHitEvent, UiPointerPhase,
+        UiPopover, UiProgressBar, UiRadioGroup, UiRadioGroupChanged, UiRating, UiRatingChanged,
+        UiResponsiveGrid, UiResponsiveRow, UiRoot, UiScrollView, UiScrollViewChanged, UiSearch,
+        UiSlider, UiSliderChanged, UiSortDirection, UiSpinner, UiSplitPane, UiStreamingMarkdown,
+        UiSwitch, UiSwitchChanged, UiTabBar, UiTabChanged, UiTable, UiText, UiTextInput,
+        UiTextInputChanged, UiThemePicker, UiThemePickerChanged, UiThemePickerMenu,
+        UiThemePickerOption, UiTitleBar, UiToast, UiToolbar, UiTooltip, UiTreeNode,
+        UiTreeNodeToggled, UiView, UiVisibleResponsive, UiWindow, button, button_with_child,
+        checkbox, icon, slider, switch, text_input,
     };
 }
 
@@ -62,11 +62,11 @@ pub mod projection {
 pub mod styling {
     pub use picus_core::{
         ActiveStyleVariant, BaseStyleSheet, ColorStyle, ComputedStyle, CurrentColorStyle,
-        InlineStyle, InteractionState, LayoutStyle, PseudoClass, Selector, StyleClass,
-        StyleDirty, StyleRule, StyleSetter, StyleSheet, StyleTransition, SyncAssetSource,
-        SyncTextSource, TargetColorStyle, TextStyle, apply_active_stylesheet_ron,
-        mark_style_dirty, parse_stylesheet_ron, register_builtin_style_type_aliases,
-        resolve_style, resolve_style_for_classes, resolve_style_for_entity_classes,
+        InlineStyle, InteractionState, LayoutStyle, PseudoClass, Selector, StyleClass, StyleDirty,
+        StyleRule, StyleSetter, StyleSheet, StyleTransition, SyncAssetSource, SyncTextSource,
+        TargetColorStyle, TextStyle, apply_active_stylesheet_ron, mark_style_dirty,
+        parse_stylesheet_ron, register_builtin_style_type_aliases, resolve_style,
+        resolve_style_for_classes, resolve_style_for_entity_classes,
         set_active_style_variant_by_name,
     };
 }
@@ -98,11 +98,11 @@ pub mod overlay {
 pub mod runtime {
     pub use picus_core::{
         MasonryRuntime, ProjectionCtx, SynthesizedUiViews, UiProjector, UiProjectorRegistry,
-        WindowRuntime, XilemFontBridge, collect_bevy_font_assets, expand_builtin_ui_component_templates,
-        find_template_part, gather_ui_roots, inject_bevy_input_into_masonry,
-        rebuild_masonry_runtime, register_builtin_projectors, register_builtin_ui_components,
-        sync_fonts_to_xilem, synthesize_roots, synthesize_roots_with_stats, synthesize_ui,
-        synthesize_world, track_window_size,
+        WindowRuntime, XilemFontBridge, collect_bevy_font_assets,
+        expand_builtin_ui_component_templates, find_template_part, gather_ui_roots,
+        inject_bevy_input_into_masonry, rebuild_masonry_runtime, register_builtin_projectors,
+        register_builtin_ui_components, sync_fonts_to_xilem, synthesize_roots,
+        synthesize_roots_with_stats, synthesize_ui, synthesize_world, track_window_size,
     };
 }
 
@@ -129,8 +129,11 @@ pub mod scene {
 /// Common imports for Picus applications.
 pub mod prelude {
     pub use crate::{
-        app::*, components::*, events::*, i18n::*, overlay::*, projection::*, runtime::*,
-        scene::*, styling::*,
+        app::*, components::*, events::*, i18n::*, overlay::*, projection::*, runtime::*, scene::*,
+        styling::*,
     };
-    pub use picus_core::{bevy_ecs::hierarchy::{ChildOf, Children}, impl_ui_component_template};
+    pub use picus_core::{
+        bevy_ecs::hierarchy::{ChildOf, Children},
+        impl_ui_component_template,
+    };
 }

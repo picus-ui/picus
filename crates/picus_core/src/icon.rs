@@ -10,12 +10,12 @@
 //! family and a sized-box bounding constraint, so it tracks the same
 //! rendering path as every other label and needs no private widget APIs.
 
+use picus_view::WidgetView;
 use picus_view::masonry_core::layout::Length;
 use picus_view::picus_widget::parley::{FontFamily, FontFamilyName};
 use picus_view::picus_widget::peniko::Color;
-use picus_view::view::{label, sized_box};
 use picus_view::style::Style as _;
-use picus_view::WidgetView;
+use picus_view::view::{label, sized_box};
 
 use crate::icons::{LUCIDE_FONT_FAMILY, PicusIcon};
 
@@ -40,21 +40,13 @@ use crate::icons::{LUCIDE_FONT_FAMILY, PicusIcon};
 /// # }
 /// ```
 #[must_use = "View values do nothing unless provided to Xilem."]
-pub fn icon(
-    picus_icon: PicusIcon,
-    size_px: f64,
-    color: Color,
-) -> impl WidgetView<()> {
+pub fn icon(picus_icon: PicusIcon, size_px: f64, color: Color) -> impl WidgetView<()> {
     icon_glyph(picus_icon.glyph(), size_px, color)
 }
 
 /// Like [`icon`] but takes a raw Lucide `char` glyph, for icons not covered
 /// by [`PicusIcon`].
-pub fn icon_glyph(
-    glyph: char,
-    size_px: f64,
-    color: Color,
-) -> impl WidgetView<()> {
+pub fn icon_glyph(glyph: char, size_px: f64, color: Color) -> impl WidgetView<()> {
     let icon_label = label(glyph.to_string())
         .text_size((size_px * 0.90) as f32)
         .font(FontFamily::Single(FontFamilyName::Named(
