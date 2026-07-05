@@ -1,5 +1,45 @@
 (
   default_variant: "dark",
+  tokens: {
+    "surface-bg": Color(Hex("#090A0C")),
+    "surface-panel": Color(Hex("#101218")),
+    "surface-elevated": Color(Hex("#171A22")),
+    "surface-subtle": Color(Hex("#161922")),
+    "surface-subtle-hover": Color(Hex("#202431")),
+    "surface-subtle-pressed": Color(Hex("#0D0F14")),
+    "surface-overlay": Color(Hex("#171A22")),
+    "surface-accent": Color(Hex("#FF6A3D")),
+    "surface-accent-hover": Color(Hex("#FF7F56")),
+    "surface-accent-pressed": Color(Hex("#D95733")),
+    "brand-bg": Color(Hex("#FF6A3D")),
+    "brand-bg-hover": Color(Hex("#FF7F56")),
+    "brand-bg-pressed": Color(Hex("#D95733")),
+    "brand-foreground": Color(Hex("#FF8A5C")),
+    "accent-primary": Color(Hex("#FF6A3D")),
+    "border-default": Color(Hex("#343945")),
+    "border-muted": Color(Hex("#252A34")),
+    "border-subtle": Color(Hex("#1D222C")),
+    "border-default-hover": Color(Hex("#4A5262")),
+    "border-default-pressed": Color(Hex("#2A303B")),
+    "text-primary": Color(Hex("#F4F5F7")),
+    "text-heading": Color(Hex("#FFFFFF")),
+    "text-secondary": Color(Hex("#B9BEC8")),
+    "text-tertiary": Color(Hex("#858B96")),
+    "text-on-accent": Color(Hex("#160D09")),
+    "text-on-brand": Color(Hex("#160D09")),
+    "status-info-bg": Color(Hex("#2A1C17")),
+    "status-info-fg": Color(Hex("#FF9A6B")),
+    "status-success-bg": Color(Hex("#14261B")),
+    "status-success-fg": Color(Hex("#74C98A")),
+    "status-warning-bg": Color(Hex("#302515")),
+    "status-warning-fg": Color(Hex("#D9A441")),
+    "status-error-bg": Color(Hex("#331B1D")),
+    "status-error-fg": Color(Hex("#E57576")),
+    "scrollbar-track": Color(Hex("#FFFFFF08")),
+    "scrollbar-thumb": Color(Hex("#FFFFFF3A")),
+    "scrollbar-thumb-hover": Color(Hex("#FFFFFF58")),
+    "scrollbar-thumb-pressed": Color(Hex("#FF6A3D88")),
+  },
   rules: [
     (
       selector: Class("picuscode.root"),
@@ -232,6 +272,22 @@
       setter: (
         colors: (
           text: Var("text-heading"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.thread.icon"),
+      setter: (
+        colors: (
+          text: Var("text-tertiary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.thread.icon.active"),
+      setter: (
+        colors: (
+          text: Var("brand-foreground"),
         ),
       ),
     ),
@@ -590,6 +646,450 @@
         colors: (
           bg: Var("status-info-bg"),
           text: Var("status-info-fg"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.primary.button"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          gap: Var("gap-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+          align_items: Center,
+        ),
+        colors: (
+          bg: Var("surface-accent"),
+          border: Var("surface-accent"),
+          text: Var("text-on-accent"),
+          hover_bg: Var("surface-accent-hover"),
+          hover_border: Var("surface-accent-hover"),
+          pressed_bg: Var("surface-accent-pressed"),
+          pressed_border: Var("surface-accent-pressed"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.primary.button.text"),
+      setter: (
+        text: (
+          size: Var("font-size-body1"),
+          weight: Var("font-weight-semibold"),
+        ),
+        colors: (
+          text: Var("text-on-accent"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.brand.mark"),
+      setter: (
+        layout: (
+          padding: Var("space-xs"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+          align_items: Center,
+        ),
+        colors: (
+          bg: Var("surface-elevated"),
+          border: Var("border-default"),
+          text: Var("brand-foreground"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.brand.mark.icon"),
+      setter: (
+        colors: (
+          text: Var("brand-foreground"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.sidebar.brand"),
+      setter: (
+        layout: (
+          padding: Var("space-xs"),
+          gap: Var("gap-sm"),
+          align_items: Center,
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.sidebar.brand.title"),
+      setter: (
+        text: (
+          size: Var("font-size-subtitle2"),
+          weight: 700.0,
+        ),
+        colors: (
+          text: Var("text-heading"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.sidebar.brand.meta"),
+      setter: (
+        text: (
+          size: Var("font-size-caption2"),
+        ),
+        colors: (
+          text: Var("text-tertiary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.sidebar.section"),
+      setter: (
+        layout: (
+          padding: Var("space-xs"),
+          align_items: Center,
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.sidebar.empty"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          border: Var("border-muted"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.sidebar.footer"),
+      setter: (
+        layout: (
+          padding: Var("space-xs"),
+          gap: Var("gap-sm"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          border: Var("border-muted"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.sidebar.nav"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          align_items: Center,
+        ),
+        colors: (
+          bg: Var("surface-bg"),
+          text: Var("text-secondary"),
+          hover_bg: Var("surface-subtle-hover"),
+          pressed_bg: Var("surface-subtle-pressed"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.sidebar.nav.text"),
+      setter: (
+        text: (
+          size: Var("font-size-body1"),
+          weight: Var("font-weight-semibold"),
+        ),
+        colors: (
+          text: Var("text-secondary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.shortcut"),
+      setter: (
+        layout: (
+          padding: Var("space-xs"),
+          corner_radius: Var("radius-sm"),
+          border_width: Var("border-thin"),
+          align_items: Center,
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          border: Var("border-muted"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.shortcut.key"),
+      setter: (
+        text: (
+          size: Var("font-size-caption1"),
+          weight: Var("font-weight-semibold"),
+        ),
+        colors: (
+          text: Var("brand-foreground"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.shortcut.label"),
+      setter: (
+        text: (
+          size: Var("font-size-caption1"),
+        ),
+        colors: (
+          text: Var("text-tertiary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.suggestion"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          border: Var("border-muted"),
+          hover_bg: Var("surface-subtle-hover"),
+          hover_border: Var("border-default-hover"),
+          pressed_bg: Var("surface-subtle-pressed"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.suggestion.title"),
+      setter: (
+        text: (
+          size: Var("font-size-body1"),
+          weight: Var("font-weight-semibold"),
+        ),
+        colors: (
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.suggestion.meta"),
+      setter: (
+        text: (
+          size: Var("font-size-caption1"),
+        ),
+        colors: (
+          text: Var("text-tertiary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.message.row"),
+      setter: (
+        layout: (
+          padding: Var("space-xs"),
+          gap: Var("gap-sm"),
+        ),
+        colors: (
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.message.stack"),
+      setter: (
+        layout: (
+          gap: Var("gap-sm"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.message.meta"),
+      setter: (
+        layout: (
+          padding: Var("space-xs"),
+          align_items: Center,
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.message.author"),
+      setter: (
+        text: (
+          size: Var("font-size-caption1"),
+          weight: Var("font-weight-semibold"),
+        ),
+        colors: (
+          text: Var("text-secondary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.message.time"),
+      setter: (
+        text: (
+          size: Var("font-size-caption2"),
+        ),
+        colors: (
+          text: Var("text-tertiary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.message.body"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-bg"),
+          border: Var("border-muted"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.message.body.user"),
+      setter: (
+        colors: (
+          bg: Var("status-info-bg"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.message.body.assistant"),
+      setter: (
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-muted"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.message.body.system"),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle"),
+          border: Var("border-muted"),
+          text: Var("text-secondary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.message.body.other"),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle"),
+          border: Var("border-muted"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.composer.input-row"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          gap: Var("gap-sm"),
+          corner_radius: Var("radius-lg"),
+          border_width: Var("border-thin"),
+          align_items: Center,
+        ),
+        colors: (
+          bg: Var("surface-bg"),
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.composer.caret"),
+      setter: (
+        text: (
+          size: Var("font-size-body2"),
+          weight: 700.0,
+        ),
+        colors: (
+          text: Var("brand-foreground"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.composer.meta"),
+      setter: (
+        layout: (
+          padding: Var("space-xs"),
+          gap: Var("gap-sm"),
+          align_items: Center,
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.status.metric"),
+      setter: (
+        layout: (
+          padding: Var("space-xs"),
+          corner_radius: Var("radius-sm"),
+          border_width: Var("border-thin"),
+          align_items: Center,
+        ),
+        colors: (
+          bg: Var("surface-bg"),
+          border: Var("border-muted"),
+          text: Var("text-secondary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.status.metric.accent"),
+      setter: (
+        colors: (
+          bg: Var("status-info-bg"),
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.status.metric.success"),
+      setter: (
+        colors: (
+          bg: Var("status-success-bg"),
+          border: Var("border-muted"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.status.metric.danger"),
+      setter: (
+        colors: (
+          bg: Var("status-error-bg"),
+          border: Var("border-muted"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.status.metric.label"),
+      setter: (
+        text: (
+          size: Var("font-size-caption2"),
+        ),
+        colors: (
+          text: Var("text-tertiary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("picuscode.status.metric.value"),
+      setter: (
+        text: (
+          size: Var("font-size-caption1"),
+          weight: Var("font-weight-semibold"),
+        ),
+        colors: (
+          text: Var("text-primary"),
         ),
       ),
     ),

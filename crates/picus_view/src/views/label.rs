@@ -43,6 +43,8 @@ pub fn label(label: impl Into<ArcStr>) -> Label {
         text_color: None,
         letter_spacing: 0.0,
         word_spacing: 0.0,
+        underline: false,
+        strikethrough: false,
     }
 }
 
@@ -61,6 +63,8 @@ pub struct Label {
     text_color: Option<Color>,
     letter_spacing: f32,
     word_spacing: f32,
+    underline: bool,
+    strikethrough: bool,
     // TODO: add more attributes of `picus_widget::widgets::Label`
 }
 
@@ -109,6 +113,18 @@ impl Label {
         self
     }
 
+    /// Draw an underline below this label.
+    pub fn underline(mut self, underline: bool) -> Self {
+        self.underline = underline;
+        self
+    }
+
+    /// Draw a strikethrough line through this label.
+    pub fn strikethrough(mut self, strikethrough: bool) -> Self {
+        self.strikethrough = strikethrough;
+        self
+    }
+
     /// Set the [font family](FontFamily) this label will use.
     ///
     /// A font family allows for providing fallbacks. If there is no matching font
@@ -151,6 +167,8 @@ impl<State: 'static, Action> View<State, Action, ViewCtx> for Label {
             .with_style(StyleProperty::FontFamily(self.font.clone()))
             .with_style(StyleProperty::WordSpacing(self.word_spacing))
             .with_style(StyleProperty::LetterSpacing(self.letter_spacing))
+            .with_style(StyleProperty::Underline(self.underline))
+            .with_style(StyleProperty::Strikethrough(self.strikethrough))
             .with_hint(self.enable_hinting);
 
         let pod = Pod::new_with_props(
@@ -201,6 +219,15 @@ impl<State: 'static, Action> View<State, Action, ViewCtx> for Label {
             widgets::Label::insert_style(
                 &mut element,
                 StyleProperty::FontFamily(self.font.clone()),
+            );
+        }
+        if prev.underline != self.underline {
+            widgets::Label::insert_style(&mut element, StyleProperty::Underline(self.underline));
+        }
+        if prev.strikethrough != self.strikethrough {
+            widgets::Label::insert_style(
+                &mut element,
+                StyleProperty::Strikethrough(self.strikethrough),
             );
         }
         if prev.text_color != self.text_color {

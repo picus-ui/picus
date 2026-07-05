@@ -1,9 +1,29 @@
-use crate::helpers::{card, class, grid, note, placeholder};
+use crate::helpers::{card, class, grid, note};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 use picus::{
-    UiLabel, UiMultilineTextInput,
+    UiLabel, UiMarkdown, UiMultilineTextInput,
     scene::{CommandsSceneExt, bsn, template_value},
 };
+
+const MARKDOWN_SAMPLE: &str = r#"# Markdown
+
+Picus renders **strong**, _emphasized_, `inline code`, ~~struck text~~, and [links](https://example.com).
+
+- [x] Parse CommonMark and GFM extensions
+- [ ] Keep streaming tails cheap
+
+> Block quotes use the same resolved text palette.
+
+| Feature | Status |
+| :-- | --: |
+| Tables | Ready |
+| Fenced code | Highlighted |
+
+```rust
+fn render() {
+    println!("markdown");
+}
+```"#;
 
 /// Text scale, CJK/Unicode, and text wrapping component examples.
 ///
@@ -55,12 +75,12 @@ pub fn spawn_typography_page(commands: &mut Commands, parent: Entity) -> Entity 
         ChildOf(wrapping)
     });
 
-    placeholder(
-        commands,
-        g,
-        "Rich text runs",
-        "UiLabel is plain text; mixed inline spans/weights/colors require a richer text component.",
-    );
+    let markdown = card(commands, g, "Markdown");
+    commands.spawn_scene(bsn! {
+        template_value(UiMarkdown::new(MARKDOWN_SAMPLE))
+        template_value(class("gallery.markdown"))
+        ChildOf(markdown)
+    });
 
     parent
 }

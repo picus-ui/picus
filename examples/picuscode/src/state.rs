@@ -75,6 +75,34 @@ pub struct ChatTitleBarView;
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct TranscriptColumnView;
 
+/// Wrapper around a rendered chat message.
+#[derive(Component, Debug, Clone, Default, PartialEq, Eq)]
+pub struct MessageRowView {
+    pub role: String,
+    pub created_at: i64,
+    pub streaming: bool,
+}
+
+impl MessageRowView {
+    #[must_use]
+    pub fn persisted(role: impl Into<String>, created_at: i64) -> Self {
+        Self {
+            role: role.into(),
+            created_at,
+            streaming: false,
+        }
+    }
+
+    #[must_use]
+    pub fn streaming(role: impl Into<String>) -> Self {
+        Self {
+            role: role.into(),
+            created_at: 0,
+            streaming: true,
+        }
+    }
+}
+
 /// Marker for the composer row.
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ComposerView;

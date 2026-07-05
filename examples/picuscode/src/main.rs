@@ -41,8 +41,9 @@ mod ui;
 use action::PicusCodeAction;
 use bridge::{BridgeEvent, BridgeRequest, ChatMessage};
 use state::{
-    AboutRootView, ChatBodyView, ChatRootView, ChatTitleBarView, ComposerView, PicusState,
-    SettingsFormView, SettingsRootView, SidebarColumnView, StatusLineView, TranscriptColumnView,
+    AboutRootView, ChatBodyView, ChatRootView, ChatTitleBarView, ComposerView, MessageRowView,
+    PicusState, SettingsFormView, SettingsRootView, SidebarColumnView, StatusLineView,
+    TranscriptColumnView,
 };
 
 /// A static welcome markdown blob shown when no thread is selected.
@@ -175,6 +176,7 @@ picus::impl_ui_component_template!(ChatTitleBarView, ui::project_title_bar);
 picus::impl_ui_component_template!(ChatBodyView, ui::project_chat_body);
 picus::impl_ui_component_template!(SidebarColumnView, ui::project_sidebar_column);
 picus::impl_ui_component_template!(TranscriptColumnView, ui::project_transcript_column);
+picus::impl_ui_component_template!(MessageRowView, ui::project_message_row);
 picus::impl_ui_component_template!(ComposerView, ui::project_composer);
 picus::impl_ui_component_template!(StatusLineView, ui::project_status_line);
 picus::impl_ui_component_template!(AboutRootView, ui::project_about_root);
@@ -430,21 +432,79 @@ fn rebuild_transcript(world: &mut World) {
     }
 
     for m in &messages {
-        let rendered = render_message_markdown(m);
-        world.spawn((
-            UiMarkdown::new(rendered),
-            bevy_ecs::hierarchy::ChildOf(transcript_column),
-        ));
+        spawn_persisted_message_row(world, transcript_column, m);
     }
 }
 
 fn render_message_markdown(m: &ChatMessage) -> String {
     match m.role.as_str() {
-        "user" => format!("**You:** {}", m.content),
-        "assistant" => m.content.clone(),
+        "user" | "assistant" => m.content.clone(),
         "system" | "history" => format!("> _system:_ {}", m.content),
         other => format!("**{other}:** {}", m.content),
     }
+}
+
+fn spawn_persisted_message_row(world: &mut World, transcript: Entity, message: &ChatMessage) {
+    let row = world
+        .spawn((
+            MessageRowView::persisted(message.role.clone(), message.created_at),
+            bevy_ecs::hierarchy::ChildOf(transcript),
+        ))
+        .id();
+    world.spawn((
+        UiMarkdown::new(render_message_markdown(message)),
+        message_body_style_class(&message.role),
+        bevy_ecs::hierarchy::ChildOf(row),
+    ));
+}
+
+fn spawn_draft_message_row(
+    world: &mut World,
+    transcript: Entity,
+    role: &str,
+    source: String,
+) -> Entity {
+    let row = world
+        .spawn((
+            MessageRowView::persisted(role.to_string(), chrono::Utc::now().timestamp()),
+            bevy_ecs::hierarchy::ChildOf(transcript),
+        ))
+        .id();
+    world.spawn((
+        UiMarkdown::new(source),
+        message_body_style_class(role),
+        bevy_ecs::hierarchy::ChildOf(row),
+    ));
+    row
+}
+
+fn spawn_streaming_message_row(world: &mut World, transcript: Entity, role: &str) -> Entity {
+    let row = world
+        .spawn((
+            MessageRowView::streaming(role.to_string()),
+            bevy_ecs::hierarchy::ChildOf(transcript),
+        ))
+        .id();
+    world
+        .spawn((
+            UiStreamingMarkdown::new(),
+            message_body_style_class(role),
+            bevy_ecs::hierarchy::ChildOf(row),
+        ))
+        .id()
+}
+
+fn message_body_style_class(role: &str) -> StyleClass {
+    let role_class = match role {
+        "user" => "picuscode.message.body.user",
+        "assistant" => "picuscode.message.body.assistant",
+        "system" | "history" => "picuscode.message.body.system",
+        _ => "picuscode.message.body.other",
+    };
+    StyleClass(vec![
+        "picuscode.message.body".to_string(),
+        role_class.to_string(),
+    ])
 }
 
 /// System: drain UI actions and dispatch them to the bridge or window
@@ -629,17 +689,8 @@ fn start_send_turn(world: &mut World) {
         return;
     };
 
-    // Spawn the user bubble + a streaming markdown holder for the assistant.
-    world.spawn((
-        UiMarkdown::new(format!("**You:** {draft}")),
-        bevy_ecs::hierarchy::ChildOf(transcript),
-    ));
-    let streaming_entity = world
-        .spawn((
-            UiStreamingMarkdown::new(),
-            bevy_ecs::hierarchy::ChildOf(transcript),
-        ))
-        .id();
+    spawn_draft_message_row(world, transcript, "user", draft.clone());
+    let streaming_entity = spawn_streaming_message_row(world, transcript, "assistant");
 
     {
         let mut s = world.resource_mut::<PicusState>();
@@ -779,6 +830,7 @@ fn build_picuscode_app() -> App {
         .register_ui_component::<ChatBodyView>()
         .register_ui_component::<SidebarColumnView>()
         .register_ui_component::<TranscriptColumnView>()
+        .register_ui_component::<MessageRowView>()
         .register_ui_component::<ComposerView>()
         .register_ui_component::<StatusLineView>()
         .register_ui_component::<AboutRootView>()

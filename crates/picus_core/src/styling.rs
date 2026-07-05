@@ -3409,8 +3409,10 @@ fn parse_hex_color(hex: &str) -> io::Result<Color> {
 }
 
 fn stylesheet_from_def(parsed: StyleSheetDef) -> io::Result<StyleSheet> {
-    let mut sheet = StyleSheet::default();
-    sheet.default_variant = parsed.default_variant;
+    let mut sheet = StyleSheet {
+        default_variant: parsed.default_variant,
+        ..Default::default()
+    };
     for (name, token) in parsed.tokens {
         sheet.tokens.insert(name, token.into_token_value()?);
     }

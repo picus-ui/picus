@@ -206,6 +206,7 @@ fn public_ui_authoring_types_are_bsn_template_ready() {
     assert_component::<crate::UiImage>();
     assert_component::<crate::UiLink>();
     assert_component::<crate::UiListView>();
+    assert_component::<crate::UiMarkdown>();
     assert_component::<crate::UiMenuBar>();
     assert_component::<crate::UiMenuBarItem>();
     assert_component::<crate::UiMenuItemPanel>();
@@ -222,6 +223,7 @@ fn public_ui_authoring_types_are_bsn_template_ready() {
     assert_component::<crate::UiSlider>();
     assert_component::<crate::UiSpinner>();
     assert_component::<crate::UiSplitPane>();
+    assert_component::<crate::UiStreamingMarkdown>();
     assert_component::<crate::UiSwitch>();
     assert_component::<crate::UiTabBar>();
     assert_component::<crate::UiTable>();
@@ -377,6 +379,79 @@ fn no_active_theme_projects_label_text_as_transparent() {
     };
 
     assert_eq!(text_color, crate::xilem::Color::TRANSPARENT);
+}
+
+#[test]
+fn markdown_projects_common_blocks_into_retained_labels() {
+    let mut app = App::new();
+    app.add_plugins(PicusPlugin);
+
+    let mut window = Window::default();
+    window.resolution.set(640.0, 480.0);
+    app.world_mut().spawn((window, PrimaryWindow));
+
+    let text_color = crate::xilem::Color::from_rgb8(0x11, 0x22, 0x33);
+    let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+    app.world_mut().spawn((
+        crate::UiMarkdown::new(
+            "# Markdown title\n\nSome **bold** and [link](https://example.com).\n\n- [x] Complete\n\n| Feature | Status |\n| :-- | --: |\n| Table | Done |\n\n```rust\nlet x = 1;\n```",
+        ),
+        crate::ColorStyle {
+            text: Some(text_color),
+            ..Default::default()
+        },
+        ChildOf(root),
+    ));
+
+    app.update();
+    app.update();
+
+    let runtime = app.world().non_send::<crate::MasonryRuntime>();
+    let window_runtime = runtime
+        .primary()
+        .expect("primary window runtime should exist");
+    let layer_root = window_runtime.render_root.get_layer_root(0);
+
+    let title = first_widget_by_short_name_and_debug_text(layer_root, "Label", "Markdown title")
+        .expect("markdown heading should project as a label");
+    assert_eq!(title.get_prop::<ContentColor>().color, text_color);
+
+    for expected in ["bold", "link", "☑ Complete", "Feature", "Done", "let x = 1;"] {
+        assert!(
+            find_widget_id_by_debug_text(layer_root, expected).is_some(),
+            "markdown should project retained label text `{expected}`"
+        );
+    }
+}
+
+#[test]
+fn no_active_theme_projects_markdown_without_backend_text_color() {
+    let mut app = App::new();
+    app.add_plugins(PicusPlugin);
+
+    let mut window = Window::default();
+    window.resolution.set(320.0, 200.0);
+    app.world_mut().spawn((window, PrimaryWindow));
+
+    let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+    app.world_mut().spawn((
+        crate::UiMarkdown::new("# Invisible title\n\nHidden paragraph"),
+        ChildOf(root),
+    ));
+
+    app.update();
+    app.update();
+
+    let runtime = app.world().non_send::<crate::MasonryRuntime>();
+    let window_runtime = runtime
+        .primary()
+        .expect("primary window runtime should exist");
+    let layer_root = window_runtime.render_root.get_layer_root(0);
+
+    assert!(
+        find_widget_id_by_debug_text(layer_root, "Invisible title").is_none(),
+        "un-themed markdown should not fall back to visible backend label text"
+    );
 }
 
 #[test]

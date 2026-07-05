@@ -17,19 +17,19 @@ use std::sync::Arc;
 use bevy_ecs::{entity::Entity, prelude::Resource};
 use masonry_core::{
     layout::{Dim, Length},
-    parley::style::FontWeight,
+    parley::{Alignment as ParleyAlignment, LineHeight, style::FontWeight},
     peniko::Color,
     properties::Padding,
 };
 use picus_view::style::Style as _;
-use picus_view::view::{FlexExt as _, flex_col, flex_row, label, sized_box};
-use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
+use picus_view::view::{CrossAxisAlignment, FlexExt as _, flex_col, flex_row, label, sized_box};
+use pulldown_cmark::{Alignment, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use syntect::highlighting::{Theme as SyntectTheme, ThemeSet};
 use syntect::parsing::SyntaxSet;
 
 use super::core::{ProjectionCtx, UiView};
 use crate::UiMarkdown;
-use crate::styling::{ResolvedStyle, apply_widget_style, resolve_style};
+use crate::styling::{ResolvedStyle, apply_widget_style, font_stack_from_style, resolve_style};
 
 /// Cached `syntect` syntax + theme state for code highlighting.
 struct HighlightState {
@@ -54,36 +54,67 @@ fn highlight_state() -> &'static HighlightState {
     HIGHLIGHT.get_or_init(HighlightState::new)
 }
 
-/// Default text color for markdown body text.
-const MD_TEXT: Color = Color::from_rgb8(0xE6, 0xE6, 0xE6);
-/// Muted text color for secondary content (block quote, list markers).
-const MD_MUTED: Color = Color::from_rgb8(0xA0, 0xA0, 0xA0);
-/// Inline code background.
-const MD_CODE_BG: Color = Color::from_rgb8(0x2A, 0x2A, 0x2A);
-/// Inline code text.
-const MD_CODE_TEXT: Color = Color::from_rgb8(0xF5, 0xC2, 0xE7);
-/// Code block background.
-const MD_PRE_BG: Color = Color::from_rgb8(0x1B, 0x1B, 0x1B);
-/// Block quote border.
-const MD_QUOTE_BORDER: Color = Color::from_rgb8(0x55, 0x55, 0x55);
-/// Link color.
-const MD_LINK: Color = Color::from_rgb8(0x58, 0xA6, 0xFF);
-/// Heading color.
-const MD_HEADING: Color = Color::from_rgb8(0xFF, 0xFF, 0xFF);
+#[derive(Clone, Copy)]
+struct MarkdownPalette {
+    text: Color,
+    muted: Color,
+    code_bg: Color,
+    code_text: Color,
+    pre_bg: Color,
+    quote_border: Color,
+    link: Color,
+    heading: Color,
+    table_border: Color,
+    table_header_bg: Color,
+}
+
+fn markdown_palette(style: &ResolvedStyle) -> Option<MarkdownPalette> {
+    let text = style.colors.text?;
+    let dark_text = color_luma(text) < 128;
+    let link = if dark_text {
+        Color::from_rgb8(0x09, 0x69, 0xDA)
+    } else {
+        Color::from_rgb8(0x58, 0xA6, 0xFF)
+    };
+    let code_text = if dark_text {
+        Color::from_rgb8(0x82, 0x50, 0xDF)
+    } else {
+        Color::from_rgb8(0xF5, 0xC2, 0xE7)
+    };
+
+    Some(MarkdownPalette {
+        text,
+        muted: text.with_alpha(0.68),
+        code_bg: text.with_alpha(0.10),
+        code_text,
+        pre_bg: text.with_alpha(0.07),
+        quote_border: text.with_alpha(0.35),
+        link,
+        heading: text,
+        table_border: text.with_alpha(0.24),
+        table_header_bg: text.with_alpha(0.08),
+    })
+}
+
+fn color_luma(color: Color) -> u8 {
+    let rgba = color.to_rgba8();
+    ((u32::from(rgba.r) * 299 + u32::from(rgba.g) * 587 + u32::from(rgba.b) * 114) / 1000)
+        as u8
+}
 
 pub(crate) fn project_markdown(component: &UiMarkdown, ctx: ProjectionCtx<'_>) -> UiView {
     let base_style = resolve_style(ctx.world, ctx.entity);
-    let Some(text_color) = base_style.colors.text else {
+    let Some(palette) = markdown_palette(&base_style) else {
         return Arc::new(apply_widget_style(
             flex_col(Vec::<picus_view::view::AnyFlexChild<(), ()>>::new()).width(Dim::Stretch),
             &base_style,
         ));
     };
 
-    let blocks = parse_markdown_blocks(&component.source, text_color);
+    let blocks = parse_markdown_blocks(&component.source);
 
     Arc::new(apply_widget_style(
-        flex_col(blocks_to_flex_children(blocks, &base_style))
+        flex_col(blocks_to_flex_children(blocks, &base_style, &palette))
             .width(Dim::Stretch)
             .gap(Length::px(8.0)),
         &base_style,
@@ -120,16 +151,11 @@ impl StreamingMarkdownParseCache {
         }
     }
 
-    fn get_or_parse_completed(
-        &mut self,
-        entity: Entity,
-        completed_source: &str,
-        text_color: Color,
-    ) -> Vec<MdBlock> {
+    fn get_or_parse_completed(&mut self, entity: Entity, completed_source: &str) -> Vec<MdBlock> {
         match self.get_cached(entity, completed_source) {
             Some(blocks) => blocks,
             None => {
-                let blocks = parse_markdown_blocks(completed_source, text_color);
+                let blocks = parse_markdown_blocks(completed_source);
                 self.entries.insert(
                     entity,
                     CachedStreamingBlocks {
@@ -161,7 +187,7 @@ pub fn update_streaming_markdown_cache(
     )>,
 ) {
     for (entity, streaming) in streaming_query.iter() {
-        let _ = cache.get_or_parse_completed(entity, streaming.completed_source(), MD_TEXT);
+        let _ = cache.get_or_parse_completed(entity, streaming.completed_source());
     }
 }
 
@@ -170,7 +196,7 @@ pub(crate) fn project_streaming_markdown(
     ctx: ProjectionCtx<'_>,
 ) -> UiView {
     let base_style = resolve_style(ctx.world, ctx.entity);
-    let Some(text_color) = base_style.colors.text else {
+    let Some(palette) = markdown_palette(&base_style) else {
         return Arc::new(apply_widget_style(
             flex_col(Vec::<picus_view::view::AnyFlexChild<(), ()>>::new()).width(Dim::Stretch),
             &base_style,
@@ -181,19 +207,19 @@ pub(crate) fn project_streaming_markdown(
         .world
         .get_resource::<StreamingMarkdownParseCache>()
         .and_then(|cache| cache.get_cached(ctx.entity, component.completed_source()))
-        .unwrap_or_else(|| parse_markdown_blocks(component.completed_source(), text_color));
+        .unwrap_or_else(|| parse_markdown_blocks(component.completed_source()));
 
     let tail_blocks = if component.in_progress_source().is_empty() {
         Vec::new()
     } else {
-        parse_markdown_blocks(component.in_progress_source(), text_color)
+        parse_markdown_blocks(component.in_progress_source())
     };
 
     let mut all_blocks = completed_blocks;
     all_blocks.extend(tail_blocks);
 
     Arc::new(apply_widget_style(
-        flex_col(blocks_to_flex_children(all_blocks, &base_style))
+        flex_col(blocks_to_flex_children(all_blocks, &base_style, &palette))
             .width(Dim::Stretch)
             .gap(Length::px(8.0)),
         &base_style,
@@ -203,11 +229,12 @@ pub(crate) fn project_streaming_markdown(
 fn blocks_to_flex_children(
     blocks: Vec<MdBlock>,
     base: &ResolvedStyle,
+    palette: &MarkdownPalette,
 ) -> Vec<picus_view::view::AnyFlexChild<(), ()>> {
     use picus_view::view::FlexExt as _;
     blocks
         .into_iter()
-        .map(|block| block_to_view(block, base).into_any_flex())
+        .map(|block| block_to_view(block, base, palette).into_any_flex())
         .collect::<Vec<_>>()
 }
 
@@ -233,17 +260,14 @@ struct InlineRun {
     code: bool,
     strikethrough: bool,
     link: bool,
-    color: Color,
 }
-
-impl InlineRun {}
 
 /// A single resolved markdown block.
 #[derive(Clone)]
 enum MdBlock {
     Heading {
         level: HeadingLevel,
-        text: String,
+        runs: Vec<InlineRun>,
     },
     Paragraph {
         runs: Vec<InlineRun>,
@@ -262,13 +286,20 @@ enum MdBlock {
         start: u64,
         items: Vec<Vec<InlineRun>>,
     },
+    Table {
+        alignments: Vec<Alignment>,
+        header: Vec<Vec<InlineRun>>,
+        rows: Vec<Vec<Vec<InlineRun>>>,
+    },
     ThematicBreak,
 }
 
 /// Parse markdown source into a list of blocks, resolving inline runs.
-fn parse_markdown_blocks(source: &str, text_color: Color) -> Vec<MdBlock> {
-    let options =
-        Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TASKLISTS;
+fn parse_markdown_blocks(source: &str) -> Vec<MdBlock> {
+    let options = Options::ENABLE_GFM
+        | Options::ENABLE_TABLES
+        | Options::ENABLE_STRIKETHROUGH
+        | Options::ENABLE_TASKLISTS;
     let parser = Parser::new_ext(source, options);
 
     let mut blocks: Vec<MdBlock> = Vec::new();
@@ -281,14 +312,18 @@ fn parse_markdown_blocks(source: &str, text_color: Color) -> Vec<MdBlock> {
     let mut list_stack: Vec<ListKind> = Vec::new();
     let mut list_items_acc: Vec<Vec<InlineRun>> = Vec::new();
     let mut quote_depth: usize = 0;
+    let mut table: Option<MdTableDraft> = None;
+    let mut table_cell_active = false;
 
     for event in parser {
         match event {
             Event::Start(tag) => match tag {
                 Tag::Paragraph => {
-                    inline_acc.clear();
-                    emphasis_stack.clear();
-                    link_active = false;
+                    if !table_cell_active {
+                        inline_acc.clear();
+                        emphasis_stack.clear();
+                        link_active = false;
+                    }
                 }
                 Tag::Heading { level, .. } => {
                     current_heading = Some(level);
@@ -309,16 +344,39 @@ fn parse_markdown_blocks(source: &str, text_color: Color) -> Vec<MdBlock> {
                     quote_depth += 1;
                 }
                 Tag::List(start) => {
-                    let kind = match start {
-                        Some(n) => ListKind::Ordered(n),
-                        None => ListKind::Unordered,
-                    };
-                    list_stack.push(kind);
-                    list_items_acc.clear();
+                    if !table_cell_active {
+                        let kind = match start {
+                            Some(n) => ListKind::Ordered(n),
+                            None => ListKind::Unordered,
+                        };
+                        list_stack.push(kind);
+                        list_items_acc.clear();
+                    }
                 }
                 Tag::Item => {
+                    if !table_cell_active {
+                        inline_acc.clear();
+                        emphasis_stack.clear();
+                    }
+                }
+                Tag::Table(alignments) => {
+                    table = Some(MdTableDraft::new(alignments));
+                }
+                Tag::TableHead => {
+                    if let Some(table) = table.as_mut() {
+                        table.in_header = true;
+                    }
+                }
+                Tag::TableRow => {
+                    if let Some(table) = table.as_mut() {
+                        table.current_row = Some(Vec::new());
+                    }
+                }
+                Tag::TableCell => {
+                    table_cell_active = true;
                     inline_acc.clear();
                     emphasis_stack.clear();
+                    link_active = false;
                 }
                 Tag::Emphasis => emphasis_stack.push(EmphasisFlag::Italic),
                 Tag::Strong => emphasis_stack.push(EmphasisFlag::Bold),
@@ -330,14 +388,15 @@ fn parse_markdown_blocks(source: &str, text_color: Color) -> Vec<MdBlock> {
             },
             Event::End(tag_end) => match tag_end {
                 TagEnd::Paragraph => {
-                    let runs = std::mem::take(&mut inline_acc);
-                    nest_into_quote(quote_depth, &mut blocks, MdBlock::Paragraph { runs });
+                    if !table_cell_active {
+                        let runs = std::mem::take(&mut inline_acc);
+                        nest_into_quote(quote_depth, &mut blocks, MdBlock::Paragraph { runs });
+                    }
                 }
                 TagEnd::Heading(_) => {
-                    let text = runs_to_string(&inline_acc);
+                    let runs = std::mem::take(&mut inline_acc);
                     let level = current_heading.take().unwrap_or(HeadingLevel::H1);
-                    nest_into_quote(quote_depth, &mut blocks, MdBlock::Heading { level, text });
-                    inline_acc.clear();
+                    nest_into_quote(quote_depth, &mut blocks, MdBlock::Heading { level, runs });
                 }
                 TagEnd::CodeBlock => {
                     let lang = code_block_lang.take().flatten();
@@ -355,17 +414,45 @@ fn parse_markdown_blocks(source: &str, text_color: Color) -> Vec<MdBlock> {
                     quote_depth = quote_depth.saturating_sub(1);
                 }
                 TagEnd::List(_) => {
-                    let items = std::mem::take(&mut list_items_acc);
-                    let kind = list_stack.pop().unwrap_or(ListKind::Unordered);
-                    let block = match kind {
-                        ListKind::Unordered => MdBlock::UnorderedList { items },
-                        ListKind::Ordered(start) => MdBlock::OrderedList { start, items },
-                    };
-                    nest_into_quote(quote_depth, &mut blocks, block);
+                    if !table_cell_active {
+                        let items = std::mem::take(&mut list_items_acc);
+                        let kind = list_stack.pop().unwrap_or(ListKind::Unordered);
+                        let block = match kind {
+                            ListKind::Unordered => MdBlock::UnorderedList { items },
+                            ListKind::Ordered(start) => MdBlock::OrderedList { start, items },
+                        };
+                        nest_into_quote(quote_depth, &mut blocks, block);
+                    }
                 }
                 TagEnd::Item => {
-                    let runs = std::mem::take(&mut inline_acc);
-                    list_items_acc.push(runs);
+                    if !table_cell_active {
+                        let runs = std::mem::take(&mut inline_acc);
+                        list_items_acc.push(runs);
+                    }
+                }
+                TagEnd::TableCell => {
+                    if let Some(table) = table.as_mut() {
+                        table.push_cell(std::mem::take(&mut inline_acc));
+                    }
+                    table_cell_active = false;
+                }
+                TagEnd::TableRow => {
+                    if let Some(table) = table.as_mut() {
+                        table.finish_row();
+                    }
+                }
+                TagEnd::TableHead => {
+                    if let Some(table) = table.as_mut() {
+                        if table.current_row.is_some() {
+                            table.finish_row();
+                        }
+                        table.in_header = false;
+                    }
+                }
+                TagEnd::Table => {
+                    if let Some(table) = table.take() {
+                        nest_into_quote(quote_depth, &mut blocks, table.into_block());
+                    }
                 }
                 TagEnd::Emphasis | TagEnd::Strong | TagEnd::Strikethrough => {
                     emphasis_stack.pop();
@@ -379,52 +466,25 @@ fn parse_markdown_blocks(source: &str, text_color: Color) -> Vec<MdBlock> {
                 if code_block_lang.is_some() {
                     code_block_acc.push_str(&text);
                 } else {
-                    push_inline_run(
-                        &mut inline_acc,
-                        &emphasis_stack,
-                        link_active,
-                        &text,
-                        text_color,
-                    );
+                    push_inline_run(&mut inline_acc, &emphasis_stack, link_active, &text);
                 }
             }
             Event::Code(text) => {
-                push_inline_run(
-                    &mut inline_acc,
-                    &[EmphasisFlag::Code],
-                    link_active,
-                    &text,
-                    MD_CODE_TEXT,
-                );
+                let mut code_stack = emphasis_stack.clone();
+                code_stack.push(EmphasisFlag::Code);
+                push_inline_run(&mut inline_acc, &code_stack, link_active, &text);
             }
             Event::SoftBreak => {
-                push_inline_run(
-                    &mut inline_acc,
-                    &emphasis_stack,
-                    link_active,
-                    " ",
-                    text_color,
-                );
+                push_inline_run(&mut inline_acc, &emphasis_stack, link_active, " ");
             }
             Event::HardBreak => {
-                push_inline_run(
-                    &mut inline_acc,
-                    &emphasis_stack,
-                    link_active,
-                    "\n",
-                    text_color,
-                );
+                push_inline_run(&mut inline_acc, &emphasis_stack, link_active, "\n");
             }
-            Event::TaskListMarker(_) => {
-                push_inline_run(
-                    &mut inline_acc,
-                    &emphasis_stack,
-                    link_active,
-                    "☐ ",
-                    text_color,
-                );
+            Event::TaskListMarker(checked) => {
+                let marker = if checked { "☑ " } else { "☐ " };
+                push_inline_run(&mut inline_acc, &emphasis_stack, link_active, marker);
             }
-            Event::Rule => {
+            Event::Rule if !table_cell_active => {
                 nest_into_quote(quote_depth, &mut blocks, MdBlock::ThematicBreak);
             }
             _ => {}
@@ -440,6 +500,47 @@ enum ListKind {
     Ordered(u64),
 }
 
+struct MdTableDraft {
+    alignments: Vec<Alignment>,
+    header: Vec<Vec<InlineRun>>,
+    rows: Vec<Vec<Vec<InlineRun>>>,
+    current_row: Option<Vec<Vec<InlineRun>>>,
+    in_header: bool,
+}
+
+impl MdTableDraft {
+    fn new(alignments: Vec<Alignment>) -> Self {
+        Self {
+            alignments,
+            header: Vec::new(),
+            rows: Vec::new(),
+            current_row: None,
+            in_header: false,
+        }
+    }
+
+    fn push_cell(&mut self, runs: Vec<InlineRun>) {
+        self.current_row.get_or_insert_with(Vec::new).push(runs);
+    }
+
+    fn finish_row(&mut self) {
+        let row = self.current_row.take().unwrap_or_default();
+        if self.in_header {
+            self.header = row;
+        } else {
+            self.rows.push(row);
+        }
+    }
+
+    fn into_block(self) -> MdBlock {
+        MdBlock::Table {
+            alignments: self.alignments,
+            header: self.header,
+            rows: self.rows,
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq)]
 enum EmphasisFlag {
     Bold,
@@ -453,15 +554,11 @@ fn push_inline_run(
     stack: &[EmphasisFlag],
     link: bool,
     text: &str,
-    default_color: Color,
 ) {
     let bold = stack.contains(&EmphasisFlag::Bold);
     let italic = stack.contains(&EmphasisFlag::Italic);
     let code = stack.contains(&EmphasisFlag::Code);
     let strikethrough = stack.contains(&EmphasisFlag::Strike);
-
-    let color = if code { MD_CODE_TEXT } else { default_color };
-    let color = if link { MD_LINK } else { color };
 
     let run = InlineRun {
         text: text.to_string(),
@@ -470,7 +567,6 @@ fn push_inline_run(
         code,
         strikethrough,
         link,
-        color,
     };
 
     if let Some(last) = acc.last_mut()
@@ -488,11 +584,6 @@ fn same_style(a: &InlineRun, b: &InlineRun) -> bool {
         && a.code == b.code
         && a.strikethrough == b.strikethrough
         && a.link == b.link
-        && a.color == b.color
-}
-
-fn runs_to_string(runs: &[InlineRun]) -> String {
-    runs.iter().map(|r| r.text.as_str()).collect()
 }
 
 fn nest_into_quote(quote_depth: usize, blocks: &mut Vec<MdBlock>, block: MdBlock) {
@@ -535,25 +626,36 @@ fn push_into_quote_at_depth(blocks: &mut Vec<MdBlock>, depth: usize, block: MdBl
 }
 
 /// Convert a parsed block into a picus view.
-fn block_to_view(block: MdBlock, base: &ResolvedStyle) -> Box<picus_view::AnyWidgetView<(), ()>> {
+fn block_to_view(
+    block: MdBlock,
+    base: &ResolvedStyle,
+    palette: &MarkdownPalette,
+) -> Box<picus_view::AnyWidgetView<(), ()>> {
     use picus_view::WidgetView as _;
     match block {
-        MdBlock::Heading { level, text } => {
+        MdBlock::Heading { level, runs } => {
             let (size, weight) = heading_style(level);
-            sized_box(label(text).text_size(size).weight(weight).color(MD_HEADING))
+            sized_box(
+                label(runs_to_string(&runs))
+                    .text_size(size)
+                    .weight(weight)
+                    .color(palette.heading),
+            )
                 .padding(Padding::vertical(Length::px(4.0)))
                 .boxed()
         }
-        MdBlock::Paragraph { runs } => paragraph_view(&runs, base),
-        MdBlock::Code { language, code } => code_block_view(language.as_deref(), &code, base),
+        MdBlock::Paragraph { runs } => paragraph_view(&runs, base, palette),
+        MdBlock::Code { language, code } => {
+            code_block_view(language.as_deref(), &code, base, palette)
+        }
         MdBlock::BlockQuote { children } => {
             let inner = children
                 .into_iter()
-                .map(|b| block_to_view(b, base).into_any_flex())
+                .map(|b| block_to_view(b, base, palette).into_any_flex())
                 .collect::<Vec<_>>();
             sized_box(flex_col(inner).gap(Length::px(4.0)))
                 .padding(Padding::horizontal(Length::px(12.0)))
-                .border(MD_QUOTE_BORDER, Length::px(2.0))
+                .border(palette.quote_border, Length::px(2.0))
                 .corner_radius(Length::px(4.0))
                 .boxed()
         }
@@ -561,8 +663,8 @@ fn block_to_view(block: MdBlock, base: &ResolvedStyle) -> Box<picus_view::AnyWid
             let rows = items
                 .into_iter()
                 .map(|runs| {
-                    let bullet = label("•").color(MD_MUTED);
-                    let body = paragraph_view(&runs, base);
+                    let bullet = label("•").color(palette.muted);
+                    let body = paragraph_view(&runs, base, palette);
                     flex_row(vec![
                         sized_box(bullet)
                             .width(Dim::Fixed(Length::px(16.0)))
@@ -580,8 +682,8 @@ fn block_to_view(block: MdBlock, base: &ResolvedStyle) -> Box<picus_view::AnyWid
                 .into_iter()
                 .enumerate()
                 .map(|(i, runs)| {
-                    let marker = label(format!("{}. ", start + i as u64)).color(MD_MUTED);
-                    let body = paragraph_view(&runs, base);
+                    let marker = label(format!("{}. ", start + i as u64)).color(palette.muted);
+                    let body = paragraph_view(&runs, base, palette);
                     flex_row(vec![
                         sized_box(marker)
                             .width(Dim::Fixed(Length::px(24.0)))
@@ -594,10 +696,15 @@ fn block_to_view(block: MdBlock, base: &ResolvedStyle) -> Box<picus_view::AnyWid
                 .collect::<Vec<_>>();
             flex_col(rows).gap(Length::px(2.0)).boxed()
         }
+        MdBlock::Table {
+            alignments,
+            header,
+            rows,
+        } => table_view(alignments, header, rows, base, palette),
         MdBlock::ThematicBreak => sized_box(label(""))
             .width(Dim::Stretch)
             .height(Length::px(1.0))
-            .background(MD_MUTED)
+            .background(palette.muted)
             .boxed(),
     }
 }
@@ -613,9 +720,30 @@ fn heading_style(level: HeadingLevel) -> (f32, FontWeight) {
     }
 }
 
+fn runs_to_string(runs: &[InlineRun]) -> String {
+    runs.iter().map(|run| run.text.as_str()).collect()
+}
+
+fn map_text_alignment(text_align: crate::styling::TextAlign) -> ParleyAlignment {
+    match text_align {
+        crate::styling::TextAlign::Start => ParleyAlignment::Start,
+        crate::styling::TextAlign::Center => ParleyAlignment::Center,
+        crate::styling::TextAlign::End => ParleyAlignment::End,
+    }
+}
+
+fn table_alignment_to_text_align(alignment: Alignment) -> crate::styling::TextAlign {
+    match alignment {
+        Alignment::None | Alignment::Left => crate::styling::TextAlign::Start,
+        Alignment::Center => crate::styling::TextAlign::Center,
+        Alignment::Right => crate::styling::TextAlign::End,
+    }
+}
+
 fn paragraph_view(
     runs: &[InlineRun],
-    _base: &ResolvedStyle,
+    base: &ResolvedStyle,
+    palette: &MarkdownPalette,
 ) -> Box<picus_view::AnyWidgetView<(), ()>> {
     use picus_view::WidgetView as _;
     if runs.is_empty() {
@@ -623,19 +751,34 @@ fn paragraph_view(
     }
 
     if runs.len() == 1 {
-        return styled_label(&runs[0]);
+        return styled_label(&runs[0], base, palette);
     }
 
     let labels = runs
         .iter()
-        .map(|run| styled_label(run).into_any_flex())
+        .map(|run| styled_label(run, base, palette).into_any_flex())
         .collect::<Vec<_>>();
-    flex_row(labels).gap(Length::px(0.0)).boxed()
+    flex_row(labels)
+        .cross_axis_alignment(CrossAxisAlignment::FirstBaseline)
+        .gap(Length::px(0.0))
+        .boxed()
 }
 
-fn styled_label(run: &InlineRun) -> Box<picus_view::AnyWidgetView<(), ()>> {
+fn styled_label(
+    run: &InlineRun,
+    base: &ResolvedStyle,
+    palette: &MarkdownPalette,
+) -> Box<picus_view::AnyWidgetView<(), ()>> {
     use picus_view::WidgetView as _;
-    let mut lbl = label(run.text.clone());
+    let mut lbl = label(run.text.clone())
+        .text_size(base.text.size)
+        .text_alignment(map_text_alignment(base.text.text_align))
+        .weight(FontWeight::new(base.text.weight))
+        .line_height(LineHeight::FontSizeRelative(base.text.line_height));
+
+    if let Some(font_stack) = font_stack_from_style(base) {
+        lbl = lbl.font(font_stack);
+    }
 
     if run.bold {
         lbl = lbl.weight(FontWeight::BOLD);
@@ -647,17 +790,23 @@ fn styled_label(run: &InlineRun) -> Box<picus_view::AnyWidgetView<(), ()>> {
         lbl = lbl.letter_spacing(0.2);
     }
 
-    let color = if run.strikethrough {
-        run.color.with_alpha(0.6)
+    lbl = lbl
+        .underline(run.link)
+        .strikethrough(run.strikethrough);
+
+    let color = if run.link {
+        palette.link
+    } else if run.code {
+        palette.code_text
     } else {
-        run.color
+        palette.text
     };
 
     if run.code {
         lbl.text_size(13.0)
             .line_break_mode(picus_view::picus_widget::properties::LineBreaking::Overflow)
             .color(color)
-            .background(MD_CODE_BG)
+            .background(palette.code_bg)
             .padding(Padding::all(Length::px(2.0)))
             .corner_radius(Length::px(3.0))
             .boxed()
@@ -670,9 +819,10 @@ fn code_block_view(
     language: Option<&str>,
     code: &str,
     _base: &ResolvedStyle,
+    palette: &MarkdownPalette,
 ) -> Box<picus_view::AnyWidgetView<(), ()>> {
     use picus_view::WidgetView as _;
-    let highlighted = highlight_code(language, code);
+    let highlighted = highlight_code(language, code, palette.text);
 
     let lines = highlighted
         .into_iter()
@@ -688,8 +838,72 @@ fn code_block_view(
     sized_box(flex_col(lines).gap(Length::px(0.0)))
         .width(Dim::Stretch)
         .padding(Padding::all(Length::px(12.0)))
-        .background(MD_PRE_BG)
+        .background(palette.pre_bg)
         .corner_radius(Length::px(6.0))
+        .boxed()
+}
+
+fn table_view(
+    alignments: Vec<Alignment>,
+    header: Vec<Vec<InlineRun>>,
+    rows: Vec<Vec<Vec<InlineRun>>>,
+    base: &ResolvedStyle,
+    palette: &MarkdownPalette,
+) -> Box<picus_view::AnyWidgetView<(), ()>> {
+    use picus_view::WidgetView as _;
+
+    let mut rendered_rows = Vec::new();
+    if !header.is_empty() {
+        rendered_rows.push(
+            table_row_view(header, &alignments, base, palette, true).into_any_flex(),
+        );
+    }
+    rendered_rows.extend(rows.into_iter().map(|row| {
+        table_row_view(row, &alignments, base, palette, false).into_any_flex()
+    }));
+
+    sized_box(flex_col(rendered_rows).gap(Length::px(0.0)))
+        .width(Dim::Stretch)
+        .border(palette.table_border, Length::px(1.0))
+        .corner_radius(Length::px(4.0))
+        .boxed()
+}
+
+fn table_row_view(
+    cells: Vec<Vec<InlineRun>>,
+    alignments: &[Alignment],
+    base: &ResolvedStyle,
+    palette: &MarkdownPalette,
+    header: bool,
+) -> Box<picus_view::AnyWidgetView<(), ()>> {
+    use picus_view::WidgetView as _;
+
+    let column_count = cells.len().max(alignments.len()).max(1);
+    let cell_width = (720.0 / column_count as f64).clamp(96.0, 240.0);
+    let cells = (0..column_count)
+        .map(|index| {
+            let runs = cells.get(index).cloned().unwrap_or_default();
+            let mut cell_style = base.clone();
+            cell_style.text.text_align =
+                table_alignment_to_text_align(alignments.get(index).copied().unwrap_or(Alignment::None));
+            if header {
+                cell_style.text.weight = 600.0;
+            }
+
+            let cell = sized_box(paragraph_view(&runs, &cell_style, palette))
+                .width(Dim::Fixed(Length::px(cell_width)))
+                .padding(Padding::all(Length::px(8.0)))
+                .border(palette.table_border, Length::px(1.0));
+            if header {
+                cell.background(palette.table_header_bg).into_any_flex()
+            } else {
+                cell.into_any_flex()
+            }
+        })
+        .collect::<Vec<_>>();
+
+    flex_row(cells)
+        .cross_axis_alignment(CrossAxisAlignment::Stretch)
         .boxed()
 }
 
@@ -699,7 +913,7 @@ struct HighlightedLine {
     color: Color,
 }
 
-fn highlight_code(language: Option<&str>, code: &str) -> Vec<HighlightedLine> {
+fn highlight_code(language: Option<&str>, code: &str, fallback_color: Color) -> Vec<HighlightedLine> {
     let state = highlight_state();
 
     let syntax = language
@@ -707,12 +921,19 @@ fn highlight_code(language: Option<&str>, code: &str) -> Vec<HighlightedLine> {
         .or_else(|| Some(state.syntax_set.find_syntax_plain_text()));
 
     let Some(syntax) = syntax else {
-        return plain_code_lines(code);
+        return plain_code_lines(code, fallback_color);
     };
 
     let mut highlighter = syntect::easy::HighlightLines::new(syntax, &state.theme);
 
-    code.lines()
+    let lines = if code.is_empty() {
+        vec![""]
+    } else {
+        code.lines().collect::<Vec<_>>()
+    };
+
+    lines
+        .into_iter()
         .map(
             |line| match highlighter.highlight_line(line, &state.syntax_set) {
                 Ok(ranges) => {
@@ -728,23 +949,30 @@ fn highlight_code(language: Option<&str>, code: &str) -> Vec<HighlightedLine> {
                                 Some(Color::from_rgba8(fg.r, fg.g, fg.b, fg.a))
                             }
                         })
-                        .unwrap_or(MD_TEXT);
+                        .unwrap_or(fallback_color);
                     HighlightedLine { text, color }
                 }
                 Err(_) => HighlightedLine {
                     text: line.to_string(),
-                    color: MD_TEXT,
+                    color: fallback_color,
                 },
             },
         )
         .collect()
 }
 
-fn plain_code_lines(code: &str) -> Vec<HighlightedLine> {
-    code.lines()
+fn plain_code_lines(code: &str, fallback_color: Color) -> Vec<HighlightedLine> {
+    let lines = if code.is_empty() {
+        vec![""]
+    } else {
+        code.lines().collect::<Vec<_>>()
+    };
+
+    lines
+        .into_iter()
         .map(|line| HighlightedLine {
             text: line.to_string(),
-            color: MD_TEXT,
+            color: fallback_color,
         })
         .collect()
 }
@@ -753,9 +981,11 @@ fn plain_code_lines(code: &str) -> Vec<HighlightedLine> {
 mod tests {
     use super::*;
 
+    const TEST_TEXT: Color = Color::from_rgb8(0xE6, 0xE6, 0xE6);
+
     #[test]
     fn parses_heading_and_paragraph() {
-        let blocks = parse_markdown_blocks("# Title\n\nSome text.", MD_TEXT);
+        let blocks = parse_markdown_blocks("# Title\n\nSome text.");
         assert!(matches!(
             blocks.first(),
             Some(MdBlock::Heading {
@@ -769,7 +999,7 @@ mod tests {
     #[test]
     fn parses_fenced_code_block_with_language() {
         let md = "```rust\nfn main() {}\n```\n";
-        let blocks = parse_markdown_blocks(md, MD_TEXT);
+        let blocks = parse_markdown_blocks(md);
         let code = blocks
             .iter()
             .find_map(|b| match b {
@@ -784,7 +1014,7 @@ mod tests {
     #[test]
     fn parses_unordered_list_items() {
         let md = "- one\n- two\n- three\n";
-        let blocks = parse_markdown_blocks(md, MD_TEXT);
+        let blocks = parse_markdown_blocks(md);
         let list = blocks
             .iter()
             .find_map(|b| match b {
@@ -798,7 +1028,7 @@ mod tests {
     #[test]
     fn parses_ordered_list_with_start() {
         let md = "3. first\n4. second\n";
-        let blocks = parse_markdown_blocks(md, MD_TEXT);
+        let blocks = parse_markdown_blocks(md);
         let (start, count) = blocks
             .iter()
             .find_map(|b| match b {
@@ -813,7 +1043,7 @@ mod tests {
     #[test]
     fn parses_block_quote_paragraph() {
         let md = "> quoted text\n";
-        let blocks = parse_markdown_blocks(md, MD_TEXT);
+        let blocks = parse_markdown_blocks(md);
         let quote = blocks
             .iter()
             .find_map(|b| match b {
@@ -827,15 +1057,53 @@ mod tests {
     #[test]
     fn parses_thematic_break() {
         let md = "a\n\n---\n\nb\n";
-        let blocks = parse_markdown_blocks(md, MD_TEXT);
+        let blocks = parse_markdown_blocks(md);
         assert!(blocks.iter().any(|b| matches!(b, MdBlock::ThematicBreak)));
+    }
+
+    #[test]
+    fn parses_checked_task_list_marker() {
+        let blocks = parse_markdown_blocks("- [x] Done\n- [ ] Later\n");
+        let items = blocks
+            .iter()
+            .find_map(|b| match b {
+                MdBlock::UnorderedList { items } => Some(items),
+                _ => None,
+            })
+            .expect("should find a task list");
+
+        assert_eq!(runs_to_string(&items[0]), "☑ Done");
+        assert_eq!(runs_to_string(&items[1]), "☐ Later");
+    }
+
+    #[test]
+    fn parses_gfm_table() {
+        let md = "| Feature | Status |\n| :-- | --: |\n| Tables | Done |\n";
+        let blocks = parse_markdown_blocks(md);
+        let (alignments, header, rows) = blocks
+            .iter()
+            .find_map(|b| match b {
+                MdBlock::Table {
+                    alignments,
+                    header,
+                    rows,
+                } => Some((alignments, header, rows)),
+                _ => None,
+            })
+            .expect("should find a table");
+
+        assert_eq!(alignments, &[Alignment::Left, Alignment::Right]);
+        assert_eq!(header.len(), 2);
+        assert_eq!(runs_to_string(&header[0]), "Feature");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(runs_to_string(&rows[0][1]), "Done");
     }
 
     #[test]
     fn inline_runs_merge_same_style() {
         let mut acc = Vec::new();
-        push_inline_run(&mut acc, &[], false, "hello ", MD_TEXT);
-        push_inline_run(&mut acc, &[], false, "world", MD_TEXT);
+        push_inline_run(&mut acc, &[], false, "hello ");
+        push_inline_run(&mut acc, &[], false, "world");
         assert_eq!(acc.len(), 1);
         assert_eq!(acc[0].text, "hello world");
     }
@@ -843,9 +1111,9 @@ mod tests {
     #[test]
     fn inline_runs_split_on_style_change() {
         let mut acc = Vec::new();
-        push_inline_run(&mut acc, &[], false, "plain", MD_TEXT);
-        push_inline_run(&mut acc, &[EmphasisFlag::Bold], false, "bold", MD_TEXT);
-        push_inline_run(&mut acc, &[], false, "plain2", MD_TEXT);
+        push_inline_run(&mut acc, &[], false, "plain");
+        push_inline_run(&mut acc, &[EmphasisFlag::Bold], false, "bold");
+        push_inline_run(&mut acc, &[], false, "plain2");
         assert_eq!(acc.len(), 3);
         assert!(!acc[0].bold);
         assert!(acc[1].bold);
@@ -854,14 +1122,14 @@ mod tests {
 
     #[test]
     fn highlight_code_returns_lines() {
-        let lines = highlight_code(Some("rust"), "fn main() {}");
+        let lines = highlight_code(Some("rust"), "fn main() {}", TEST_TEXT);
         assert!(!lines.is_empty());
         assert!(lines.iter().any(|l| l.text.contains("fn main")));
     }
 
     #[test]
     fn plain_code_lines_fallback_when_no_grammar() {
-        let lines = highlight_code(Some("totally-not-a-language"), "x = 1");
+        let lines = highlight_code(Some("totally-not-a-language"), "x = 1", TEST_TEXT);
         assert!(!lines.is_empty());
     }
 }
@@ -920,8 +1188,8 @@ mod streaming_tests {
         let mut cache = StreamingMarkdownParseCache::default();
         let entity = Entity::from_bits(7);
         let src = "# H\n\npara\n";
-        let first = cache.get_or_parse_completed(entity, src, MD_TEXT);
-        let second = cache.get_or_parse_completed(entity, src, MD_TEXT);
+        let first = cache.get_or_parse_completed(entity, src);
+        let second = cache.get_or_parse_completed(entity, src);
         assert_eq!(first.len(), second.len());
     }
 
@@ -929,8 +1197,8 @@ mod streaming_tests {
     fn cache_reparses_when_completed_source_changes() {
         let mut cache = StreamingMarkdownParseCache::default();
         let entity = Entity::from_bits(9);
-        let first = cache.get_or_parse_completed(entity, "# A\n", MD_TEXT);
-        let second = cache.get_or_parse_completed(entity, "# A\n\n# B\n", MD_TEXT);
+        let first = cache.get_or_parse_completed(entity, "# A\n");
+        let second = cache.get_or_parse_completed(entity, "# A\n\n# B\n");
         assert!(second.len() > first.len());
     }
 
@@ -938,7 +1206,7 @@ mod streaming_tests {
     fn cache_evict_removes_entry() {
         let mut cache = StreamingMarkdownParseCache::default();
         let entity = Entity::from_bits(11);
-        let _ = cache.get_or_parse_completed(entity, "x", MD_TEXT);
+        let _ = cache.get_or_parse_completed(entity, "x");
         assert!(cache.entries.contains_key(&entity));
         cache.evict(entity);
         assert!(!cache.entries.contains_key(&entity));
@@ -955,7 +1223,7 @@ mod streaming_tests {
     fn get_cached_returns_none_when_source_mismatch() {
         let mut cache = StreamingMarkdownParseCache::default();
         let entity = Entity::from_bits(15);
-        let _ = cache.get_or_parse_completed(entity, "old", MD_TEXT);
+        let _ = cache.get_or_parse_completed(entity, "old");
         assert!(cache.get_cached(entity, "new").is_none());
     }
 }

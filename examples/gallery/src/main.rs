@@ -432,6 +432,26 @@ mod tests {
     }
 
     #[test]
+    fn gallery_typography_page_exposes_markdown_sample() {
+        let mut app = build_gallery_app();
+        app.update();
+
+        let has_sample = {
+            let mut query = app.world_mut().query::<&picus::UiMarkdown>();
+            query
+                .iter(app.world())
+                .any(|markdown| markdown.source.contains("Fenced code"))
+        };
+        let markdown_style = picus::resolve_style_for_classes(app.world(), ["gallery.markdown"]);
+
+        assert!(has_sample, "gallery should spawn the markdown typography sample");
+        assert!(
+            markdown_style.colors.text.is_some(),
+            "gallery markdown sample needs an explicit text color"
+        );
+    }
+
+    #[test]
     fn gallery_navigation_view_tracks_invisible_window_resize() {
         let mut app = build_gallery_app();
 

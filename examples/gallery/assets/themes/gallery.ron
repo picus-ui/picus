@@ -526,6 +526,21 @@
       ),
     ),
     (
+      selector: Class("gallery.markdown"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+        ),
+        colors: (
+          text: Var("text-primary"),
+        ),
+        text: (
+          size: 14.0,
+          line_height: 1.45,
+        ),
+      ),
+    ),
+    (
       selector: Class("gallery.split_panel"),
       setter: (
         layout: (
