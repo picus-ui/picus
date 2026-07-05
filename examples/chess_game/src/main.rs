@@ -5,8 +5,8 @@ use std::{
 };
 
 use picus::{
-    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot, UiThemePicker,
-    UiView, apply_label_style, apply_widget_style,
+    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiComponentTemplate, UiEventQueue,
+    UiRoot, UiThemePicker, UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::prelude::*,
     button, button_with_child, checkbox,
@@ -591,7 +591,8 @@ fn build_chess_ui_components_view(
     ))
 }
 
-fn project_chess_root(_: &ChessRootView, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for ChessRootView {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let mut children = ctx.children.into_iter();
     let theme_picker = children.next().unwrap_or_else(|| Arc::new(label("")));
@@ -610,17 +611,22 @@ fn project_chess_root(_: &ChessRootView, ctx: ProjectionCtx<'_>) -> UiView {
         &style,
     ))
 }
+}
 
-fn project_chess_ui_components_panel(_: &ChessUiComponentsPanel, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for ChessUiComponentsPanel {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let game_res = ctx.world.resource::<ChessGameResource>();
     let ui = ctx.world.resource::<ChessUiResource>();
     let flow = ctx.world.resource::<ChessFlowResource>();
     build_chess_ui_components_view(ctx.world, game_res, ui, flow, ctx.entity)
 }
+}
 
-fn project_chess_board_panel(_: &ChessBoardPanel, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for ChessBoardPanel {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let ui = ctx.world.resource::<ChessUiResource>();
     build_chess_board_view(ctx.world, ui, ctx.entity)
+}
 }
 
 fn setup_chess_world(mut commands: Commands) {
@@ -648,10 +654,6 @@ fn drain_events_and_tick(world: &mut World) {
         tick_game(game_res, ui, flow);
     });
 }
-
-picus::impl_ui_component_template!(ChessRootView, project_chess_root);
-picus::impl_ui_component_template!(ChessUiComponentsPanel, project_chess_ui_components_panel,);
-picus::impl_ui_component_template!(ChessBoardPanel, project_chess_board_panel);
 
 fn build_bevy_chess_app() -> App {
     init_logging();

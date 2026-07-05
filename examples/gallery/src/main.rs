@@ -9,7 +9,7 @@
 //!
 //! - [`helpers`] — Shared utilities (card, grid, note, placeholder, canvas/image helpers)
 //! - [`state`] — `GalleryPage` enum, `GalleryState`/`GalleryRuntime` resources, `NavCategory`
-//! - [`views`] — `UiComponentTemplate` implementations for `GalleryRoot` and `GalleryStatus`
+//! - [`views`] — shell components and projectors for `GalleryRoot` and `GalleryStatus`
 //! - [`events`] — Event dispatch for all component interactions
 //! - [`pages`] — 16 page modules, each showcasing a component category
 //!
@@ -305,9 +305,6 @@ fn spawn_page(
         .id();
     build(commands, page_col)
 }
-
-picus::impl_ui_component_template!(GalleryRoot, views::project_gallery_root);
-picus::impl_ui_component_template!(GalleryStatus, views::project_gallery_status);
 
 /// Build the Bevy application with all gallery systems and resources.
 fn build_gallery_app() -> App {

@@ -184,6 +184,9 @@ components with `AppPicusExt::register_ui_component::<T>()`.
 - `project(&T, ProjectionCtx) -> UiView` converts ECS state into a Picus retained
   view.
 
+Application components implement this trait directly so projector signatures
+remain constrained by the trait contract.
+
 Projection uses `entity.to_bits()` for stable node identities. Core root/container
 types include `UiRoot`, `UiOverlayRoot`, `UiFlexColumn`, `UiFlexRow`, `UiGrid`
 with MewUI-style `UiGridLength` track intent and `UiGridCell` attached

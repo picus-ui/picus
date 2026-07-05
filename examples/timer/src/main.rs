@@ -6,8 +6,8 @@ use std::{
 use tokio::time;
 
 use picus::{
-    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot, UiThemePicker,
-    UiView, apply_label_style, apply_widget_style,
+    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiComponentTemplate, UiEventQueue,
+    UiRoot, UiThemePicker, UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::prelude::*,
     button, emit_ui_action,
@@ -210,7 +210,8 @@ fn draw_timer_dial(scene: &mut Scene, size: Size, progress: f64, running: bool) 
         .draw();
 }
 
-fn project_timer_root(_: &TimerRootView, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for TimerRootView {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let root_style = resolve_style(ctx.world, ctx.entity);
     let content = apply_widget_style(
         flex_col(
@@ -241,13 +242,17 @@ fn project_timer_root(_: &TimerRootView, ctx: ProjectionCtx<'_>) -> UiView {
 
     Arc::new(fork(content, Some(heartbeat)))
 }
+}
 
-fn project_timer_title(_: &TimerTitle, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for TimerTitle {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let title_style = resolve_style_for_classes(ctx.world, ["timer.title"]);
     Arc::new(apply_label_style(label("Timer"), &title_style))
 }
+}
 
-fn project_timer_dial(_: &TimerDialView, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for TimerDialView {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let dial_shell_style = resolve_style_for_classes(ctx.world, ["timer.dial-shell"]);
     let state = ctx.world.resource::<TimerState>().clone();
     let progress = if state.duration_secs > 0.0 {
@@ -277,8 +282,10 @@ fn project_timer_dial(_: &TimerDialView, ctx: ProjectionCtx<'_>) -> UiView {
         .fixed_height(Length::px(DIAL_SIZE)),
     )
 }
+}
 
-fn project_timer_elapsed_row(_: &TimerElapsedRow, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for TimerElapsedRow {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let row_style = resolve_style_for_classes(ctx.world, ["timer.row"]);
     let body_text_style = resolve_style_for_classes(ctx.world, ["timer.body-text"]);
     let state = ctx.world.resource::<TimerState>();
@@ -291,8 +298,10 @@ fn project_timer_elapsed_row(_: &TimerElapsedRow, ctx: ProjectionCtx<'_>) -> UiV
         &row_style,
     ))
 }
+}
 
-fn project_timer_progress_row(_: &TimerProgressRow, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for TimerProgressRow {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let state = ctx.world.resource::<TimerState>();
     let progress = if state.duration_secs > 0.0 {
         Some(clamp01(state.elapsed_secs / state.duration_secs))
@@ -301,8 +310,10 @@ fn project_timer_progress_row(_: &TimerProgressRow, ctx: ProjectionCtx<'_>) -> U
     };
     Arc::new(progress_bar(progress))
 }
+}
 
-fn project_timer_duration_row(_: &TimerDurationRow, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for TimerDurationRow {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let row_style = resolve_style_for_classes(ctx.world, ["timer.row"]);
     let body_text_style = resolve_style_for_classes(ctx.world, ["timer.body-text"]);
     let state = ctx.world.resource::<TimerState>();
@@ -327,8 +338,10 @@ fn project_timer_duration_row(_: &TimerDurationRow, ctx: ProjectionCtx<'_>) -> U
         &row_style,
     ))
 }
+}
 
-fn project_timer_ui_components_row(_: &TimerUiComponentsRow, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for TimerUiComponentsRow {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let row_style = resolve_style_for_classes(ctx.world, ["timer.row"]);
     let pause_button_style =
         resolve_style_for_entity_classes(ctx.world, ctx.entity, ["timer.pause-button"]);
@@ -350,6 +363,7 @@ fn project_timer_ui_components_row(_: &TimerUiComponentsRow, ctx: ProjectionCtx<
         )),
         &row_style,
     ))
+}
 }
 
 fn setup_timer_world(mut commands: Commands) {
@@ -382,14 +396,6 @@ fn drain_timer_events_and_tick(world: &mut World) {
         tick_timer(&mut state);
     }
 }
-
-picus::impl_ui_component_template!(TimerRootView, project_timer_root);
-picus::impl_ui_component_template!(TimerTitle, project_timer_title);
-picus::impl_ui_component_template!(TimerDialView, project_timer_dial);
-picus::impl_ui_component_template!(TimerElapsedRow, project_timer_elapsed_row);
-picus::impl_ui_component_template!(TimerProgressRow, project_timer_progress_row);
-picus::impl_ui_component_template!(TimerDurationRow, project_timer_duration_row);
-picus::impl_ui_component_template!(TimerUiComponentsRow, project_timer_ui_components_row,);
 
 fn build_bevy_timer_app() -> App {
     init_logging();

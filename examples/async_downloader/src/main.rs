@@ -6,8 +6,8 @@ use std::{
 };
 
 use picus::{
-    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiDialog, UiEventQueue, UiRoot,
-    UiThemePicker, UiView, apply_label_style, apply_widget_style,
+    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiComponentTemplate, UiDialog,
+    UiEventQueue, UiRoot, UiThemePicker, UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::prelude::*,
     bevy_tasks::{IoTaskPool, TaskPoolBuilder},
@@ -284,7 +284,8 @@ fn progress_value(state: &DownloadState) -> Option<f64> {
         .map(|total| state.downloaded_bytes as f64 / total as f64)
 }
 
-fn project_download_root(_: &DownloadRootView, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for DownloadRootView {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let root_style = resolve_style(ctx.world, ctx.entity);
     let content = apply_widget_style(
         flex_col(
@@ -315,16 +316,20 @@ fn project_download_root(_: &DownloadRootView, ctx: ProjectionCtx<'_>) -> UiView
 
     Arc::new(fork(content, Some(heartbeat)))
 }
+}
 
-fn project_download_title(_: &DownloadTitle, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for DownloadTitle {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let title_style = resolve_style_for_classes(ctx.world, ["download.title"]);
     Arc::new(apply_label_style(
         label("Remote File Downloader"),
         &title_style,
     ))
 }
+}
 
-fn project_download_url_row(_: &DownloadUrlRow, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for DownloadUrlRow {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let row_style = resolve_style_for_classes(ctx.world, ["download.row"]);
     let input_style = resolve_style_for_classes(ctx.world, ["download.url-input"]);
     let status_style = resolve_style_for_classes(ctx.world, ["download.status"]);
@@ -343,8 +348,10 @@ fn project_download_url_row(_: &DownloadUrlRow, ctx: ProjectionCtx<'_>) -> UiVie
         &row_style,
     ))
 }
+}
 
-fn project_download_action_row(_: &DownloadActionRow, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for DownloadActionRow {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let row_style = resolve_style_for_classes(ctx.world, ["download.row"]);
     let button_style = resolve_style_for_classes(ctx.world, ["download.button"]);
     let state = ctx.world.resource::<DownloadState>();
@@ -364,8 +371,10 @@ fn project_download_action_row(_: &DownloadActionRow, ctx: ProjectionCtx<'_>) ->
         &row_style,
     ))
 }
+}
 
-fn project_download_dialog_mode_row(_: &DownloadDialogModeRow, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for DownloadDialogModeRow {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let row_style = resolve_style_for_classes(ctx.world, ["download.row"]);
     let status_style = resolve_style_for_classes(ctx.world, ["download.status"]);
     let state = ctx.world.resource::<DownloadState>();
@@ -391,8 +400,10 @@ fn project_download_dialog_mode_row(_: &DownloadDialogModeRow, ctx: ProjectionCt
         &row_style,
     ))
 }
+}
 
-fn project_download_progress_panel(_: &DownloadProgressPanel, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for DownloadProgressPanel {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let status_style = resolve_style_for_classes(ctx.world, ["download.status"]);
     let state = ctx.world.resource::<DownloadState>();
 
@@ -418,6 +429,7 @@ fn project_download_progress_panel(_: &DownloadProgressPanel, ctx: ProjectionCtx
         apply_label_style(label(target_text), &status_style).into_any_flex(),
         apply_label_style(label(state.status.clone()), &status_style).into_any_flex(),
     )))
+}
 }
 
 fn setup_download_world(mut commands: Commands) {
@@ -546,13 +558,6 @@ fn drain_download_events(world: &mut World) {
         }
     }
 }
-
-picus::impl_ui_component_template!(DownloadRootView, project_download_root);
-picus::impl_ui_component_template!(DownloadTitle, project_download_title);
-picus::impl_ui_component_template!(DownloadUrlRow, project_download_url_row);
-picus::impl_ui_component_template!(DownloadActionRow, project_download_action_row);
-picus::impl_ui_component_template!(DownloadDialogModeRow, project_download_dialog_mode_row,);
-picus::impl_ui_component_template!(DownloadProgressPanel, project_download_progress_panel);
 
 fn build_async_downloader_app() -> App {
     init_logging();

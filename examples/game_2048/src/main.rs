@@ -17,8 +17,8 @@ use picus::masonry_core::{
     properties::Padding,
 };
 use picus::{
-    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot, UiThemePicker,
-    UiView, apply_label_style, apply_widget_style,
+    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiComponentTemplate, UiEventQueue,
+    UiRoot, UiThemePicker, UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::prelude::*,
     bevy_input::{ButtonInput, keyboard::KeyCode},
@@ -751,7 +751,8 @@ where
     }
 }
 
-fn project_game_root(_: &GameRoot, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for GameRoot {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let mut children = ctx.children.into_iter();
     let theme_picker = children.next().unwrap_or_else(|| Arc::new(label("")));
@@ -774,8 +775,10 @@ fn project_game_root(_: &GameRoot, ctx: ProjectionCtx<'_>) -> UiView {
 
     Arc::new(hotkey_capture(ctx.entity, portal(content)))
 }
+}
 
-fn project_header_block(_: &HeaderBlock, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for HeaderBlock {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let title_style = resolve_style_for_classes(ctx.world, ["g2048.title"]);
     let subtitle_style = resolve_style_for_classes(ctx.world, ["g2048.subtitle"]);
@@ -792,8 +795,10 @@ fn project_header_block(_: &HeaderBlock, ctx: ProjectionCtx<'_>) -> UiView {
         &style,
     ))
 }
+}
 
-fn project_score_strip(_: &ScoreStrip, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for ScoreStrip {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let children = ctx
         .children
@@ -806,8 +811,10 @@ fn project_score_strip(_: &ScoreStrip, ctx: ProjectionCtx<'_>) -> UiView {
         &style,
     ))
 }
+}
 
-fn project_score_card(score_card: &ScoreCard, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for ScoreCard {
+    fn project(score_card: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let state = ctx.world.resource::<Game2048State>();
     let style = resolve_style(ctx.world, ctx.entity);
     let caption_style = resolve_style_for_classes(ctx.world, ["g2048.score-caption"]);
@@ -822,8 +829,10 @@ fn project_score_card(score_card: &ScoreCard, ctx: ProjectionCtx<'_>) -> UiView 
         &style,
     ))
 }
+}
 
-fn project_status_line(_: &StatusLine, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for StatusLine {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let state = ctx.world.resource::<Game2048State>();
     let (message, class_name) = status_message(&state.game);
     let style = resolve_style_for_classes(ctx.world, ["g2048.status", class_name]);
@@ -833,8 +842,10 @@ fn project_status_line(_: &StatusLine, ctx: ProjectionCtx<'_>) -> UiView {
         &style,
     ))
 }
+}
 
-fn project_game_flow_row(_: &GameFlowRow, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for GameFlowRow {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let children = ctx
         .children
@@ -849,8 +860,10 @@ fn project_game_flow_row(_: &GameFlowRow, ctx: ProjectionCtx<'_>) -> UiView {
         &style,
     ))
 }
+}
 
-fn project_board_container(_: &BoardContainer, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for BoardContainer {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let rows = ctx
         .children
@@ -863,8 +876,10 @@ fn project_board_container(_: &BoardContainer, ctx: ProjectionCtx<'_>) -> UiView
         &style,
     ))
 }
+}
 
-fn project_side_panel(_: &SidePanel, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for SidePanel {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let viewport = *ctx.world.resource::<GameViewport>();
     let metrics = GameLayoutMetrics::from_viewport(viewport);
@@ -884,8 +899,10 @@ fn project_side_panel(_: &SidePanel, ctx: ProjectionCtx<'_>) -> UiView {
         .fixed_width(Length::px(metrics.side_panel_width)),
     )
 }
+}
 
-fn project_board_row(_: &BoardRow, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for BoardRow {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let cells = ctx
         .children
@@ -898,8 +915,10 @@ fn project_board_row(_: &BoardRow, ctx: ProjectionCtx<'_>) -> UiView {
         &style,
     ))
 }
+}
 
-fn project_tile_cell(tile: &TileCell, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for TileCell {
+    fn project(tile: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let state = ctx.world.resource::<Game2048State>();
     let viewport = *ctx.world.resource::<GameViewport>();
     let metrics = GameLayoutMetrics::from_viewport(viewport);
@@ -922,8 +941,10 @@ fn project_tile_cell(tile: &TileCell, ctx: ProjectionCtx<'_>) -> UiView {
         .fixed_height(Length::px(metrics.tile_size)),
     )
 }
+}
 
-fn project_ui_components_pad(_: &UiComponentsPad, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for UiComponentsPad {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let rows = ctx
         .children
@@ -938,8 +959,10 @@ fn project_ui_components_pad(_: &UiComponentsPad, ctx: ProjectionCtx<'_>) -> UiV
         &style,
     ))
 }
+}
 
-fn project_ui_components_row(_: &UiComponentsRow, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for UiComponentsRow {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let buttons = ctx
         .children
@@ -952,8 +975,10 @@ fn project_ui_components_row(_: &UiComponentsRow, ctx: ProjectionCtx<'_>) -> UiV
         &style,
     ))
 }
+}
 
-fn project_ui_component_button(button_info: &UiComponentButton, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for UiComponentButton {
+    fn project(button_info: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let viewport = *ctx.world.resource::<GameViewport>();
     let metrics = GameLayoutMetrics::from_viewport(viewport);
     let style = resolve_style(ctx.world, ctx.entity);
@@ -978,8 +1003,10 @@ fn project_ui_component_button(button_info: &UiComponentButton, ctx: ProjectionC
         .fixed_height(Length::px(metrics.ui_component_button_height)),
     )
 }
+}
 
-fn project_hint_line(_: &HintLine, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for HintLine {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     Arc::new(apply_widget_style(
         apply_label_style(
@@ -990,6 +1017,7 @@ fn project_hint_line(_: &HintLine, ctx: ProjectionCtx<'_>) -> UiView {
         ),
         &style,
     ))
+}
 }
 
 fn setup_game_world(mut commands: Commands) {
@@ -1264,21 +1292,6 @@ fn apply_keyboard_game_input(world: &mut World) {
         state.game.try_move(direction);
     }
 }
-
-picus::impl_ui_component_template!(GameRoot, project_game_root);
-picus::impl_ui_component_template!(HeaderBlock, project_header_block);
-picus::impl_ui_component_template!(ScoreStrip, project_score_strip);
-picus::impl_ui_component_template!(ScoreCard, project_score_card);
-picus::impl_ui_component_template!(StatusLine, project_status_line);
-picus::impl_ui_component_template!(GameFlowRow, project_game_flow_row);
-picus::impl_ui_component_template!(BoardContainer, project_board_container);
-picus::impl_ui_component_template!(BoardRow, project_board_row);
-picus::impl_ui_component_template!(TileCell, project_tile_cell);
-picus::impl_ui_component_template!(SidePanel, project_side_panel);
-picus::impl_ui_component_template!(UiComponentsPad, project_ui_components_pad);
-picus::impl_ui_component_template!(UiComponentsRow, project_ui_components_row);
-picus::impl_ui_component_template!(UiComponentButton, project_ui_component_button);
-picus::impl_ui_component_template!(HintLine, project_hint_line);
 
 fn build_2048_app() -> App {
     init_logging();

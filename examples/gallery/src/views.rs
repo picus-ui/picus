@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use picus::{
-    ProjectionCtx, UiView, apply_label_style, apply_widget_style,
+    ProjectionCtx, UiComponentTemplate, UiView, apply_label_style, apply_widget_style,
     bevy_ecs::prelude::*,
     masonry_core::{
         layout::{Dim, Length},
@@ -30,7 +30,8 @@ pub struct GalleryRoot;
 #[derive(Component, Debug, Clone, Copy, Default)]
 pub struct GalleryStatus;
 
-pub fn project_gallery_root(_: &GalleryRoot, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for GalleryRoot {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let child_entities = ctx
         .world
@@ -62,8 +63,10 @@ pub fn project_gallery_root(_: &GalleryRoot, ctx: ProjectionCtx<'_>) -> UiView {
         ),
     )
 }
+}
 
-pub fn project_gallery_status(_: &GalleryStatus, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for GalleryStatus {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let text_style = resolve_style_for_classes(ctx.world, ["gallery.note"]);
     let state = ctx.world.resource::<GalleryState>();
@@ -72,4 +75,5 @@ pub fn project_gallery_status(_: &GalleryStatus, ctx: ProjectionCtx<'_>) -> UiVi
         apply_label_style(label(state.last_event.clone()), &text_style),
         &style,
     ))
+}
 }

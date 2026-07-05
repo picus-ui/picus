@@ -132,8 +132,5 @@ pub mod prelude {
         app::*, components::*, events::*, i18n::*, overlay::*, projection::*, runtime::*, scene::*,
         styling::*,
     };
-    pub use picus_core::{
-        bevy_ecs::hierarchy::{ChildOf, Children},
-        impl_ui_component_template,
-    };
+    pub use picus_core::bevy_ecs::hierarchy::{ChildOf, Children};
 }

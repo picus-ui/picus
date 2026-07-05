@@ -1,10 +1,10 @@
-//! Projection functions for picuscode view markers.
+//! `UiComponentTemplate` implementations for picuscode view markers.
 
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use picus::{
-    ProjectionCtx, UiView, apply_direct_text_input_style, apply_label_style, apply_widget_style,
+    ProjectionCtx, UiComponentTemplate, UiView, apply_direct_text_input_style, apply_label_style, apply_widget_style,
     bevy_ecs::hierarchy::Children,
     button_with_child, emit_ui_action,
     icon::icon,
@@ -28,7 +28,8 @@ use crate::action::PicusCodeAction;
 use crate::bridge::ThreadSummary;
 use crate::state::*;
 
-pub fn project_chat_root(_: &ChatRootView, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for ChatRootView {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let children = child_entities(&ctx)
         .into_iter()
@@ -57,8 +58,10 @@ pub fn project_chat_root(_: &ChatRootView, ctx: ProjectionCtx<'_>) -> UiView {
         ),
     )
 }
+}
 
-pub fn project_title_bar(_: &ChatTitleBarView, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for ChatTitleBarView {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let snapshot = HeaderSnapshot::from_state(&ctx);
     let title = text_view(&ctx, ["picuscode.title"], "picuscode");
@@ -101,8 +104,10 @@ pub fn project_title_bar(_: &ChatTitleBarView, ctx: ProjectionCtx<'_>) -> UiView
         &style,
     ))
 }
+}
 
-pub fn project_chat_body(_: &ChatBodyView, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for ChatBodyView {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let children = child_entities(&ctx)
         .into_iter()
@@ -123,8 +128,10 @@ pub fn project_chat_body(_: &ChatBodyView, ctx: ProjectionCtx<'_>) -> UiView {
         &style,
     ))
 }
+}
 
-pub fn project_sidebar_column(_: &SidebarColumnView, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for SidebarColumnView {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let state = ctx.world.get_resource::<PicusState>();
     let active_thread = state.and_then(|s| s.active_thread.clone());
@@ -161,8 +168,10 @@ pub fn project_sidebar_column(_: &SidebarColumnView, ctx: ProjectionCtx<'_>) -> 
         &style,
     ))
 }
+}
 
-pub fn project_transcript_column(_: &TranscriptColumnView, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for TranscriptColumnView {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let state = ctx.world.get_resource::<PicusState>();
     let summary = TranscriptSummary::from_state(state);
@@ -182,8 +191,10 @@ pub fn project_transcript_column(_: &TranscriptColumnView, ctx: ProjectionCtx<'_
         &style,
     ))
 }
+}
 
-pub fn project_message_row(row: &MessageRowView, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for MessageRowView {
+    fn project(row: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let role = message_role(row.role.as_str());
     let row_style = resolve_style_for_classes(
         ctx.world,
@@ -210,8 +221,10 @@ pub fn project_message_row(row: &MessageRowView, ctx: ProjectionCtx<'_>) -> UiVi
         &row_style,
     ))
 }
+}
 
-pub fn project_composer(_: &ComposerView, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for ComposerView {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let state = ctx.world.get_resource::<PicusState>();
     let draft = ctx
@@ -265,8 +278,10 @@ pub fn project_composer(_: &ComposerView, ctx: ProjectionCtx<'_>) -> UiView {
         &style,
     ))
 }
+}
 
-pub fn project_status_line(_: &StatusLineView, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for StatusLineView {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let state = ctx.world.get_resource::<PicusState>();
     let metrics = state
@@ -334,8 +349,10 @@ pub fn project_status_line(_: &StatusLineView, ctx: ProjectionCtx<'_>) -> UiView
         &style,
     ))
 }
+}
 
-pub fn project_about_root(_: &AboutRootView, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for AboutRootView {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let close_btn = toolbar_button(&ctx, PicusCodeAction::CloseAbout, "Close", PicusIcon::X);
     let children = ctx
@@ -353,8 +370,10 @@ pub fn project_about_root(_: &AboutRootView, ctx: ProjectionCtx<'_>) -> UiView {
         &style,
     ))
 }
+}
 
-pub fn project_settings_root(_: &SettingsRootView, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for SettingsRootView {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let close_btn = toolbar_button(&ctx, PicusCodeAction::CloseSettings, "Close", PicusIcon::X);
     let save_btn = toolbar_button(
@@ -393,8 +412,10 @@ pub fn project_settings_root(_: &SettingsRootView, ctx: ProjectionCtx<'_>) -> Ui
         &style,
     ))
 }
+}
 
-pub fn project_settings_form(_: &SettingsFormView, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for SettingsFormView {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let state = ctx.world.get_resource::<PicusState>();
 
@@ -465,6 +486,7 @@ pub fn project_settings_form(_: &SettingsFormView, ctx: ProjectionCtx<'_>) -> Ui
             .gap(Length::px(style.layout.gap)),
         &style,
     ))
+}
 }
 
 fn child_entities(ctx: &ProjectionCtx<'_>) -> Vec<picus::bevy_ecs::entity::Entity> {

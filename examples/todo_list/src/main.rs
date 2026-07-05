@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use picus::{
-    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot, UiThemePicker,
-    UiView, apply_label_style, apply_text_input_style, apply_widget_style,
+    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiComponentTemplate, UiEventQueue,
+    UiRoot, UiThemePicker, UiView, apply_label_style, apply_text_input_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{
         hierarchy::{ChildOf, Children},
@@ -88,7 +88,8 @@ struct TodoFilterBar;
 #[derive(Component, Debug, Clone, Copy, Default)]
 struct FilterToggle(FilterType);
 
-fn project_todo_root(_: &TodoRootView, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for TodoRootView {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let children = ctx
         .children
@@ -98,13 +99,17 @@ fn project_todo_root(_: &TodoRootView, ctx: ProjectionCtx<'_>) -> UiView {
 
     Arc::new(apply_widget_style(flex_col(children), &style))
 }
+}
 
-fn project_todo_header(_: &TodoHeader, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for TodoHeader {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     Arc::new(apply_label_style(label("todos"), &style))
 }
+}
 
-fn project_todo_input_area(_: &TodoInputArea, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for TodoInputArea {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let area_style = resolve_style(ctx.world, ctx.entity);
     let input_style = resolve_style_for_classes(ctx.world, ["todo.input"]);
     let add_button_style =
@@ -134,8 +139,10 @@ fn project_todo_input_area(_: &TodoInputArea, ctx: ProjectionCtx<'_>) -> UiView 
         &area_style,
     ))
 }
+}
 
-fn project_todo_list_container(_: &TodoListContainer, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for TodoListContainer {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let container_style = resolve_style(ctx.world, ctx.entity);
     let empty_style = resolve_style_for_classes(ctx.world, ["todo.empty"]);
     let viewport_style = resolve_style_for_classes(ctx.world, ["todo.list-viewport"]);
@@ -185,8 +192,10 @@ fn project_todo_list_container(_: &TodoListContainer, ctx: ProjectionCtx<'_>) ->
         &container_style,
     ))
 }
+}
 
-fn project_todo_item(item: &TodoItem, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for TodoItem {
+    fn project(item: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let entity = ctx.entity;
     let style = resolve_style(ctx.world, ctx.entity);
     let checkbox_style = resolve_style_for_classes(ctx.world, ["todo.item-checkbox"]);
@@ -211,8 +220,10 @@ fn project_todo_item(item: &TodoItem, ctx: ProjectionCtx<'_>) -> UiView {
         &style,
     ))
 }
+}
 
-fn project_filter_bar(_: &TodoFilterBar, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for TodoFilterBar {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let list_container = ctx.world.resource::<TodoRuntime>().list_container;
     let has_tasks = ctx
@@ -235,8 +246,10 @@ fn project_filter_bar(_: &TodoFilterBar, ctx: ProjectionCtx<'_>) -> UiView {
         &style,
     ))
 }
+}
 
-fn project_filter_toggle(filter_toggle: &FilterToggle, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for FilterToggle {
+    fn project(filter_toggle: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let filter = filter_toggle.0;
     let active = ctx.world.resource::<ActiveFilter>().0;
@@ -248,6 +261,7 @@ fn project_filter_toggle(filter_toggle: &FilterToggle, ctx: ProjectionCtx<'_>) -
         .text_size(style.text.size),
         &style,
     ))
+}
 }
 
 fn todo_matches_filter(item: &TodoItem, filter: FilterType) -> bool {
@@ -390,14 +404,6 @@ fn drain_todo_events_and_mutate_world(world: &mut World) {
         }
     }
 }
-
-picus::impl_ui_component_template!(TodoRootView, project_todo_root);
-picus::impl_ui_component_template!(TodoHeader, project_todo_header);
-picus::impl_ui_component_template!(TodoInputArea, project_todo_input_area);
-picus::impl_ui_component_template!(TodoListContainer, project_todo_list_container);
-picus::impl_ui_component_template!(TodoItem, project_todo_item);
-picus::impl_ui_component_template!(TodoFilterBar, project_filter_bar);
-picus::impl_ui_component_template!(FilterToggle, project_filter_toggle);
 
 fn build_bevy_todo_app() -> App {
     init_logging();

@@ -121,21 +121,6 @@ pub trait UiComponentTemplate: Component + Sized {
     }
 }
 
-/// Implement [`UiComponentTemplate`] for a component by forwarding to a projector function.
-///
-/// This is intended for application/example-defined ECS components that already expose
-/// a projector function with signature `fn(&T, ProjectionCtx<'_>) -> UiView`.
-#[macro_export]
-macro_rules! impl_ui_component_template {
-    ($component:ty, $project:path $(,)?) => {
-        impl $crate::UiComponentTemplate for $component {
-            fn project(component: &Self, ctx: $crate::ProjectionCtx<'_>) -> $crate::UiView {
-                $project(component, ctx)
-            }
-        }
-    };
-}
-
 /// Internal resource tracking which UI component types were already registered.
 #[derive(Resource, Debug, Default)]
 pub struct RegisteredUiComponentTypes {

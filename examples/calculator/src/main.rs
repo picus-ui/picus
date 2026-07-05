@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use picus::{
-    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot, UiThemePicker,
-    UiView, apply_label_style, apply_widget_style,
+    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiComponentTemplate, UiEventQueue,
+    UiRoot, UiThemePicker, UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::prelude::*,
     button, resolve_style, resolve_style_for_classes, run_app_with_window_options,
@@ -421,7 +421,8 @@ fn project_calc_button(entity: Entity, button_data: &CalcButtonSpec, world: &Wor
     ))
 }
 
-fn project_calc_root(_: &CalcRoot, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for CalcRoot {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let root_style = resolve_style(ctx.world, ctx.entity);
     Arc::new(apply_widget_style(
         flex_col(
@@ -433,8 +434,10 @@ fn project_calc_root(_: &CalcRoot, ctx: ProjectionCtx<'_>) -> UiView {
         &root_style,
     ))
 }
+}
 
-fn project_calc_display(_: &CalcDisplayPanel, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for CalcDisplayPanel {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let display_row_style = resolve_style_for_classes(ctx.world, ["calc.display.row"]);
     let display_text_style = resolve_style_for_classes(ctx.world, ["calc.display.text"]);
     let engine = ctx.world.resource::<CalculatorEngine>();
@@ -446,8 +449,10 @@ fn project_calc_display(_: &CalcDisplayPanel, ctx: ProjectionCtx<'_>) -> UiView 
         &display_row_style,
     ))
 }
+}
 
-fn project_calc_keypad(_: &CalcKeypad, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for CalcKeypad {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     Arc::new(flex_col(
         ctx.children
             .into_iter()
@@ -455,8 +460,10 @@ fn project_calc_keypad(_: &CalcKeypad, ctx: ProjectionCtx<'_>) -> UiView {
             .collect::<Vec<_>>(),
     ))
 }
+}
 
-fn project_calc_row(_: &CalcButtonRow, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for CalcButtonRow {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     let row_style = resolve_style_for_classes(ctx.world, ["calc.row"]);
     Arc::new(apply_widget_style(
         flex_row(
@@ -468,9 +475,12 @@ fn project_calc_row(_: &CalcButtonRow, ctx: ProjectionCtx<'_>) -> UiView {
         &row_style,
     ))
 }
+}
 
-fn project_calc_button_component(button_data: &CalcButtonSpec, ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for CalcButtonSpec {
+    fn project(button_data: &Self, ctx: ProjectionCtx<'_>) -> UiView {
     project_calc_button(ctx.entity, button_data, ctx.world)
+}
 }
 
 fn setup_calculator_world(mut commands: Commands) {
@@ -528,12 +538,6 @@ fn drain_calc_events(world: &mut World) {
         engine.apply_event(event.action);
     }
 }
-
-picus::impl_ui_component_template!(CalcRoot, project_calc_root);
-picus::impl_ui_component_template!(CalcDisplayPanel, project_calc_display);
-picus::impl_ui_component_template!(CalcKeypad, project_calc_keypad);
-picus::impl_ui_component_template!(CalcButtonRow, project_calc_row);
-picus::impl_ui_component_template!(CalcButtonSpec, project_calc_button_component);
 
 fn build_bevy_calculator_app() -> App {
     init_logging();

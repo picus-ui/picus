@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use picus::{
     AppPicusExt, BuiltinUiAction, PicusPlugin, ProjectionCtx, UiButton, UiComboBox, UiComboOption,
-    UiEventQueue, UiFlexColumn, UiLabel, UiRoot, UiThemePicker, UiView,
+    UiComponentTemplate, UiEventQueue, UiFlexColumn, UiLabel, UiRoot, UiThemePicker, UiView,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::prelude::*,
     run_app_with_window_options,
@@ -23,11 +23,11 @@ struct UiToast {
 #[derive(Component, Debug, Clone, Copy, Default)]
 struct SpawnToastButton;
 
-fn project_ui_toast(toast: &UiToast, _ctx: ProjectionCtx<'_>) -> UiView {
+impl UiComponentTemplate for UiToast {
+    fn project(toast: &Self, _ctx: ProjectionCtx<'_>) -> UiView {
     Arc::new(transformed(label(toast.message.clone())).translate((520.0, 40.0)))
 }
-
-picus::impl_ui_component_template!(UiToast, project_ui_toast);
+}
 
 fn setup_overlay_hit_routing_world(mut commands: Commands) {
     commands.spawn_scene(bsn! {

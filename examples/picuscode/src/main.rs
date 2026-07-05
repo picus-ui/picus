@@ -171,18 +171,6 @@ fn spawn_settings_window(world: &mut World) -> (Entity, Entity) {
     (settings_entity, window_entity)
 }
 
-picus::impl_ui_component_template!(ChatRootView, ui::project_chat_root);
-picus::impl_ui_component_template!(ChatTitleBarView, ui::project_title_bar);
-picus::impl_ui_component_template!(ChatBodyView, ui::project_chat_body);
-picus::impl_ui_component_template!(SidebarColumnView, ui::project_sidebar_column);
-picus::impl_ui_component_template!(TranscriptColumnView, ui::project_transcript_column);
-picus::impl_ui_component_template!(MessageRowView, ui::project_message_row);
-picus::impl_ui_component_template!(ComposerView, ui::project_composer);
-picus::impl_ui_component_template!(StatusLineView, ui::project_status_line);
-picus::impl_ui_component_template!(AboutRootView, ui::project_about_root);
-picus::impl_ui_component_template!(SettingsRootView, ui::project_settings_root);
-picus::impl_ui_component_template!(SettingsFormView, ui::project_settings_form);
-
 /// System: locate the sidebar + transcript entities, spawn the bridge, and
 /// insert the shared `PicusState` resource. Requests an initial thread list
 /// and config list so the first frame has real data.
