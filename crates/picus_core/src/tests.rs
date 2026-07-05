@@ -416,7 +416,14 @@ fn markdown_projects_common_blocks_into_retained_labels() {
         .expect("markdown heading should project as a label");
     assert_eq!(title.get_prop::<ContentColor>().color, text_color);
 
-    for expected in ["bold", "link", "☑ Complete", "Feature", "Done", "let x = 1;"] {
+    for expected in [
+        "bold",
+        "link",
+        "☑ Complete",
+        "Feature",
+        "Done",
+        "let x = 1;",
+    ] {
         assert!(
             find_widget_id_by_debug_text(layer_root, expected).is_some(),
             "markdown should project retained label text `{expected}`"
@@ -728,9 +735,7 @@ fn load_style_sheet_ron_default_variant_applies_registered_variant_when_unset() 
 
     let entity = app
         .world_mut()
-        .spawn((crate::StyleClass(vec![
-            "demo.uses-theme-token".to_string(),
-        ]),))
+        .spawn((crate::StyleClass(vec!["demo.uses-theme-token".to_string()]),))
         .id();
 
     assert_eq!(
@@ -3548,14 +3553,9 @@ fn first_widget_by_short_name_and_debug_text<'w>(
         return Some(widget);
     }
 
-    widget
-        .children()
-        .into_iter()
-        .find_map(|child| first_widget_by_short_name_and_debug_text(
-            child,
-            short_type_name,
-            debug_text,
-        ))
+    widget.children().into_iter().find_map(|child| {
+        first_widget_by_short_name_and_debug_text(child, short_type_name, debug_text)
+    })
 }
 
 #[test]
@@ -5125,10 +5125,8 @@ fn route_masonry_view_messages_dispatches_text_input_on_changed() {
         let window_runtime = runtime
             .primary_mut()
             .expect("primary window runtime should exist");
-        window_runtime.route_test_view_message(
-            Box::new(TextAction::Changed("h".to_string())),
-            text_area_id,
-        )
+        window_runtime
+            .route_test_view_message(Box::new(TextAction::Changed("h".to_string())), text_area_id)
     };
     assert!(routed, "text input should register a view action source");
 

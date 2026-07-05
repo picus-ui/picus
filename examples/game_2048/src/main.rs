@@ -17,8 +17,8 @@ use picus::masonry_core::{
     properties::Padding,
 };
 use picus::{
-    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiComponentTemplate, UiEventQueue,
-    UiRoot, UiThemePicker, UiView, apply_label_style, apply_widget_style,
+    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiComponentTemplate, UiEventQueue, UiRoot,
+    UiThemePicker, UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::prelude::*,
     bevy_input::{ButtonInput, keyboard::KeyCode},
@@ -753,271 +753,271 @@ where
 
 impl UiComponentTemplate for GameRoot {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let mut children = ctx.children.into_iter();
-    let theme_picker = children.next().unwrap_or_else(|| Arc::new(label("")));
-    let content_children = children
-        .map(|child| child.into_any_flex())
-        .collect::<Vec<_>>();
+        let style = resolve_style(ctx.world, ctx.entity);
+        let mut children = ctx.children.into_iter();
+        let theme_picker = children.next().unwrap_or_else(|| Arc::new(label("")));
+        let content_children = children
+            .map(|child| child.into_any_flex())
+            .collect::<Vec<_>>();
 
-    let content = apply_widget_style(
-        flex_col(vec![
-            theme_picker.into_any_flex(),
-            flex_col(content_children)
-                .cross_axis_alignment(CrossAxisAlignment::Center)
-                .main_axis_alignment(MainAxisAlignment::Start)
-                .into_any_flex(),
-        ])
-        .cross_axis_alignment(CrossAxisAlignment::Stretch)
-        .main_axis_alignment(MainAxisAlignment::Start),
-        &style,
-    );
+        let content = apply_widget_style(
+            flex_col(vec![
+                theme_picker.into_any_flex(),
+                flex_col(content_children)
+                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                    .main_axis_alignment(MainAxisAlignment::Start)
+                    .into_any_flex(),
+            ])
+            .cross_axis_alignment(CrossAxisAlignment::Stretch)
+            .main_axis_alignment(MainAxisAlignment::Start),
+            &style,
+        );
 
-    Arc::new(hotkey_capture(ctx.entity, portal(content)))
-}
+        Arc::new(hotkey_capture(ctx.entity, portal(content)))
+    }
 }
 
 impl UiComponentTemplate for HeaderBlock {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let title_style = resolve_style_for_classes(ctx.world, ["g2048.title"]);
-    let subtitle_style = resolve_style_for_classes(ctx.world, ["g2048.subtitle"]);
+        let style = resolve_style(ctx.world, ctx.entity);
+        let title_style = resolve_style_for_classes(ctx.world, ["g2048.title"]);
+        let subtitle_style = resolve_style_for_classes(ctx.world, ["g2048.subtitle"]);
 
-    Arc::new(apply_widget_style(
-        flex_col((
-            apply_label_style(label("2048"), &title_style),
-            apply_label_style(
-                label("Playable demo · scoring · keep playing after 2048"),
-                &subtitle_style,
-            ),
+        Arc::new(apply_widget_style(
+            flex_col((
+                apply_label_style(label("2048"), &title_style),
+                apply_label_style(
+                    label("Playable demo · scoring · keep playing after 2048"),
+                    &subtitle_style,
+                ),
+            ))
+            .cross_axis_alignment(CrossAxisAlignment::Center),
+            &style,
         ))
-        .cross_axis_alignment(CrossAxisAlignment::Center),
-        &style,
-    ))
-}
+    }
 }
 
 impl UiComponentTemplate for ScoreStrip {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let children = ctx
-        .children
-        .into_iter()
-        .map(|child| child.into_any_flex())
-        .collect::<Vec<_>>();
+        let style = resolve_style(ctx.world, ctx.entity);
+        let children = ctx
+            .children
+            .into_iter()
+            .map(|child| child.into_any_flex())
+            .collect::<Vec<_>>();
 
-    Arc::new(apply_widget_style(
-        flex_row(children).main_axis_alignment(MainAxisAlignment::Center),
-        &style,
-    ))
-}
+        Arc::new(apply_widget_style(
+            flex_row(children).main_axis_alignment(MainAxisAlignment::Center),
+            &style,
+        ))
+    }
 }
 
 impl UiComponentTemplate for ScoreCard {
     fn project(score_card: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let state = ctx.world.resource::<Game2048State>();
-    let style = resolve_style(ctx.world, ctx.entity);
-    let caption_style = resolve_style_for_classes(ctx.world, ["g2048.score-caption"]);
-    let value_style = resolve_style_for_classes(ctx.world, ["g2048.score-value"]);
+        let state = ctx.world.resource::<Game2048State>();
+        let style = resolve_style(ctx.world, ctx.entity);
+        let caption_style = resolve_style_for_classes(ctx.world, ["g2048.score-caption"]);
+        let value_style = resolve_style_for_classes(ctx.world, ["g2048.score-value"]);
 
-    Arc::new(apply_widget_style(
-        flex_col((
-            apply_label_style(label(score_card.kind.title()), &caption_style),
-            apply_label_style(label(score_card.kind.value(&state.game)), &value_style),
+        Arc::new(apply_widget_style(
+            flex_col((
+                apply_label_style(label(score_card.kind.title()), &caption_style),
+                apply_label_style(label(score_card.kind.value(&state.game)), &value_style),
+            ))
+            .cross_axis_alignment(CrossAxisAlignment::Center),
+            &style,
         ))
-        .cross_axis_alignment(CrossAxisAlignment::Center),
-        &style,
-    ))
-}
+    }
 }
 
 impl UiComponentTemplate for StatusLine {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let state = ctx.world.resource::<Game2048State>();
-    let (message, class_name) = status_message(&state.game);
-    let style = resolve_style_for_classes(ctx.world, ["g2048.status", class_name]);
+        let state = ctx.world.resource::<Game2048State>();
+        let (message, class_name) = status_message(&state.game);
+        let style = resolve_style_for_classes(ctx.world, ["g2048.status", class_name]);
 
-    Arc::new(apply_widget_style(
-        apply_label_style(label(message), &style),
-        &style,
-    ))
-}
+        Arc::new(apply_widget_style(
+            apply_label_style(label(message), &style),
+            &style,
+        ))
+    }
 }
 
 impl UiComponentTemplate for GameFlowRow {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let children = ctx
-        .children
-        .into_iter()
-        .map(|child| child.into_any_flex())
-        .collect::<Vec<_>>();
+        let style = resolve_style(ctx.world, ctx.entity);
+        let children = ctx
+            .children
+            .into_iter()
+            .map(|child| child.into_any_flex())
+            .collect::<Vec<_>>();
 
-    Arc::new(apply_widget_style(
-        flex_row(children)
-            .cross_axis_alignment(CrossAxisAlignment::Start)
-            .main_axis_alignment(MainAxisAlignment::Center),
-        &style,
-    ))
-}
+        Arc::new(apply_widget_style(
+            flex_row(children)
+                .cross_axis_alignment(CrossAxisAlignment::Start)
+                .main_axis_alignment(MainAxisAlignment::Center),
+            &style,
+        ))
+    }
 }
 
 impl UiComponentTemplate for BoardContainer {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let rows = ctx
-        .children
-        .into_iter()
-        .map(|row| row.into_any_flex())
-        .collect::<Vec<_>>();
+        let style = resolve_style(ctx.world, ctx.entity);
+        let rows = ctx
+            .children
+            .into_iter()
+            .map(|row| row.into_any_flex())
+            .collect::<Vec<_>>();
 
-    Arc::new(apply_widget_style(
-        flex_col(rows).cross_axis_alignment(CrossAxisAlignment::Center),
-        &style,
-    ))
-}
+        Arc::new(apply_widget_style(
+            flex_col(rows).cross_axis_alignment(CrossAxisAlignment::Center),
+            &style,
+        ))
+    }
 }
 
 impl UiComponentTemplate for SidePanel {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let viewport = *ctx.world.resource::<GameViewport>();
-    let metrics = GameLayoutMetrics::from_viewport(viewport);
-    let children = ctx
-        .children
-        .into_iter()
-        .map(|child| child.into_any_flex())
-        .collect::<Vec<_>>();
+        let style = resolve_style(ctx.world, ctx.entity);
+        let viewport = *ctx.world.resource::<GameViewport>();
+        let metrics = GameLayoutMetrics::from_viewport(viewport);
+        let children = ctx
+            .children
+            .into_iter()
+            .map(|child| child.into_any_flex())
+            .collect::<Vec<_>>();
 
-    Arc::new(
-        sized_box(apply_widget_style(
-            flex_col(children)
-                .cross_axis_alignment(CrossAxisAlignment::Stretch)
-                .main_axis_alignment(MainAxisAlignment::Start),
-            &style,
-        ))
-        .fixed_width(Length::px(metrics.side_panel_width)),
-    )
-}
+        Arc::new(
+            sized_box(apply_widget_style(
+                flex_col(children)
+                    .cross_axis_alignment(CrossAxisAlignment::Stretch)
+                    .main_axis_alignment(MainAxisAlignment::Start),
+                &style,
+            ))
+            .fixed_width(Length::px(metrics.side_panel_width)),
+        )
+    }
 }
 
 impl UiComponentTemplate for BoardRow {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let cells = ctx
-        .children
-        .into_iter()
-        .map(|cell| cell.into_any_flex())
-        .collect::<Vec<_>>();
+        let style = resolve_style(ctx.world, ctx.entity);
+        let cells = ctx
+            .children
+            .into_iter()
+            .map(|cell| cell.into_any_flex())
+            .collect::<Vec<_>>();
 
-    Arc::new(apply_widget_style(
-        flex_row(cells).main_axis_alignment(MainAxisAlignment::Center),
-        &style,
-    ))
-}
+        Arc::new(apply_widget_style(
+            flex_row(cells).main_axis_alignment(MainAxisAlignment::Center),
+            &style,
+        ))
+    }
 }
 
 impl UiComponentTemplate for TileCell {
     fn project(tile: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let state = ctx.world.resource::<Game2048State>();
-    let viewport = *ctx.world.resource::<GameViewport>();
-    let metrics = GameLayoutMetrics::from_viewport(viewport);
-    let value = state.game.tiles[tile.index];
-    let class_name = tile_value_class(value);
-    let style = resolve_style_for_classes(ctx.world, ["g2048.tile", class_name]);
+        let state = ctx.world.resource::<Game2048State>();
+        let viewport = *ctx.world.resource::<GameViewport>();
+        let metrics = GameLayoutMetrics::from_viewport(viewport);
+        let value = state.game.tiles[tile.index];
+        let class_name = tile_value_class(value);
+        let style = resolve_style_for_classes(ctx.world, ["g2048.tile", class_name]);
 
-    let text = if value == 0 {
-        String::new()
-    } else {
-        value.to_string()
-    };
+        let text = if value == 0 {
+            String::new()
+        } else {
+            value.to_string()
+        };
 
-    Arc::new(
-        sized_box(apply_widget_style(
-            apply_label_style(label(text), &style),
-            &style,
-        ))
-        .fixed_width(Length::px(metrics.tile_size))
-        .fixed_height(Length::px(metrics.tile_size)),
-    )
-}
+        Arc::new(
+            sized_box(apply_widget_style(
+                apply_label_style(label(text), &style),
+                &style,
+            ))
+            .fixed_width(Length::px(metrics.tile_size))
+            .fixed_height(Length::px(metrics.tile_size)),
+        )
+    }
 }
 
 impl UiComponentTemplate for UiComponentsPad {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let rows = ctx
-        .children
-        .into_iter()
-        .map(|row| row.into_any_flex())
-        .collect::<Vec<_>>();
+        let style = resolve_style(ctx.world, ctx.entity);
+        let rows = ctx
+            .children
+            .into_iter()
+            .map(|row| row.into_any_flex())
+            .collect::<Vec<_>>();
 
-    Arc::new(apply_widget_style(
-        flex_col(rows)
-            .cross_axis_alignment(CrossAxisAlignment::Stretch)
-            .main_axis_alignment(MainAxisAlignment::Start),
-        &style,
-    ))
-}
+        Arc::new(apply_widget_style(
+            flex_col(rows)
+                .cross_axis_alignment(CrossAxisAlignment::Stretch)
+                .main_axis_alignment(MainAxisAlignment::Start),
+            &style,
+        ))
+    }
 }
 
 impl UiComponentTemplate for UiComponentsRow {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let buttons = ctx
-        .children
-        .into_iter()
-        .map(|button| button.into_any_flex())
-        .collect::<Vec<_>>();
+        let style = resolve_style(ctx.world, ctx.entity);
+        let buttons = ctx
+            .children
+            .into_iter()
+            .map(|button| button.into_any_flex())
+            .collect::<Vec<_>>();
 
-    Arc::new(apply_widget_style(
-        flex_row(buttons).main_axis_alignment(MainAxisAlignment::Start),
-        &style,
-    ))
-}
+        Arc::new(apply_widget_style(
+            flex_row(buttons).main_axis_alignment(MainAxisAlignment::Start),
+            &style,
+        ))
+    }
 }
 
 impl UiComponentTemplate for UiComponentButton {
     fn project(button_info: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let viewport = *ctx.world.resource::<GameViewport>();
-    let metrics = GameLayoutMetrics::from_viewport(viewport);
-    let style = resolve_style(ctx.world, ctx.entity);
-    let text_color = style
-        .colors
-        .text
-        .unwrap_or(Color::from_rgb8(0xF9, 0xF6, 0xF2));
+        let viewport = *ctx.world.resource::<GameViewport>();
+        let metrics = GameLayoutMetrics::from_viewport(viewport);
+        let style = resolve_style(ctx.world, ctx.entity);
+        let text_color = style
+            .colors
+            .text
+            .unwrap_or(Color::from_rgb8(0xF9, 0xF6, 0xF2));
 
-    Arc::new(
-        sized_box(
-            button(ctx.entity, button_info.action, button_info.label)
-                .padding(Padding::all(Length::px(style.layout.padding)))
-                .corner_radius(Length::px(style.layout.corner_radius))
-                .border(
-                    style.colors.border.unwrap_or(Color::TRANSPARENT),
-                    Length::px(style.layout.border_width),
-                )
-                .background_color(style.colors.bg.unwrap_or(Color::TRANSPARENT))
-                .color(text_color),
+        Arc::new(
+            sized_box(
+                button(ctx.entity, button_info.action, button_info.label)
+                    .padding(Padding::all(Length::px(style.layout.padding)))
+                    .corner_radius(Length::px(style.layout.corner_radius))
+                    .border(
+                        style.colors.border.unwrap_or(Color::TRANSPARENT),
+                        Length::px(style.layout.border_width),
+                    )
+                    .background_color(style.colors.bg.unwrap_or(Color::TRANSPARENT))
+                    .color(text_color),
+            )
+            .fixed_width(Length::px(metrics.ui_component_button_width))
+            .fixed_height(Length::px(metrics.ui_component_button_height)),
         )
-        .fixed_width(Length::px(metrics.ui_component_button_width))
-        .fixed_height(Length::px(metrics.ui_component_button_height)),
-    )
-}
+    }
 }
 
 impl UiComponentTemplate for HintLine {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    Arc::new(apply_widget_style(
-        apply_label_style(
-            label(
-                "UI Components: Arrow keys / WASD / on-screen buttons. Press Z to undo one move.",
+        let style = resolve_style(ctx.world, ctx.entity);
+        Arc::new(apply_widget_style(
+            apply_label_style(
+                label(
+                    "UI Components: Arrow keys / WASD / on-screen buttons. Press Z to undo one move.",
+                ),
+                &style,
             ),
             &style,
-        ),
-        &style,
-    ))
-}
+        ))
+    }
 }
 
 fn setup_game_world(mut commands: Commands) {

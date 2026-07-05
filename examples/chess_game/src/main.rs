@@ -5,8 +5,8 @@ use std::{
 };
 
 use picus::{
-    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiComponentTemplate, UiEventQueue,
-    UiRoot, UiThemePicker, UiView, apply_label_style, apply_widget_style,
+    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiComponentTemplate, UiEventQueue, UiRoot,
+    UiThemePicker, UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::prelude::*,
     button, button_with_child, checkbox,
@@ -593,40 +593,40 @@ fn build_chess_ui_components_view(
 
 impl UiComponentTemplate for ChessRootView {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let mut children = ctx.children.into_iter();
-    let theme_picker = children.next().unwrap_or_else(|| Arc::new(label("")));
-    let content_children = children
-        .map(|child| child.into_any_flex())
-        .collect::<Vec<_>>();
+        let style = resolve_style(ctx.world, ctx.entity);
+        let mut children = ctx.children.into_iter();
+        let theme_picker = children.next().unwrap_or_else(|| Arc::new(label("")));
+        let content_children = children
+            .map(|child| child.into_any_flex())
+            .collect::<Vec<_>>();
 
-    Arc::new(apply_widget_style(
-        flex_col(vec![
-            theme_picker.into_any_flex(),
-            flex_row(content_children)
-                .cross_axis_alignment(CrossAxisAlignment::Start)
-                .into_any_flex(),
-        ])
-        .cross_axis_alignment(CrossAxisAlignment::Stretch),
-        &style,
-    ))
-}
+        Arc::new(apply_widget_style(
+            flex_col(vec![
+                theme_picker.into_any_flex(),
+                flex_row(content_children)
+                    .cross_axis_alignment(CrossAxisAlignment::Start)
+                    .into_any_flex(),
+            ])
+            .cross_axis_alignment(CrossAxisAlignment::Stretch),
+            &style,
+        ))
+    }
 }
 
 impl UiComponentTemplate for ChessUiComponentsPanel {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let game_res = ctx.world.resource::<ChessGameResource>();
-    let ui = ctx.world.resource::<ChessUiResource>();
-    let flow = ctx.world.resource::<ChessFlowResource>();
-    build_chess_ui_components_view(ctx.world, game_res, ui, flow, ctx.entity)
-}
+        let game_res = ctx.world.resource::<ChessGameResource>();
+        let ui = ctx.world.resource::<ChessUiResource>();
+        let flow = ctx.world.resource::<ChessFlowResource>();
+        build_chess_ui_components_view(ctx.world, game_res, ui, flow, ctx.entity)
+    }
 }
 
 impl UiComponentTemplate for ChessBoardPanel {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let ui = ctx.world.resource::<ChessUiResource>();
-    build_chess_board_view(ctx.world, ui, ctx.entity)
-}
+        let ui = ctx.world.resource::<ChessUiResource>();
+        build_chess_board_view(ctx.world, ui, ctx.entity)
+    }
 }
 
 fn setup_chess_world(mut commands: Commands) {

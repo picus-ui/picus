@@ -216,7 +216,9 @@ pub(crate) fn project_checkbox(checkbox: &UiCheckbox, ctx: ProjectionCtx<'_>) ->
         &box_style,
     ));
     let mut indicator_layers = vec![box_layer];
-    if checkbox.checked && let Some(mark_color) = mark_color {
+    if checkbox.checked
+        && let Some(mark_color) = mark_color
+    {
         indicator_layers.push(vector_icon(VectorIcon::Check, mark_size, mark_color));
     }
     let indicator = zstack(indicator_layers).alignment(UnitPoint::CENTER);
@@ -567,8 +569,11 @@ pub(crate) fn project_avatar(avatar: &UiAvatar, ctx: ProjectionCtx<'_>) -> UiVie
 
     let avatar_view: UiView = Arc::new(
         sized_box(apply_widget_style(
-            zstack(vec![Arc::new(apply_label_style(label(initials), &initials_style))])
-                .alignment(masonry_core::layout::UnitPoint::CENTER),
+            zstack(vec![Arc::new(apply_label_style(
+                label(initials),
+                &initials_style,
+            ))])
+            .alignment(masonry_core::layout::UnitPoint::CENTER),
             &avatar_style,
         ))
         .width(Dim::Fixed(Length::px(size_f64)))

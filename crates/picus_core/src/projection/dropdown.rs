@@ -374,8 +374,8 @@ pub(crate) fn project_combo_box(combo_box: &UiComboBox, ctx: ProjectionCtx<'_>) 
     }
 
     let button_content = flex_row(button_items)
-    .cross_axis_alignment(CrossAxisAlignment::Center)
-    .gap(Length::px(6.0));
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .gap(Length::px(6.0));
 
     Arc::new(apply_direct_widget_style(
         button_with_child_view(ctx.entity, OverlayUiAction::ToggleCombo, button_content),
@@ -502,8 +502,8 @@ pub(crate) fn project_dropdown_item(item: &UiDropdownItem, ctx: ProjectionCtx<'_
     );
 
     let content = flex_row(content_items)
-    .cross_axis_alignment(CrossAxisAlignment::Center)
-    .gap(Length::px(8.0));
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .gap(Length::px(8.0));
 
     Arc::new(apply_direct_widget_style(
         button_with_child_view(

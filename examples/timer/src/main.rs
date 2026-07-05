@@ -6,8 +6,8 @@ use std::{
 use tokio::time;
 
 use picus::{
-    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiComponentTemplate, UiEventQueue,
-    UiRoot, UiThemePicker, UiView, apply_label_style, apply_widget_style,
+    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiComponentTemplate, UiEventQueue, UiRoot,
+    UiThemePicker, UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::prelude::*,
     button, emit_ui_action,
@@ -212,158 +212,158 @@ fn draw_timer_dial(scene: &mut Scene, size: Size, progress: f64, running: bool) 
 
 impl UiComponentTemplate for TimerRootView {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let root_style = resolve_style(ctx.world, ctx.entity);
-    let content = apply_widget_style(
-        flex_col(
-            ctx.children
-                .into_iter()
-                .map(|child| child.into_any_flex())
-                .collect::<Vec<_>>(),
-        )
-        .cross_axis_alignment(CrossAxisAlignment::Start),
-        &root_style,
-    );
+        let root_style = resolve_style(ctx.world, ctx.entity);
+        let content = apply_widget_style(
+            flex_col(
+                ctx.children
+                    .into_iter()
+                    .map(|child| child.into_any_flex())
+                    .collect::<Vec<_>>(),
+            )
+            .cross_axis_alignment(CrossAxisAlignment::Start),
+            &root_style,
+        );
 
-    let tick_entity = ctx.entity;
-    let heartbeat = task(
-        |proxy, _: &mut ()| async move {
-            let mut interval = time::interval(std::time::Duration::from_millis(50));
-            loop {
-                interval.tick().await;
-                let Ok(()) = proxy.message(()) else {
-                    break;
-                };
-            }
-        },
-        move |_: &mut (), ()| {
-            emit_ui_action(tick_entity, TimerEvent::Tick);
-        },
-    );
+        let tick_entity = ctx.entity;
+        let heartbeat = task(
+            |proxy, _: &mut ()| async move {
+                let mut interval = time::interval(std::time::Duration::from_millis(50));
+                loop {
+                    interval.tick().await;
+                    let Ok(()) = proxy.message(()) else {
+                        break;
+                    };
+                }
+            },
+            move |_: &mut (), ()| {
+                emit_ui_action(tick_entity, TimerEvent::Tick);
+            },
+        );
 
-    Arc::new(fork(content, Some(heartbeat)))
-}
+        Arc::new(fork(content, Some(heartbeat)))
+    }
 }
 
 impl UiComponentTemplate for TimerTitle {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let title_style = resolve_style_for_classes(ctx.world, ["timer.title"]);
-    Arc::new(apply_label_style(label("Timer"), &title_style))
-}
+        let title_style = resolve_style_for_classes(ctx.world, ["timer.title"]);
+        Arc::new(apply_label_style(label("Timer"), &title_style))
+    }
 }
 
 impl UiComponentTemplate for TimerDialView {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let dial_shell_style = resolve_style_for_classes(ctx.world, ["timer.dial-shell"]);
-    let state = ctx.world.resource::<TimerState>().clone();
-    let progress = if state.duration_secs > 0.0 {
-        Some(clamp01(state.elapsed_secs / state.duration_secs))
-    } else {
-        Some(1.0)
-    };
-    let progress_value = progress.unwrap_or(1.0);
+        let dial_shell_style = resolve_style_for_classes(ctx.world, ["timer.dial-shell"]);
+        let state = ctx.world.resource::<TimerState>().clone();
+        let progress = if state.duration_secs > 0.0 {
+            Some(clamp01(state.elapsed_secs / state.duration_secs))
+        } else {
+            Some(1.0)
+        };
+        let progress_value = progress.unwrap_or(1.0);
 
-    Arc::new(
-        sized_box(
-            canvas(
-                move |_: &mut (), _ctx: &mut _, scene: &mut Scene, size: Size| {
-                    draw_timer_dial(scene, size, progress_value, state.running);
-                },
+        Arc::new(
+            sized_box(
+                canvas(
+                    move |_: &mut (), _ctx: &mut _, scene: &mut Scene, size: Size| {
+                        draw_timer_dial(scene, size, progress_value, state.running);
+                    },
+                )
+                .alt_text("Timer dial")
+                .padding(Padding::all(Length::px(dial_shell_style.layout.padding)))
+                .corner_radius(Length::px(dial_shell_style.layout.corner_radius))
+                .border(
+                    dial_shell_style.colors.border.unwrap_or(Color::TRANSPARENT),
+                    Length::px(dial_shell_style.layout.border_width),
+                )
+                .background_color(dial_shell_style.colors.bg.unwrap_or(Color::TRANSPARENT)),
             )
-            .alt_text("Timer dial")
-            .padding(Padding::all(Length::px(dial_shell_style.layout.padding)))
-            .corner_radius(Length::px(dial_shell_style.layout.corner_radius))
-            .border(
-                dial_shell_style.colors.border.unwrap_or(Color::TRANSPARENT),
-                Length::px(dial_shell_style.layout.border_width),
-            )
-            .background_color(dial_shell_style.colors.bg.unwrap_or(Color::TRANSPARENT)),
+            .fixed_width(Length::px(DIAL_SIZE))
+            .fixed_height(Length::px(DIAL_SIZE)),
         )
-        .fixed_width(Length::px(DIAL_SIZE))
-        .fixed_height(Length::px(DIAL_SIZE)),
-    )
-}
+    }
 }
 
 impl UiComponentTemplate for TimerElapsedRow {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let row_style = resolve_style_for_classes(ctx.world, ["timer.row"]);
-    let body_text_style = resolve_style_for_classes(ctx.world, ["timer.body-text"]);
-    let state = ctx.world.resource::<TimerState>();
+        let row_style = resolve_style_for_classes(ctx.world, ["timer.row"]);
+        let body_text_style = resolve_style_for_classes(ctx.world, ["timer.body-text"]);
+        let state = ctx.world.resource::<TimerState>();
 
-    Arc::new(apply_widget_style(
-        flex_row((
-            apply_label_style(label("Elapsed Time:"), &body_text_style),
-            apply_label_style(label(format_secs(state.elapsed_secs)), &body_text_style),
-        )),
-        &row_style,
-    ))
-}
+        Arc::new(apply_widget_style(
+            flex_row((
+                apply_label_style(label("Elapsed Time:"), &body_text_style),
+                apply_label_style(label(format_secs(state.elapsed_secs)), &body_text_style),
+            )),
+            &row_style,
+        ))
+    }
 }
 
 impl UiComponentTemplate for TimerProgressRow {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let state = ctx.world.resource::<TimerState>();
-    let progress = if state.duration_secs > 0.0 {
-        Some(clamp01(state.elapsed_secs / state.duration_secs))
-    } else {
-        Some(1.0)
-    };
-    Arc::new(progress_bar(progress))
-}
+        let state = ctx.world.resource::<TimerState>();
+        let progress = if state.duration_secs > 0.0 {
+            Some(clamp01(state.elapsed_secs / state.duration_secs))
+        } else {
+            Some(1.0)
+        };
+        Arc::new(progress_bar(progress))
+    }
 }
 
 impl UiComponentTemplate for TimerDurationRow {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let row_style = resolve_style_for_classes(ctx.world, ["timer.row"]);
-    let body_text_style = resolve_style_for_classes(ctx.world, ["timer.body-text"]);
-    let state = ctx.world.resource::<TimerState>();
-    let duration_value = state.duration_secs;
+        let row_style = resolve_style_for_classes(ctx.world, ["timer.row"]);
+        let body_text_style = resolve_style_for_classes(ctx.world, ["timer.body-text"]);
+        let state = ctx.world.resource::<TimerState>();
+        let duration_value = state.duration_secs;
 
-    Arc::new(apply_widget_style(
-        flex_row((
-            apply_label_style(
-                label(format!("Duration: {duration_value:.0} s")),
-                &body_text_style,
-            ),
-            slider(
-                ctx.entity,
-                1.0,
-                60.0,
-                duration_value,
-                TimerEvent::SetDurationSecs,
-            )
-            .step(1.0)
-            .flex(1.0),
-        )),
-        &row_style,
-    ))
-}
+        Arc::new(apply_widget_style(
+            flex_row((
+                apply_label_style(
+                    label(format!("Duration: {duration_value:.0} s")),
+                    &body_text_style,
+                ),
+                slider(
+                    ctx.entity,
+                    1.0,
+                    60.0,
+                    duration_value,
+                    TimerEvent::SetDurationSecs,
+                )
+                .step(1.0)
+                .flex(1.0),
+            )),
+            &row_style,
+        ))
+    }
 }
 
 impl UiComponentTemplate for TimerUiComponentsRow {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let row_style = resolve_style_for_classes(ctx.world, ["timer.row"]);
-    let pause_button_style =
-        resolve_style_for_entity_classes(ctx.world, ctx.entity, ["timer.pause-button"]);
-    let reset_button_style =
-        resolve_style_for_entity_classes(ctx.world, ctx.entity, ["timer.reset-button"]);
-    let state = ctx.world.resource::<TimerState>();
-    let pause_label = if state.running { "Pause" } else { "Resume" };
+        let row_style = resolve_style_for_classes(ctx.world, ["timer.row"]);
+        let pause_button_style =
+            resolve_style_for_entity_classes(ctx.world, ctx.entity, ["timer.pause-button"]);
+        let reset_button_style =
+            resolve_style_for_entity_classes(ctx.world, ctx.entity, ["timer.reset-button"]);
+        let state = ctx.world.resource::<TimerState>();
+        let pause_label = if state.running { "Pause" } else { "Resume" };
 
-    Arc::new(apply_widget_style(
-        flex_row((
-            apply_widget_style(
-                button(ctx.entity, TimerEvent::ToggleRunning, pause_label),
-                &pause_button_style,
-            ),
-            apply_widget_style(
-                button(ctx.entity, TimerEvent::Reset, "Reset"),
-                &reset_button_style,
-            ),
-        )),
-        &row_style,
-    ))
-}
+        Arc::new(apply_widget_style(
+            flex_row((
+                apply_widget_style(
+                    button(ctx.entity, TimerEvent::ToggleRunning, pause_label),
+                    &pause_button_style,
+                ),
+                apply_widget_style(
+                    button(ctx.entity, TimerEvent::Reset, "Reset"),
+                    &reset_button_style,
+                ),
+            )),
+            &row_style,
+        ))
+    }
 }
 
 fn setup_timer_world(mut commands: Commands) {

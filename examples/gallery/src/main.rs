@@ -88,10 +88,7 @@ fn setup_gallery(mut commands: Commands) {
     // Build navigation items from all gallery pages (with Lucide icon glyphs)
     let nav_items: Vec<NavigationViewItem> = GalleryPage::ALL
         .iter()
-        .map(|page| {
-            NavigationViewItem::new(page.label())
-                .with_icon(page.icon().glyph())
-        })
+        .map(|page| NavigationViewItem::new(page.label()).with_icon(page.icon().glyph()))
         .collect();
 
     let nav_view = commands
@@ -441,7 +438,10 @@ mod tests {
         };
         let markdown_style = picus::resolve_style_for_classes(app.world(), ["gallery.markdown"]);
 
-        assert!(has_sample, "gallery should spawn the markdown typography sample");
+        assert!(
+            has_sample,
+            "gallery should spawn the markdown typography sample"
+        );
         assert!(
             markdown_style.colors.text.is_some(),
             "gallery markdown sample needs an explicit text color"

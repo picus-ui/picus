@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use picus::{
-    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiComponentTemplate, UiEventQueue,
-    UiRoot, UiThemePicker, UiView, apply_label_style, apply_text_input_style, apply_widget_style,
+    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiComponentTemplate, UiEventQueue, UiRoot,
+    UiThemePicker, UiView, apply_label_style, apply_text_input_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{
         hierarchy::{ChildOf, Children},
@@ -90,178 +90,178 @@ struct FilterToggle(FilterType);
 
 impl UiComponentTemplate for TodoRootView {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let children = ctx
-        .children
-        .into_iter()
-        .map(|child| child.into_any_flex())
-        .collect::<Vec<_>>();
+        let style = resolve_style(ctx.world, ctx.entity);
+        let children = ctx
+            .children
+            .into_iter()
+            .map(|child| child.into_any_flex())
+            .collect::<Vec<_>>();
 
-    Arc::new(apply_widget_style(flex_col(children), &style))
-}
+        Arc::new(apply_widget_style(flex_col(children), &style))
+    }
 }
 
 impl UiComponentTemplate for TodoHeader {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    Arc::new(apply_label_style(label("todos"), &style))
-}
+        let style = resolve_style(ctx.world, ctx.entity);
+        Arc::new(apply_label_style(label("todos"), &style))
+    }
 }
 
 impl UiComponentTemplate for TodoInputArea {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let area_style = resolve_style(ctx.world, ctx.entity);
-    let input_style = resolve_style_for_classes(ctx.world, ["todo.input"]);
-    let add_button_style =
-        resolve_style_for_entity_classes(ctx.world, ctx.entity, ["todo.add-button"]);
+        let area_style = resolve_style(ctx.world, ctx.entity);
+        let input_style = resolve_style_for_classes(ctx.world, ["todo.input"]);
+        let add_button_style =
+            resolve_style_for_entity_classes(ctx.world, ctx.entity, ["todo.add-button"]);
 
-    let draft = ctx.world.resource::<DraftTodo>().0.clone();
-    let input_entity = ctx.entity;
-    let entity_for_enter = ctx.entity;
+        let draft = ctx.world.resource::<DraftTodo>().0.clone();
+        let input_entity = ctx.entity;
+        let entity_for_enter = ctx.entity;
 
-    Arc::new(apply_widget_style(
-        flex_row((
-            apply_text_input_style(
-                text_input(input_entity, draft, TodoEvent::SetDraft)
-                    .placeholder("What needs to be done?")
-                    .insert_newline(InsertNewline::OnShiftEnter)
-                    .on_enter(move |_| {
-                        emit_ui_action(entity_for_enter, TodoEvent::SubmitDraft);
-                    }),
-                &input_style,
-            )
-            .flex(1.0),
-            apply_widget_style(
-                button(ctx.entity, TodoEvent::SubmitDraft, "Add task"),
-                &add_button_style,
-            ),
-        )),
-        &area_style,
-    ))
-}
+        Arc::new(apply_widget_style(
+            flex_row((
+                apply_text_input_style(
+                    text_input(input_entity, draft, TodoEvent::SetDraft)
+                        .placeholder("What needs to be done?")
+                        .insert_newline(InsertNewline::OnShiftEnter)
+                        .on_enter(move |_| {
+                            emit_ui_action(entity_for_enter, TodoEvent::SubmitDraft);
+                        }),
+                    &input_style,
+                )
+                .flex(1.0),
+                apply_widget_style(
+                    button(ctx.entity, TodoEvent::SubmitDraft, "Add task"),
+                    &add_button_style,
+                ),
+            )),
+            &area_style,
+        ))
+    }
 }
 
 impl UiComponentTemplate for TodoListContainer {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let container_style = resolve_style(ctx.world, ctx.entity);
-    let empty_style = resolve_style_for_classes(ctx.world, ["todo.empty"]);
-    let viewport_style = resolve_style_for_classes(ctx.world, ["todo.list-viewport"]);
+        let container_style = resolve_style(ctx.world, ctx.entity);
+        let empty_style = resolve_style_for_classes(ctx.world, ["todo.empty"]);
+        let viewport_style = resolve_style_for_classes(ctx.world, ["todo.list-viewport"]);
 
-    let active_filter = ctx.world.resource::<ActiveFilter>().0;
-    let child_entities = ctx
-        .world
-        .get::<Children>(ctx.entity)
-        .map(|children| children.iter().collect::<Vec<_>>())
-        .unwrap_or_default();
+        let active_filter = ctx.world.resource::<ActiveFilter>().0;
+        let child_entities = ctx
+            .world
+            .get::<Children>(ctx.entity)
+            .map(|children| children.iter().collect::<Vec<_>>())
+            .unwrap_or_default();
 
-    let visible_children = child_entities
-        .into_iter()
-        .zip(ctx.children)
-        .filter_map(|(entity, child)| {
-            let item = ctx.world.get::<TodoItem>(entity)?;
-            todo_matches_filter(item, active_filter).then_some(child)
-        })
-        .collect::<Vec<_>>();
+        let visible_children = child_entities
+            .into_iter()
+            .zip(ctx.children)
+            .filter_map(|(entity, child)| {
+                let item = ctx.world.get::<TodoItem>(entity)?;
+                todo_matches_filter(item, active_filter).then_some(child)
+            })
+            .collect::<Vec<_>>();
 
-    if visible_children.is_empty() {
-        return Arc::new(apply_widget_style(
-            apply_label_style(label("No tasks for this filter."), &empty_style),
+        if visible_children.is_empty() {
+            return Arc::new(apply_widget_style(
+                apply_label_style(label("No tasks for this filter."), &empty_style),
+                &container_style,
+            ));
+        }
+
+        let visible_children = Arc::new(visible_children);
+        let item_count = i64::try_from(visible_children.len()).unwrap_or(i64::MAX);
+
+        Arc::new(apply_widget_style(
+            apply_widget_style(
+                sized_box(virtual_scroll(0..item_count, {
+                    let visible_children = Arc::clone(&visible_children);
+                    move |_, idx| {
+                        let index =
+                            usize::try_from(idx).expect("virtual scroll index should be positive");
+                        visible_children
+                            .get(index)
+                            .cloned()
+                            .unwrap_or_else(|| Arc::new(label("")))
+                    }
+                }))
+                .fixed_height(Length::px(LIST_VIEWPORT_HEIGHT)),
+                &viewport_style,
+            ),
             &container_style,
-        ));
+        ))
     }
-
-    let visible_children = Arc::new(visible_children);
-    let item_count = i64::try_from(visible_children.len()).unwrap_or(i64::MAX);
-
-    Arc::new(apply_widget_style(
-        apply_widget_style(
-            sized_box(virtual_scroll(0..item_count, {
-                let visible_children = Arc::clone(&visible_children);
-                move |_, idx| {
-                    let index =
-                        usize::try_from(idx).expect("virtual scroll index should be positive");
-                    visible_children
-                        .get(index)
-                        .cloned()
-                        .unwrap_or_else(|| Arc::new(label("")))
-                }
-            }))
-            .fixed_height(Length::px(LIST_VIEWPORT_HEIGHT)),
-            &viewport_style,
-        ),
-        &container_style,
-    ))
-}
 }
 
 impl UiComponentTemplate for TodoItem {
     fn project(item: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let entity = ctx.entity;
-    let style = resolve_style(ctx.world, ctx.entity);
-    let checkbox_style = resolve_style_for_classes(ctx.world, ["todo.item-checkbox"]);
-    let delete_button_style =
-        resolve_style_for_entity_classes(ctx.world, entity, ["todo.delete-button"]);
+        let entity = ctx.entity;
+        let style = resolve_style(ctx.world, ctx.entity);
+        let checkbox_style = resolve_style_for_classes(ctx.world, ["todo.item-checkbox"]);
+        let delete_button_style =
+            resolve_style_for_entity_classes(ctx.world, entity, ["todo.delete-button"]);
 
-    Arc::new(apply_widget_style(
-        flex_row((
-            apply_widget_style(
-                checkbox(entity, item.text.clone(), item.completed, move |value| {
-                    TodoEvent::SetCompleted(entity, value)
-                })
-                .text_size(checkbox_style.text.size),
-                &checkbox_style,
-            ),
-            FlexSpacer::Flex(1.0),
-            apply_widget_style(
-                button(entity, TodoEvent::Delete(entity), "Delete"),
-                &delete_button_style,
-            ),
-        )),
-        &style,
-    ))
-}
+        Arc::new(apply_widget_style(
+            flex_row((
+                apply_widget_style(
+                    checkbox(entity, item.text.clone(), item.completed, move |value| {
+                        TodoEvent::SetCompleted(entity, value)
+                    })
+                    .text_size(checkbox_style.text.size),
+                    &checkbox_style,
+                ),
+                FlexSpacer::Flex(1.0),
+                apply_widget_style(
+                    button(entity, TodoEvent::Delete(entity), "Delete"),
+                    &delete_button_style,
+                ),
+            )),
+            &style,
+        ))
+    }
 }
 
 impl UiComponentTemplate for TodoFilterBar {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let list_container = ctx.world.resource::<TodoRuntime>().list_container;
-    let has_tasks = ctx
-        .world
-        .get::<Children>(list_container)
-        .is_some_and(|children| !children.is_empty());
+        let style = resolve_style(ctx.world, ctx.entity);
+        let list_container = ctx.world.resource::<TodoRuntime>().list_container;
+        let has_tasks = ctx
+            .world
+            .get::<Children>(list_container)
+            .is_some_and(|children| !children.is_empty());
 
-    if !has_tasks {
-        return Arc::new(label(""));
+        if !has_tasks {
+            return Arc::new(label(""));
+        }
+
+        let children = ctx
+            .children
+            .into_iter()
+            .map(|child| child.into_any_flex())
+            .collect::<Vec<_>>();
+
+        Arc::new(apply_widget_style(
+            flex_row(children).main_axis_alignment(MainAxisAlignment::Center),
+            &style,
+        ))
     }
-
-    let children = ctx
-        .children
-        .into_iter()
-        .map(|child| child.into_any_flex())
-        .collect::<Vec<_>>();
-
-    Arc::new(apply_widget_style(
-        flex_row(children).main_axis_alignment(MainAxisAlignment::Center),
-        &style,
-    ))
-}
 }
 
 impl UiComponentTemplate for FilterToggle {
     fn project(filter_toggle: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let filter = filter_toggle.0;
-    let active = ctx.world.resource::<ActiveFilter>().0;
+        let style = resolve_style(ctx.world, ctx.entity);
+        let filter = filter_toggle.0;
+        let active = ctx.world.resource::<ActiveFilter>().0;
 
-    Arc::new(apply_widget_style(
-        checkbox(ctx.entity, filter.as_str(), active == filter, move |_| {
-            TodoEvent::SetFilter(filter)
-        })
-        .text_size(style.text.size),
-        &style,
-    ))
-}
+        Arc::new(apply_widget_style(
+            checkbox(ctx.entity, filter.as_str(), active == filter, move |_| {
+                TodoEvent::SetFilter(filter)
+            })
+            .text_size(style.text.size),
+            &style,
+        ))
+    }
 }
 
 fn todo_matches_filter(item: &TodoItem, filter: FilterType) -> bool {

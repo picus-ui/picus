@@ -32,48 +32,48 @@ pub struct GalleryStatus;
 
 impl UiComponentTemplate for GalleryRoot {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let child_entities = ctx
-        .world
-        .get::<Children>(ctx.entity)
-        .map(|children| children.iter().collect::<Vec<_>>())
-        .unwrap_or_default();
-    let children = child_entities
-        .into_iter()
-        .zip(ctx.children)
-        .map(|(entity, child)| {
-            let flex_grow = resolve_style(ctx.world, entity).layout.flex_grow;
-            if flex_grow > 0.0 {
-                flex_item(child, flex_grow).into()
-            } else {
-                child.into_any_flex()
-            }
-        })
-        .collect::<Vec<_>>();
+        let style = resolve_style(ctx.world, ctx.entity);
+        let child_entities = ctx
+            .world
+            .get::<Children>(ctx.entity)
+            .map(|children| children.iter().collect::<Vec<_>>())
+            .unwrap_or_default();
+        let children = child_entities
+            .into_iter()
+            .zip(ctx.children)
+            .map(|(entity, child)| {
+                let flex_grow = resolve_style(ctx.world, entity).layout.flex_grow;
+                if flex_grow > 0.0 {
+                    flex_item(child, flex_grow).into()
+                } else {
+                    child.into_any_flex()
+                }
+            })
+            .collect::<Vec<_>>();
 
-    Arc::new(
-        sized_box(apply_widget_style(
-            flex_col(children).gap(Length::px(style.layout.gap)),
-            &style,
-        ))
-        .dims(
-            Dimensions::AUTO
-                .with_width(Dim::Stretch)
-                .with_height(Dim::Stretch),
-        ),
-    )
-}
+        Arc::new(
+            sized_box(apply_widget_style(
+                flex_col(children).gap(Length::px(style.layout.gap)),
+                &style,
+            ))
+            .dims(
+                Dimensions::AUTO
+                    .with_width(Dim::Stretch)
+                    .with_height(Dim::Stretch),
+            ),
+        )
+    }
 }
 
 impl UiComponentTemplate for GalleryStatus {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let text_style = resolve_style_for_classes(ctx.world, ["gallery.note"]);
-    let state = ctx.world.resource::<GalleryState>();
+        let style = resolve_style(ctx.world, ctx.entity);
+        let text_style = resolve_style_for_classes(ctx.world, ["gallery.note"]);
+        let state = ctx.world.resource::<GalleryState>();
 
-    Arc::new(apply_widget_style(
-        apply_label_style(label(state.last_event.clone()), &text_style),
-        &style,
-    ))
-}
+        Arc::new(apply_widget_style(
+            apply_label_style(label(state.last_event.clone()), &text_style),
+            &style,
+        ))
+    }
 }

@@ -222,11 +222,9 @@ impl<State: 'static> View<State, (), ViewCtx> for TextInput<State> {
 
         let mut pod = ctx.create_pod(text_input);
         pod.new_widget.options.disabled = self.disabled;
-        pod.new_widget
-            .properties
-            .insert(PlaceholderColor::new(
-                self.placeholder_color.unwrap_or(Color::TRANSPARENT),
-            ));
+        pod.new_widget.properties.insert(PlaceholderColor::new(
+            self.placeholder_color.unwrap_or(Color::TRANSPARENT),
+        ));
         (pod, ())
     }
 

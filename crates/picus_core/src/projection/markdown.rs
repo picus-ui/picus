@@ -98,8 +98,7 @@ fn markdown_palette(style: &ResolvedStyle) -> Option<MarkdownPalette> {
 
 fn color_luma(color: Color) -> u8 {
     let rgba = color.to_rgba8();
-    ((u32::from(rgba.r) * 299 + u32::from(rgba.g) * 587 + u32::from(rgba.b) * 114) / 1000)
-        as u8
+    ((u32::from(rgba.r) * 299 + u32::from(rgba.g) * 587 + u32::from(rgba.b) * 114) / 1000) as u8
 }
 
 pub(crate) fn project_markdown(component: &UiMarkdown, ctx: ProjectionCtx<'_>) -> UiView {
@@ -549,12 +548,7 @@ enum EmphasisFlag {
     Code,
 }
 
-fn push_inline_run(
-    acc: &mut Vec<InlineRun>,
-    stack: &[EmphasisFlag],
-    link: bool,
-    text: &str,
-) {
+fn push_inline_run(acc: &mut Vec<InlineRun>, stack: &[EmphasisFlag], link: bool, text: &str) {
     let bold = stack.contains(&EmphasisFlag::Bold);
     let italic = stack.contains(&EmphasisFlag::Italic);
     let code = stack.contains(&EmphasisFlag::Code);
@@ -641,8 +635,8 @@ fn block_to_view(
                     .weight(weight)
                     .color(palette.heading),
             )
-                .padding(Padding::vertical(Length::px(4.0)))
-                .boxed()
+            .padding(Padding::vertical(Length::px(4.0)))
+            .boxed()
         }
         MdBlock::Paragraph { runs } => paragraph_view(&runs, base, palette),
         MdBlock::Code { language, code } => {
@@ -790,9 +784,7 @@ fn styled_label(
         lbl = lbl.letter_spacing(0.2);
     }
 
-    lbl = lbl
-        .underline(run.link)
-        .strikethrough(run.strikethrough);
+    lbl = lbl.underline(run.link).strikethrough(run.strikethrough);
 
     let color = if run.link {
         palette.link
@@ -854,13 +846,13 @@ fn table_view(
 
     let mut rendered_rows = Vec::new();
     if !header.is_empty() {
-        rendered_rows.push(
-            table_row_view(header, &alignments, base, palette, true).into_any_flex(),
-        );
+        rendered_rows
+            .push(table_row_view(header, &alignments, base, palette, true).into_any_flex());
     }
-    rendered_rows.extend(rows.into_iter().map(|row| {
-        table_row_view(row, &alignments, base, palette, false).into_any_flex()
-    }));
+    rendered_rows.extend(
+        rows.into_iter()
+            .map(|row| table_row_view(row, &alignments, base, palette, false).into_any_flex()),
+    );
 
     sized_box(flex_col(rendered_rows).gap(Length::px(0.0)))
         .width(Dim::Stretch)
@@ -884,8 +876,9 @@ fn table_row_view(
         .map(|index| {
             let runs = cells.get(index).cloned().unwrap_or_default();
             let mut cell_style = base.clone();
-            cell_style.text.text_align =
-                table_alignment_to_text_align(alignments.get(index).copied().unwrap_or(Alignment::None));
+            cell_style.text.text_align = table_alignment_to_text_align(
+                alignments.get(index).copied().unwrap_or(Alignment::None),
+            );
             if header {
                 cell_style.text.weight = 600.0;
             }
@@ -913,7 +906,11 @@ struct HighlightedLine {
     color: Color,
 }
 
-fn highlight_code(language: Option<&str>, code: &str, fallback_color: Color) -> Vec<HighlightedLine> {
+fn highlight_code(
+    language: Option<&str>,
+    code: &str,
+    fallback_color: Color,
+) -> Vec<HighlightedLine> {
     let state = highlight_state();
 
     let syntax = language

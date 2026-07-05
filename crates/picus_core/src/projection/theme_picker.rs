@@ -128,8 +128,8 @@ pub(crate) fn project_theme_picker_menu(
                     .into_any_flex(),
             );
             let content = flex_row(content_items)
-            .cross_axis_alignment(CrossAxisAlignment::Center)
-            .gap(Length::px(item_style.layout.gap));
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .gap(Length::px(item_style.layout.gap));
 
             let item_button = button_with_child_view(
                 ctx.entity,

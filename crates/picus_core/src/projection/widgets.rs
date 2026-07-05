@@ -757,8 +757,7 @@ pub(crate) fn project_tree_node(tree_node: &UiTreeNode, ctx: ProjectionCtx<'_>) 
             items.push(icon.into_any_flex());
         }
         items.push(apply_label_style(label(tree_node.label.clone()), &style).into_any_flex());
-        let content = flex_row(items)
-        .gap(Length::px(6.0));
+        let content = flex_row(items).gap(Length::px(6.0));
 
         let btn = button_with_child_view(
             ctx.entity,
@@ -1122,8 +1121,7 @@ pub(crate) fn project_menu_bar_item(item: &UiMenuBarItem, ctx: ProjectionCtx<'_>
         };
         items.push(icon.into_any_flex());
     }
-    let content = flex_row(items)
-    .gap(Length::px(4.0));
+    let content = flex_row(items).gap(Length::px(4.0));
     Arc::new(apply_direct_widget_style(
         button_with_child_view(ctx.entity, OverlayUiAction::ToggleMenuBarItem, content),
         &style,
@@ -1283,8 +1281,7 @@ pub(crate) fn project_color_picker(picker: &UiColorPicker, ctx: ProjectionCtx<'_
         };
         items.push(icon.into_any_flex());
     }
-    let content = flex_row(items)
-    .gap(Length::px(6.0));
+    let content = flex_row(items).gap(Length::px(6.0));
     Arc::new(apply_direct_widget_style(
         button_with_child_view(ctx.entity, OverlayUiAction::ToggleColorPicker, content),
         &style,
@@ -1403,8 +1400,7 @@ pub(crate) fn project_group_box(group_box: &UiGroupBox, ctx: ProjectionCtx<'_>) 
     content_items.extend(ctx.children.into_iter().map(|c| c.into_any_flex()));
 
     Arc::new(apply_widget_style(
-        apply_flex_alignment(flex_col(content_items), &style)
-            .gap(Length::px(style.layout.gap)),
+        apply_flex_alignment(flex_col(content_items), &style).gap(Length::px(style.layout.gap)),
         &style,
     ))
 }
@@ -1512,8 +1508,7 @@ pub(crate) fn project_date_picker(picker: &UiDatePicker, ctx: ProjectionCtx<'_>)
         };
         items.push(icon.into_any_flex());
     }
-    let content = flex_row(items)
-    .gap(Length::px(6.0));
+    let content = flex_row(items).gap(Length::px(6.0));
     Arc::new(apply_direct_widget_style(
         button_with_child_view(ctx.entity, OverlayUiAction::ToggleDatePicker, content),
         &style,
@@ -1532,8 +1527,7 @@ pub(crate) fn project_date_picker_panel(
     let panel_style = default_panel_style(ctx.world, "overlay.date_picker.panel");
     let cell_style = resolve_style_for_classes(ctx.world, ["overlay.date_picker.cell"]);
     let mut today_style = cell_style.clone();
-    let today_overrides =
-        resolve_style_for_classes(ctx.world, ["overlay.date_picker.cell.today"]);
+    let today_overrides = resolve_style_for_classes(ctx.world, ["overlay.date_picker.cell.today"]);
     apply_color_overrides(&mut today_style, &today_overrides);
     let mut selected_style = cell_style.clone();
     let selected_overrides =
@@ -1727,7 +1721,8 @@ pub(crate) fn project_breadcrumb(ctx: ProjectionCtx<'_>) -> UiView {
     let mut items: Vec<picus_view::view::AnyFlexChild<(), ()>> = Vec::new();
     for (i, child) in child_views.iter().enumerate() {
         if i > 0 {
-            let separator_style = resolve_style_for_classes(ctx.world, ["widget.breadcrumb.separator"]);
+            let separator_style =
+                resolve_style_for_classes(ctx.world, ["widget.breadcrumb.separator"]);
             let chevron: UiView =
                 Arc::new(apply_label_style(label(" \u{203A} "), &separator_style));
             items.push(chevron.into_any_flex());
@@ -1993,8 +1988,8 @@ pub(crate) fn project_time_picker(picker: &UiTimePicker, ctx: ProjectionCtx<'_>)
     }
     items.push(apply_label_style(label(time_str), &style).into_any_flex());
     let content = flex_row(items)
-    .cross_axis_alignment(CrossAxisAlignment::Center)
-    .gap(Length::px(6.0));
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .gap(Length::px(6.0));
     Arc::new(apply_direct_widget_style(
         button_with_child_view(ctx.entity, OverlayUiAction::ToggleTimePicker, content),
         &style,
@@ -2224,7 +2219,8 @@ pub(crate) fn project_context_menu(menu: &UiContextMenu, ctx: ProjectionCtx<'_>)
             let separator = sized_box(label(""))
                 .height(Dim::Fixed(Length::px(1.0)))
                 .width(Dim::Stretch);
-            let sep_style = resolve_style_for_classes(ctx.world, ["overlay.context_menu.separator"]);
+            let sep_style =
+                resolve_style_for_classes(ctx.world, ["overlay.context_menu.separator"]);
             menu_items.push(Arc::new(apply_widget_style(separator, &sep_style)));
         }
 

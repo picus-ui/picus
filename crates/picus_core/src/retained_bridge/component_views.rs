@@ -104,8 +104,9 @@ where
             .with_style(StyleProperty::FontSize(self.text_size))
             .with_style(StyleProperty::FontFamily(self.font.clone()));
 
-        let label = NewWidget::new(label)
-            .with_props(ContentColor::new(self.text_color.unwrap_or(Color::TRANSPARENT)));
+        let label = NewWidget::new(label).with_props(ContentColor::new(
+            self.text_color.unwrap_or(Color::TRANSPARENT),
+        ));
 
         let element = ctx.with_action_widget(|ctx| {
             let mut pod = ctx.create_pod(widgets::Checkbox::from_label(self.checked, label));
@@ -266,8 +267,9 @@ where
             .with_style(StyleProperty::FontSize(self.text_size))
             .with_style(StyleProperty::FontFamily(self.font.clone()));
 
-        let label = NewWidget::new(label)
-            .with_props(ContentColor::new(self.text_color.unwrap_or(Color::TRANSPARENT)));
+        let label = NewWidget::new(label).with_props(ContentColor::new(
+            self.text_color.unwrap_or(Color::TRANSPARENT),
+        ));
 
         let element = ctx.with_action_widget(|ctx| {
             let mut pod = ctx.create_pod(widgets::RadioButton::from_label(self.checked, label));

@@ -25,8 +25,8 @@ struct SpawnToastButton;
 
 impl UiComponentTemplate for UiToast {
     fn project(toast: &Self, _ctx: ProjectionCtx<'_>) -> UiView {
-    Arc::new(transformed(label(toast.message.clone())).translate((520.0, 40.0)))
-}
+        Arc::new(transformed(label(toast.message.clone())).translate((520.0, 40.0)))
+    }
 }
 
 fn setup_overlay_hit_routing_world(mut commands: Commands) {
@@ -125,7 +125,7 @@ mod tests {
     fn embedded_overlay_hit_routing_theme_ron_parses() {
         let sheet =
             picus::parse_stylesheet_ron(include_str!("../assets/themes/overlay_hit_routing.ron"))
-            .expect("embedded overlay_hit_routing stylesheet should parse");
+                .expect("embedded overlay_hit_routing stylesheet should parse");
         assert_eq!(sheet.default_variant.as_deref(), None);
     }
 }

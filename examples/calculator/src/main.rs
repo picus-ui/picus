@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use picus::{
-    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiComponentTemplate, UiEventQueue,
-    UiRoot, UiThemePicker, UiView, apply_label_style, apply_widget_style,
+    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiComponentTemplate, UiEventQueue, UiRoot,
+    UiThemePicker, UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::prelude::*,
     button, resolve_style, resolve_style_for_classes, run_app_with_window_options,
@@ -423,64 +423,65 @@ fn project_calc_button(entity: Entity, button_data: &CalcButtonSpec, world: &Wor
 
 impl UiComponentTemplate for CalcRoot {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let root_style = resolve_style(ctx.world, ctx.entity);
-    Arc::new(apply_widget_style(
-        flex_col(
-            ctx.children
-                .into_iter()
-                .map(|child| child.into_any_flex())
-                .collect::<Vec<_>>(),
-        ),
-        &root_style,
-    ))
-}
+        let root_style = resolve_style(ctx.world, ctx.entity);
+        Arc::new(apply_widget_style(
+            flex_col(
+                ctx.children
+                    .into_iter()
+                    .map(|child| child.into_any_flex())
+                    .collect::<Vec<_>>(),
+            ),
+            &root_style,
+        ))
+    }
 }
 
 impl UiComponentTemplate for CalcDisplayPanel {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let display_row_style = resolve_style_for_classes(ctx.world, ["calc.display.row"]);
-    let display_text_style = resolve_style_for_classes(ctx.world, ["calc.display.text"]);
-    let engine = ctx.world.resource::<CalculatorEngine>();
+        let display_row_style = resolve_style_for_classes(ctx.world, ["calc.display.row"]);
+        let display_text_style = resolve_style_for_classes(ctx.world, ["calc.display.text"]);
+        let engine = ctx.world.resource::<CalculatorEngine>();
 
-    Arc::new(apply_widget_style(
-        flex_row((
-            apply_label_style(label(engine.display_text()), &display_text_style).into_any_flex(),
-        )),
-        &display_row_style,
-    ))
-}
+        Arc::new(apply_widget_style(
+            flex_row((
+                apply_label_style(label(engine.display_text()), &display_text_style)
+                    .into_any_flex(),
+            )),
+            &display_row_style,
+        ))
+    }
 }
 
 impl UiComponentTemplate for CalcKeypad {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    Arc::new(flex_col(
-        ctx.children
-            .into_iter()
-            .map(|child| child.into_any_flex())
-            .collect::<Vec<_>>(),
-    ))
-}
-}
-
-impl UiComponentTemplate for CalcButtonRow {
-    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let row_style = resolve_style_for_classes(ctx.world, ["calc.row"]);
-    Arc::new(apply_widget_style(
-        flex_row(
+        Arc::new(flex_col(
             ctx.children
                 .into_iter()
                 .map(|child| child.into_any_flex())
                 .collect::<Vec<_>>(),
-        ),
-        &row_style,
-    ))
+        ))
+    }
 }
+
+impl UiComponentTemplate for CalcButtonRow {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
+        let row_style = resolve_style_for_classes(ctx.world, ["calc.row"]);
+        Arc::new(apply_widget_style(
+            flex_row(
+                ctx.children
+                    .into_iter()
+                    .map(|child| child.into_any_flex())
+                    .collect::<Vec<_>>(),
+            ),
+            &row_style,
+        ))
+    }
 }
 
 impl UiComponentTemplate for CalcButtonSpec {
     fn project(button_data: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    project_calc_button(ctx.entity, button_data, ctx.world)
-}
+        project_calc_button(ctx.entity, button_data, ctx.world)
+    }
 }
 
 fn setup_calculator_world(mut commands: Commands) {

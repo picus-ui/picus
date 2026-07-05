@@ -4,7 +4,8 @@ use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use picus::{
-    ProjectionCtx, UiComponentTemplate, UiView, apply_direct_text_input_style, apply_label_style, apply_widget_style,
+    ProjectionCtx, UiComponentTemplate, UiView, apply_direct_text_input_style, apply_label_style,
+    apply_widget_style,
     bevy_ecs::hierarchy::Children,
     button_with_child, emit_ui_action,
     icon::icon,
@@ -30,463 +31,468 @@ use crate::state::*;
 
 impl UiComponentTemplate for ChatRootView {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let children = child_entities(&ctx)
-        .into_iter()
-        .zip(ctx.children)
-        .map(|(entity, child)| {
-            let grow = resolve_style(ctx.world, entity).layout.flex_grow;
-            if grow > 0.0 {
-                flex_item(child, grow).into_any_flex()
-            } else {
-                child.into_any_flex()
-            }
-        })
-        .collect::<Vec<_>>();
-    Arc::new(
-        sized_box(apply_widget_style(
-            flex_col(children)
-                .width(Dim::Stretch)
-                .height(Dim::Stretch)
-                .gap(Length::px(style.layout.gap)),
-            &style,
-        ))
-        .dims(
-            Dimensions::AUTO
-                .with_width(Dim::Stretch)
-                .with_height(Dim::Stretch),
-        ),
-    )
-}
+        let style = resolve_style(ctx.world, ctx.entity);
+        let children = child_entities(&ctx)
+            .into_iter()
+            .zip(ctx.children)
+            .map(|(entity, child)| {
+                let grow = resolve_style(ctx.world, entity).layout.flex_grow;
+                if grow > 0.0 {
+                    flex_item(child, grow).into_any_flex()
+                } else {
+                    child.into_any_flex()
+                }
+            })
+            .collect::<Vec<_>>();
+        Arc::new(
+            sized_box(apply_widget_style(
+                flex_col(children)
+                    .width(Dim::Stretch)
+                    .height(Dim::Stretch)
+                    .gap(Length::px(style.layout.gap)),
+                &style,
+            ))
+            .dims(
+                Dimensions::AUTO
+                    .with_width(Dim::Stretch)
+                    .with_height(Dim::Stretch),
+            ),
+        )
+    }
 }
 
 impl UiComponentTemplate for ChatTitleBarView {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let snapshot = HeaderSnapshot::from_state(&ctx);
-    let title = text_view(&ctx, ["picuscode.title"], "picuscode");
-    let subtitle = text_view(&ctx, ["picuscode.subtitle"], snapshot.subtitle);
-    let brand = flex_row(vec![
-        brand_mark(&ctx, 30.0).into_any_flex(),
-        flex_col(vec![title.into_any_flex(), subtitle.into_any_flex()])
-            .gap(Length::px(1.0))
-            .into_any_flex(),
-    ])
-    .cross_axis_alignment(CrossAxisAlignment::Center)
-    .gap(Length::px(9.0));
-
-    let chips = flex_row(vec![
-        chip_view(&ctx, snapshot.provider_chip, ChipTone::Neutral).into_any_flex(),
-        chip_view(&ctx, snapshot.model_chip, ChipTone::Accent).into_any_flex(),
-        chip_view(&ctx, snapshot.stream_chip, ChipTone::Success).into_any_flex(),
-    ])
-    .cross_axis_alignment(CrossAxisAlignment::Center)
-    .gap(Length::px(6.0));
-
-    let new_btn = primary_button(&ctx, PicusCodeAction::NewThread, "New", PicusIcon::Plus);
-    let settings_btn = toolbar_button(
-        &ctx,
-        PicusCodeAction::OpenSettings,
-        "Settings",
-        PicusIcon::Settings,
-    );
-    let about_btn = toolbar_button(&ctx, PicusCodeAction::OpenAbout, "About", PicusIcon::Info);
-    Arc::new(apply_widget_style(
-        flex_row(vec![
-            sized_box(brand).flex(1.0).into_any_flex(),
-            chips.into_any_flex(),
-            new_btn.into_any_flex(),
-            settings_btn.into_any_flex(),
-            about_btn.into_any_flex(),
+        let style = resolve_style(ctx.world, ctx.entity);
+        let snapshot = HeaderSnapshot::from_state(&ctx);
+        let title = text_view(&ctx, ["picuscode.title"], "picuscode");
+        let subtitle = text_view(&ctx, ["picuscode.subtitle"], snapshot.subtitle);
+        let brand = flex_row(vec![
+            brand_mark(&ctx, 30.0).into_any_flex(),
+            flex_col(vec![title.into_any_flex(), subtitle.into_any_flex()])
+                .gap(Length::px(1.0))
+                .into_any_flex(),
         ])
         .cross_axis_alignment(CrossAxisAlignment::Center)
-        .gap(Length::px(8.0)),
-        &style,
-    ))
-}
+        .gap(Length::px(9.0));
+
+        let chips = flex_row(vec![
+            chip_view(&ctx, snapshot.provider_chip, ChipTone::Neutral).into_any_flex(),
+            chip_view(&ctx, snapshot.model_chip, ChipTone::Accent).into_any_flex(),
+            chip_view(&ctx, snapshot.stream_chip, ChipTone::Success).into_any_flex(),
+        ])
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .gap(Length::px(6.0));
+
+        let new_btn = primary_button(&ctx, PicusCodeAction::NewThread, "New", PicusIcon::Plus);
+        let settings_btn = toolbar_button(
+            &ctx,
+            PicusCodeAction::OpenSettings,
+            "Settings",
+            PicusIcon::Settings,
+        );
+        let about_btn = toolbar_button(&ctx, PicusCodeAction::OpenAbout, "About", PicusIcon::Info);
+        Arc::new(apply_widget_style(
+            flex_row(vec![
+                sized_box(brand).flex(1.0).into_any_flex(),
+                chips.into_any_flex(),
+                new_btn.into_any_flex(),
+                settings_btn.into_any_flex(),
+                about_btn.into_any_flex(),
+            ])
+            .cross_axis_alignment(CrossAxisAlignment::Center)
+            .gap(Length::px(8.0)),
+            &style,
+        ))
+    }
 }
 
 impl UiComponentTemplate for ChatBodyView {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let children = child_entities(&ctx)
-        .into_iter()
-        .zip(ctx.children)
-        .map(|(entity, child)| {
-            let grow = resolve_style(ctx.world, entity).layout.flex_grow;
-            if grow > 0.0 {
-                flex_item(child, grow).into_any_flex()
-            } else {
-                child.into_any_flex()
-            }
-        })
-        .collect::<Vec<_>>();
-    Arc::new(apply_widget_style(
-        flex_row(children)
-            .cross_axis_alignment(CrossAxisAlignment::Stretch)
-            .gap(Length::px(style.layout.gap)),
-        &style,
-    ))
-}
+        let style = resolve_style(ctx.world, ctx.entity);
+        let children = child_entities(&ctx)
+            .into_iter()
+            .zip(ctx.children)
+            .map(|(entity, child)| {
+                let grow = resolve_style(ctx.world, entity).layout.flex_grow;
+                if grow > 0.0 {
+                    flex_item(child, grow).into_any_flex()
+                } else {
+                    child.into_any_flex()
+                }
+            })
+            .collect::<Vec<_>>();
+        Arc::new(apply_widget_style(
+            flex_row(children)
+                .cross_axis_alignment(CrossAxisAlignment::Stretch)
+                .gap(Length::px(style.layout.gap)),
+            &style,
+        ))
+    }
 }
 
 impl UiComponentTemplate for SidebarColumnView {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let state = ctx.world.get_resource::<PicusState>();
-    let active_thread = state.and_then(|s| s.active_thread.clone());
-    let threads = state.map(|s| s.threads.clone()).unwrap_or_default();
+        let style = resolve_style(ctx.world, ctx.entity);
+        let state = ctx.world.get_resource::<PicusState>();
+        let active_thread = state.and_then(|s| s.active_thread.clone());
+        let threads = state.map(|s| s.threads.clone()).unwrap_or_default();
 
-    let mut items: Vec<_> = Vec::with_capacity(threads.len() + 5);
-    let thread_count = threads.len();
-    let active_count = threads.iter().filter(|t| !t.archived).count();
+        let mut items: Vec<_> = Vec::with_capacity(threads.len() + 5);
+        let thread_count = threads.len();
+        let active_count = threads.iter().filter(|t| !t.archived).count();
 
-    items.push(sidebar_brand_block(&ctx).into_any_flex());
-    items.push(
-        sized_box(primary_button(
-            &ctx,
-            PicusCodeAction::NewThread,
-            "New session",
-            PicusIcon::Edit,
+        items.push(sidebar_brand_block(&ctx).into_any_flex());
+        items.push(
+            sized_box(primary_button(
+                &ctx,
+                PicusCodeAction::NewThread,
+                "New session",
+                PicusIcon::Edit,
+            ))
+            .width(Length::px(220.0))
+            .into_any_flex(),
+        );
+        items.push(sidebar_section_header(&ctx, active_count, thread_count).into_any_flex());
+
+        if threads.is_empty() {
+            items.push(sidebar_empty_state(&ctx).into_any_flex());
+        }
+        for t in threads {
+            let is_active = active_thread.as_deref() == Some(t.id.as_str());
+            items.push(sidebar_thread_item(&ctx, &t, is_active).into_any_flex());
+        }
+        items.push(sidebar_footer(&ctx).into_any_flex());
+
+        Arc::new(apply_widget_style(
+            sized_box(flex_col(items).gap(Length::px(style.layout.gap))).width(Length::px(244.0)),
+            &style,
         ))
-        .width(Length::px(220.0))
-        .into_any_flex(),
-    );
-    items.push(sidebar_section_header(&ctx, active_count, thread_count).into_any_flex());
-
-    if threads.is_empty() {
-        items.push(sidebar_empty_state(&ctx).into_any_flex());
     }
-    for t in threads {
-        let is_active = active_thread.as_deref() == Some(t.id.as_str());
-        items.push(sidebar_thread_item(&ctx, &t, is_active).into_any_flex());
-    }
-    items.push(sidebar_footer(&ctx).into_any_flex());
-
-    Arc::new(apply_widget_style(
-        sized_box(flex_col(items).gap(Length::px(style.layout.gap))).width(Length::px(244.0)),
-        &style,
-    ))
-}
 }
 
 impl UiComponentTemplate for TranscriptColumnView {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let state = ctx.world.get_resource::<PicusState>();
-    let summary = TranscriptSummary::from_state(state);
-    let mut rows = Vec::with_capacity(ctx.children.len() + 4);
-    rows.push(transcript_header(&ctx, &summary).into_any_flex());
+        let style = resolve_style(ctx.world, ctx.entity);
+        let state = ctx.world.get_resource::<PicusState>();
+        let summary = TranscriptSummary::from_state(state);
+        let mut rows = Vec::with_capacity(ctx.children.len() + 4);
+        rows.push(transcript_header(&ctx, &summary).into_any_flex());
 
-    if summary.active_thread.is_none() || (summary.message_count == 0 && ctx.children.is_empty()) {
-        rows.push(transcript_empty_state(&ctx, &summary).into_any_flex());
+        if summary.active_thread.is_none()
+            || (summary.message_count == 0 && ctx.children.is_empty())
+        {
+            rows.push(transcript_empty_state(&ctx, &summary).into_any_flex());
+        }
+
+        rows.extend(ctx.children.into_iter().map(|child| child.into_any_flex()));
+
+        Arc::new(apply_widget_style(
+            flex_col(rows)
+                .cross_axis_alignment(CrossAxisAlignment::Stretch)
+                .gap(Length::px(style.layout.gap)),
+            &style,
+        ))
     }
-
-    rows.extend(ctx.children.into_iter().map(|child| child.into_any_flex()));
-
-    Arc::new(apply_widget_style(
-        flex_col(rows)
-            .cross_axis_alignment(CrossAxisAlignment::Stretch)
-            .gap(Length::px(style.layout.gap)),
-        &style,
-    ))
-}
 }
 
 impl UiComponentTemplate for MessageRowView {
     fn project(row: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let role = message_role(row.role.as_str());
-    let row_style = resolve_style_for_classes(
-        ctx.world,
-        ["picuscode.message.row", message_role_row_class(role)],
-    );
-    let body_style = resolve_style_for_classes(ctx.world, ["picuscode.message.stack"]);
-    let mut children = Vec::with_capacity(ctx.children.len() + 1);
-    children.push(message_meta(&ctx, row, role).into_any_flex());
-    children.extend(ctx.children.into_iter().map(|child| child.into_any_flex()));
+        let role = message_role(row.role.as_str());
+        let row_style = resolve_style_for_classes(
+            ctx.world,
+            ["picuscode.message.row", message_role_row_class(role)],
+        );
+        let body_style = resolve_style_for_classes(ctx.world, ["picuscode.message.stack"]);
+        let mut children = Vec::with_capacity(ctx.children.len() + 1);
+        children.push(message_meta(&ctx, row, role).into_any_flex());
+        children.extend(ctx.children.into_iter().map(|child| child.into_any_flex()));
 
-    let alignment = if matches!(role, MessageRole::User) {
-        CrossAxisAlignment::End
-    } else {
-        CrossAxisAlignment::Stretch
-    };
+        let alignment = if matches!(role, MessageRole::User) {
+            CrossAxisAlignment::End
+        } else {
+            CrossAxisAlignment::Stretch
+        };
 
-    Arc::new(apply_widget_style(
-        apply_widget_style(
-            flex_col(children)
-                .cross_axis_alignment(alignment)
-                .gap(Length::px(body_style.layout.gap)),
-            &body_style,
-        ),
-        &row_style,
-    ))
-}
+        Arc::new(apply_widget_style(
+            apply_widget_style(
+                flex_col(children)
+                    .cross_axis_alignment(alignment)
+                    .gap(Length::px(body_style.layout.gap)),
+                &body_style,
+            ),
+            &row_style,
+        ))
+    }
 }
 
 impl UiComponentTemplate for ComposerView {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let state = ctx.world.get_resource::<PicusState>();
-    let draft = ctx
-        .world
-        .get_resource::<PicusState>()
-        .map(|s| s.draft.clone())
-        .unwrap_or_default();
-    let streaming = state.is_some_and(|s| s.streaming);
-    let draft_count = draft_len(&draft);
-    let input_entity = ctx.entity;
-    let enter_entity = ctx.entity;
-    let input_style = resolve_style_for_classes(ctx.world, ["picuscode.text-input"]);
-    let input_row_style = resolve_style_for_classes(ctx.world, ["picuscode.composer.input-row"]);
-    let input = apply_direct_text_input_style(
-        text_input(input_entity, draft, PicusCodeAction::ComposerChanged)
-            .placeholder("Message CodeWhale...")
-            .insert_newline(InsertNewline::OnShiftEnter)
-            .on_enter(move |_| {
-                emit_ui_action(enter_entity, PicusCodeAction::Send);
-            }),
-        &input_style,
-    );
-    let action_btn = if streaming {
-        toolbar_button(
-            &ctx,
-            PicusCodeAction::CancelTurn,
-            "Stop",
-            PicusIcon::StopCircle,
-        )
-    } else {
-        primary_button(&ctx, PicusCodeAction::Send, "Send", PicusIcon::Send)
-    };
-    let selected = state.and_then(|s| s.active_thread.as_deref()).is_some();
-    let caret = if streaming { "…" } else { "›" };
-    Arc::new(apply_widget_style(
-        flex_col(vec![
-            apply_widget_style(
-                flex_row(vec![
-                    text_view(&ctx, ["picuscode.composer.caret"], caret).into_any_flex(),
-                    input.flex(1.0).into_any_flex(),
-                    action_btn.into_any_flex(),
-                ])
-                .cross_axis_alignment(CrossAxisAlignment::Center)
-                .gap(Length::px(8.0)),
-                &input_row_style,
+        let style = resolve_style(ctx.world, ctx.entity);
+        let state = ctx.world.get_resource::<PicusState>();
+        let draft = ctx
+            .world
+            .get_resource::<PicusState>()
+            .map(|s| s.draft.clone())
+            .unwrap_or_default();
+        let streaming = state.is_some_and(|s| s.streaming);
+        let draft_count = draft_len(&draft);
+        let input_entity = ctx.entity;
+        let enter_entity = ctx.entity;
+        let input_style = resolve_style_for_classes(ctx.world, ["picuscode.text-input"]);
+        let input_row_style =
+            resolve_style_for_classes(ctx.world, ["picuscode.composer.input-row"]);
+        let input = apply_direct_text_input_style(
+            text_input(input_entity, draft, PicusCodeAction::ComposerChanged)
+                .placeholder("Message CodeWhale...")
+                .insert_newline(InsertNewline::OnShiftEnter)
+                .on_enter(move |_| {
+                    emit_ui_action(enter_entity, PicusCodeAction::Send);
+                }),
+            &input_style,
+        );
+        let action_btn = if streaming {
+            toolbar_button(
+                &ctx,
+                PicusCodeAction::CancelTurn,
+                "Stop",
+                PicusIcon::StopCircle,
             )
-            .into_any_flex(),
-            composer_context_bar(&ctx, state, draft_count, streaming, selected).into_any_flex(),
-        ])
-        .gap(Length::px(style.layout.gap)),
-        &style,
-    ))
-}
+        } else {
+            primary_button(&ctx, PicusCodeAction::Send, "Send", PicusIcon::Send)
+        };
+        let selected = state.and_then(|s| s.active_thread.as_deref()).is_some();
+        let caret = if streaming { "…" } else { "›" };
+        Arc::new(apply_widget_style(
+            flex_col(vec![
+                apply_widget_style(
+                    flex_row(vec![
+                        text_view(&ctx, ["picuscode.composer.caret"], caret).into_any_flex(),
+                        input.flex(1.0).into_any_flex(),
+                        action_btn.into_any_flex(),
+                    ])
+                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                    .gap(Length::px(8.0)),
+                    &input_row_style,
+                )
+                .into_any_flex(),
+                composer_context_bar(&ctx, state, draft_count, streaming, selected).into_any_flex(),
+            ])
+            .gap(Length::px(style.layout.gap)),
+            &style,
+        ))
+    }
 }
 
 impl UiComponentTemplate for StatusLineView {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let state = ctx.world.get_resource::<PicusState>();
-    let metrics = state
-        .map(|s| {
-            vec![
-                status_metric(
+        let style = resolve_style(ctx.world, ctx.entity);
+        let state = ctx.world.get_resource::<PicusState>();
+        let metrics = state
+            .map(|s| {
+                vec![
+                    status_metric(
+                        &ctx,
+                        PicusIcon::CircleDot,
+                        "state",
+                        truncate_preview(&s.status, 42),
+                        if s.streaming {
+                            ChipTone::Success
+                        } else {
+                            ChipTone::Neutral
+                        },
+                    ),
+                    status_metric(
+                        &ctx,
+                        PicusIcon::MessageSquare,
+                        "threads",
+                        s.threads.len().to_string(),
+                        ChipTone::Neutral,
+                    ),
+                    status_metric(
+                        &ctx,
+                        PicusIcon::List,
+                        "messages",
+                        s.messages.len().to_string(),
+                        ChipTone::Neutral,
+                    ),
+                    status_metric(
+                        &ctx,
+                        PicusIcon::Globe,
+                        "provider",
+                        config_summary_value(s, "provider", "unset"),
+                        ChipTone::Accent,
+                    ),
+                    status_metric(
+                        &ctx,
+                        PicusIcon::Bot,
+                        "model",
+                        config_summary_value(s, "model", "unset"),
+                        ChipTone::Neutral,
+                    ),
+                ]
+            })
+            .unwrap_or_else(|| {
+                vec![status_metric(
                     &ctx,
-                    PicusIcon::CircleDot,
+                    PicusIcon::Loader,
                     "state",
-                    truncate_preview(&s.status, 42),
-                    if s.streaming {
-                        ChipTone::Success
-                    } else {
-                        ChipTone::Neutral
-                    },
-                ),
-                status_metric(
-                    &ctx,
-                    PicusIcon::MessageSquare,
-                    "threads",
-                    s.threads.len().to_string(),
+                    "Bridge starting",
                     ChipTone::Neutral,
-                ),
-                status_metric(
-                    &ctx,
-                    PicusIcon::List,
-                    "messages",
-                    s.messages.len().to_string(),
-                    ChipTone::Neutral,
-                ),
-                status_metric(
-                    &ctx,
-                    PicusIcon::Globe,
-                    "provider",
-                    config_summary_value(s, "provider", "unset"),
-                    ChipTone::Accent,
-                ),
-                status_metric(
-                    &ctx,
-                    PicusIcon::Bot,
-                    "model",
-                    config_summary_value(s, "model", "unset"),
-                    ChipTone::Neutral,
-                ),
-            ]
-        })
-        .unwrap_or_else(|| {
-            vec![status_metric(
-                &ctx,
-                PicusIcon::Loader,
-                "state",
-                "Bridge starting",
-                ChipTone::Neutral,
-            )]
-        });
-    Arc::new(apply_widget_style(
-        flex_row(
-            metrics
-                .into_iter()
-                .map(|metric| metric.into_any_flex())
-                .collect::<Vec<_>>(),
-        )
+                )]
+            });
+        Arc::new(apply_widget_style(
+            flex_row(
+                metrics
+                    .into_iter()
+                    .map(|metric| metric.into_any_flex())
+                    .collect::<Vec<_>>(),
+            )
             .cross_axis_alignment(CrossAxisAlignment::Center)
             .gap(Length::px(6.0)),
-        &style,
-    ))
-}
+            &style,
+        ))
+    }
 }
 
 impl UiComponentTemplate for AboutRootView {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let close_btn = toolbar_button(&ctx, PicusCodeAction::CloseAbout, "Close", PicusIcon::X);
-    let children = ctx
-        .children
-        .into_iter()
-        .map(|child| child.into_any_flex())
-        .collect::<Vec<_>>();
-    let mut all = children;
-    all.push(close_btn.into_any_flex());
-    Arc::new(apply_widget_style(
-        flex_col(all)
-            .width(Dim::Stretch)
-            .height(Dim::Stretch)
-            .gap(Length::px(12.0)),
-        &style,
-    ))
-}
+        let style = resolve_style(ctx.world, ctx.entity);
+        let close_btn = toolbar_button(&ctx, PicusCodeAction::CloseAbout, "Close", PicusIcon::X);
+        let children = ctx
+            .children
+            .into_iter()
+            .map(|child| child.into_any_flex())
+            .collect::<Vec<_>>();
+        let mut all = children;
+        all.push(close_btn.into_any_flex());
+        Arc::new(apply_widget_style(
+            flex_col(all)
+                .width(Dim::Stretch)
+                .height(Dim::Stretch)
+                .gap(Length::px(12.0)),
+            &style,
+        ))
+    }
 }
 
 impl UiComponentTemplate for SettingsRootView {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let close_btn = toolbar_button(&ctx, PicusCodeAction::CloseSettings, "Close", PicusIcon::X);
-    let save_btn = toolbar_button(
-        &ctx,
-        PicusCodeAction::ApplyConfigEdits,
-        "Save",
-        PicusIcon::Check,
-    );
-    let reload_btn = toolbar_button(
-        &ctx,
-        PicusCodeAction::ReloadConfig,
-        "Reload",
-        PicusIcon::RefreshCw,
-    );
-    let children = ctx
-        .children
-        .into_iter()
-        .map(|child| child.into_any_flex())
-        .collect::<Vec<_>>();
-    let mut all = children;
-    all.push(
-        flex_row(vec![
-            sized_box(reload_btn).flex(1.0).into_any_flex(),
-            save_btn.into_any_flex(),
-            close_btn.into_any_flex(),
-        ])
-        .cross_axis_alignment(CrossAxisAlignment::Center)
-        .gap(Length::px(8.0))
-        .into_any_flex(),
-    );
-    Arc::new(apply_widget_style(
-        flex_col(all)
-            .width(Dim::Stretch)
-            .height(Dim::Stretch)
-            .gap(Length::px(12.0)),
-        &style,
-    ))
-}
+        let style = resolve_style(ctx.world, ctx.entity);
+        let close_btn = toolbar_button(&ctx, PicusCodeAction::CloseSettings, "Close", PicusIcon::X);
+        let save_btn = toolbar_button(
+            &ctx,
+            PicusCodeAction::ApplyConfigEdits,
+            "Save",
+            PicusIcon::Check,
+        );
+        let reload_btn = toolbar_button(
+            &ctx,
+            PicusCodeAction::ReloadConfig,
+            "Reload",
+            PicusIcon::RefreshCw,
+        );
+        let children = ctx
+            .children
+            .into_iter()
+            .map(|child| child.into_any_flex())
+            .collect::<Vec<_>>();
+        let mut all = children;
+        all.push(
+            flex_row(vec![
+                sized_box(reload_btn).flex(1.0).into_any_flex(),
+                save_btn.into_any_flex(),
+                close_btn.into_any_flex(),
+            ])
+            .cross_axis_alignment(CrossAxisAlignment::Center)
+            .gap(Length::px(8.0))
+            .into_any_flex(),
+        );
+        Arc::new(apply_widget_style(
+            flex_col(all)
+                .width(Dim::Stretch)
+                .height(Dim::Stretch)
+                .gap(Length::px(12.0)),
+            &style,
+        ))
+    }
 }
 
 impl UiComponentTemplate for SettingsFormView {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let state = ctx.world.get_resource::<PicusState>();
+        let style = resolve_style(ctx.world, ctx.entity);
+        let state = ctx.world.get_resource::<PicusState>();
 
-    let mut rows: Vec<_> = Vec::new();
-    rows.push(settings_header(&ctx, state).into_any_flex());
+        let mut rows: Vec<_> = Vec::new();
+        rows.push(settings_header(&ctx, state).into_any_flex());
 
-    let values = state.map(|s| s.config_values.clone()).unwrap_or_default();
-    let edits = state.map(|s| s.config_edits.clone()).unwrap_or_default();
-    let active_provider = edits
-        .get("provider")
-        .or_else(|| values.get("provider"))
-        .cloned()
-        .unwrap_or_default();
-    rows.push(
-        settings_section(
-            &ctx,
-            "Connection",
-            &values,
-            &edits,
-            &active_provider,
-            &[
-                ("provider", "Provider", ConfigScope::Top),
-                ("model", "Model", ConfigScope::ProviderOrTop),
-                ("api_key", "API Key", ConfigScope::ProviderOrTop),
-                ("base_url", "Base URL", ConfigScope::ProviderOrTop),
-            ],
-        )
-        .into_any_flex(),
-    );
-    rows.push(
-        settings_section(
-            &ctx,
-            "Runtime",
-            &values,
-            &edits,
-            &active_provider,
-            &[
-                ("auth.mode", "Auth Mode", ConfigScope::Top),
-                ("telemetry", "Telemetry", ConfigScope::Top),
-            ],
-        )
-        .into_any_flex(),
-    );
-    rows.push(
-        settings_section(
-            &ctx,
-            "Safety",
-            &values,
-            &edits,
-            &active_provider,
-            &[
-                ("approval_policy", "Approval Policy", ConfigScope::Top),
-                ("sandbox_mode", "Sandbox Mode", ConfigScope::Top),
-            ],
-        )
-        .into_any_flex(),
-    );
+        let values = state.map(|s| s.config_values.clone()).unwrap_or_default();
+        let edits = state.map(|s| s.config_edits.clone()).unwrap_or_default();
+        let active_provider = edits
+            .get("provider")
+            .or_else(|| values.get("provider"))
+            .cloned()
+            .unwrap_or_default();
+        rows.push(
+            settings_section(
+                &ctx,
+                "Connection",
+                &values,
+                &edits,
+                &active_provider,
+                &[
+                    ("provider", "Provider", ConfigScope::Top),
+                    ("model", "Model", ConfigScope::ProviderOrTop),
+                    ("api_key", "API Key", ConfigScope::ProviderOrTop),
+                    ("base_url", "Base URL", ConfigScope::ProviderOrTop),
+                ],
+            )
+            .into_any_flex(),
+        );
+        rows.push(
+            settings_section(
+                &ctx,
+                "Runtime",
+                &values,
+                &edits,
+                &active_provider,
+                &[
+                    ("auth.mode", "Auth Mode", ConfigScope::Top),
+                    ("telemetry", "Telemetry", ConfigScope::Top),
+                ],
+            )
+            .into_any_flex(),
+        );
+        rows.push(
+            settings_section(
+                &ctx,
+                "Safety",
+                &values,
+                &edits,
+                &active_provider,
+                &[
+                    ("approval_policy", "Approval Policy", ConfigScope::Top),
+                    ("sandbox_mode", "Sandbox Mode", ConfigScope::Top),
+                ],
+            )
+            .into_any_flex(),
+        );
 
-    if let Some(s) = state
-        && let Some(status) = &s.config_status
-    {
-        rows.push(text_view(&ctx, ["picuscode.settings.status"], status.as_str()).into_any_flex());
+        if let Some(s) = state
+            && let Some(status) = &s.config_status
+        {
+            rows.push(
+                text_view(&ctx, ["picuscode.settings.status"], status.as_str()).into_any_flex(),
+            );
+        }
+
+        Arc::new(apply_widget_style(
+            flex_col(rows)
+                .cross_axis_alignment(CrossAxisAlignment::Stretch)
+                .gap(Length::px(style.layout.gap)),
+            &style,
+        ))
     }
-
-    Arc::new(apply_widget_style(
-        flex_col(rows)
-            .cross_axis_alignment(CrossAxisAlignment::Stretch)
-            .gap(Length::px(style.layout.gap)),
-        &style,
-    ))
-}
 }
 
 fn child_entities(ctx: &ProjectionCtx<'_>) -> Vec<picus::bevy_ecs::entity::Entity> {
@@ -576,11 +582,7 @@ fn shortcut_hint(ctx: &ProjectionCtx<'_>, key: &'static str, label_text: &'stati
     ))
 }
 
-fn suggestion_button(
-    ctx: &ProjectionCtx<'_>,
-    prompt: &'static str,
-    meta: &'static str,
-) -> UiView {
+fn suggestion_button(ctx: &ProjectionCtx<'_>, prompt: &'static str, meta: &'static str) -> UiView {
     let style = resolve_style_for_classes(ctx.world, ["picuscode.suggestion"]);
     let title_style = resolve_style_for_classes(ctx.world, ["picuscode.suggestion.title"]);
     let meta_style = resolve_style_for_classes(ctx.world, ["picuscode.suggestion.meta"]);
@@ -641,11 +643,7 @@ fn sidebar_section_header(
     ))
 }
 
-fn sidebar_thread_item(
-    ctx: &ProjectionCtx<'_>,
-    thread: &ThreadSummary,
-    is_active: bool,
-) -> UiView {
+fn sidebar_thread_item(ctx: &ProjectionCtx<'_>, thread: &ThreadSummary, is_active: bool) -> UiView {
     let name = thread
         .name
         .clone()
@@ -722,8 +720,12 @@ fn sidebar_empty_state(ctx: &ProjectionCtx<'_>) -> UiView {
     Arc::new(apply_widget_style(
         flex_col(vec![
             text_view(ctx, ["picuscode.empty.title"], "No sessions").into_any_flex(),
-            text_view(ctx, ["picuscode.empty.body"], "Create one to sync CodeWhale state.")
-                .into_any_flex(),
+            text_view(
+                ctx,
+                ["picuscode.empty.body"],
+                "Create one to sync CodeWhale state.",
+            )
+            .into_any_flex(),
         ])
         .gap(Length::px(4.0)),
         &style,
@@ -734,8 +736,13 @@ fn sidebar_footer(ctx: &ProjectionCtx<'_>) -> UiView {
     let style = resolve_style_for_classes(ctx.world, ["picuscode.sidebar.footer"]);
     Arc::new(apply_widget_style(
         flex_col(vec![
-            sidebar_nav_button(ctx, PicusCodeAction::OpenSettings, "Settings", PicusIcon::Settings)
-                .into_any_flex(),
+            sidebar_nav_button(
+                ctx,
+                PicusCodeAction::OpenSettings,
+                "Settings",
+                PicusIcon::Settings,
+            )
+            .into_any_flex(),
             sidebar_nav_button(ctx, PicusCodeAction::OpenAbout, "About", PicusIcon::Info)
                 .into_any_flex(),
         ])
@@ -1092,10 +1099,18 @@ fn transcript_empty_state(ctx: &ProjectionCtx<'_>, summary: &TranscriptSummary) 
             flex_col(vec![
                 suggestion_button(ctx, primary_prompt, "Start with a repository-level map")
                     .into_any_flex(),
-                suggestion_button(ctx, "Find the riskiest TODOs", "Scan for work that needs attention")
-                    .into_any_flex(),
-                suggestion_button(ctx, "Draft a focused implementation plan", "Prepare a short next-step checklist")
-                    .into_any_flex(),
+                suggestion_button(
+                    ctx,
+                    "Find the riskiest TODOs",
+                    "Scan for work that needs attention",
+                )
+                .into_any_flex(),
+                suggestion_button(
+                    ctx,
+                    "Draft a focused implementation plan",
+                    "Prepare a short next-step checklist",
+                )
+                .into_any_flex(),
             ])
             .cross_axis_alignment(CrossAxisAlignment::Stretch)
             .gap(Length::px(8.0))
@@ -1391,12 +1406,7 @@ mod tests {
         );
 
         assert_eq!(
-            resolve_config_field(
-                &values,
-                "openrouter",
-                "model",
-                ConfigScope::ProviderOrTop
-            ),
+            resolve_config_field(&values, "openrouter", "model", ConfigScope::ProviderOrTop),
             "provider-model"
         );
     }
@@ -1439,7 +1449,10 @@ mod tests {
 
     #[test]
     fn settings_api_key_field_does_not_display_redacted_secret_as_editable_value() {
-        assert_eq!(display_config_field_value("api_key", "sk-d***cret", None), "");
+        assert_eq!(
+            display_config_field_value("api_key", "sk-d***cret", None),
+            ""
+        );
         assert_eq!(
             config_field_placeholder("api_key"),
             "Paste new key to update"

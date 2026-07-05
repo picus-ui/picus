@@ -286,150 +286,150 @@ fn progress_value(state: &DownloadState) -> Option<f64> {
 
 impl UiComponentTemplate for DownloadRootView {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let root_style = resolve_style(ctx.world, ctx.entity);
-    let content = apply_widget_style(
-        flex_col(
-            ctx.children
-                .into_iter()
-                .map(|child| child.into_any_flex())
-                .collect::<Vec<_>>(),
-        )
-        .cross_axis_alignment(CrossAxisAlignment::Start),
-        &root_style,
-    );
+        let root_style = resolve_style(ctx.world, ctx.entity);
+        let content = apply_widget_style(
+            flex_col(
+                ctx.children
+                    .into_iter()
+                    .map(|child| child.into_any_flex())
+                    .collect::<Vec<_>>(),
+            )
+            .cross_axis_alignment(CrossAxisAlignment::Start),
+            &root_style,
+        );
 
-    let heartbeat_entity = ctx.entity;
-    let heartbeat = task(
-        |proxy, _: &mut ()| async move {
-            let mut interval = tokio::time::interval(Duration::from_millis(HEARTBEAT_MS));
-            loop {
-                interval.tick().await;
-                let Ok(()) = proxy.message(()) else {
-                    break;
-                };
-            }
-        },
-        move |_: &mut (), ()| {
-            emit_ui_action(heartbeat_entity, DownloadEvent::Tick);
-        },
-    );
+        let heartbeat_entity = ctx.entity;
+        let heartbeat = task(
+            |proxy, _: &mut ()| async move {
+                let mut interval = tokio::time::interval(Duration::from_millis(HEARTBEAT_MS));
+                loop {
+                    interval.tick().await;
+                    let Ok(()) = proxy.message(()) else {
+                        break;
+                    };
+                }
+            },
+            move |_: &mut (), ()| {
+                emit_ui_action(heartbeat_entity, DownloadEvent::Tick);
+            },
+        );
 
-    Arc::new(fork(content, Some(heartbeat)))
-}
+        Arc::new(fork(content, Some(heartbeat)))
+    }
 }
 
 impl UiComponentTemplate for DownloadTitle {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let title_style = resolve_style_for_classes(ctx.world, ["download.title"]);
-    Arc::new(apply_label_style(
-        label("Remote File Downloader"),
-        &title_style,
-    ))
-}
+        let title_style = resolve_style_for_classes(ctx.world, ["download.title"]);
+        Arc::new(apply_label_style(
+            label("Remote File Downloader"),
+            &title_style,
+        ))
+    }
 }
 
 impl UiComponentTemplate for DownloadUrlRow {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let row_style = resolve_style_for_classes(ctx.world, ["download.row"]);
-    let input_style = resolve_style_for_classes(ctx.world, ["download.url-input"]);
-    let status_style = resolve_style_for_classes(ctx.world, ["download.status"]);
-    let state = ctx.world.resource::<DownloadState>();
+        let row_style = resolve_style_for_classes(ctx.world, ["download.row"]);
+        let input_style = resolve_style_for_classes(ctx.world, ["download.url-input"]);
+        let status_style = resolve_style_for_classes(ctx.world, ["download.status"]);
+        let state = ctx.world.resource::<DownloadState>();
 
-    Arc::new(apply_widget_style(
-        flex_row((
-            apply_label_style(label("URL:"), &status_style),
-            apply_widget_style(
-                text_input(ctx.entity, state.url.clone(), DownloadEvent::SetUrl)
-                    .placeholder(DEFAULT_URL),
-                &input_style,
-            )
-            .flex(1.0),
-        )),
-        &row_style,
-    ))
-}
+        Arc::new(apply_widget_style(
+            flex_row((
+                apply_label_style(label("URL:"), &status_style),
+                apply_widget_style(
+                    text_input(ctx.entity, state.url.clone(), DownloadEvent::SetUrl)
+                        .placeholder(DEFAULT_URL),
+                    &input_style,
+                )
+                .flex(1.0),
+            )),
+            &row_style,
+        ))
+    }
 }
 
 impl UiComponentTemplate for DownloadActionRow {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let row_style = resolve_style_for_classes(ctx.world, ["download.row"]);
-    let button_style = resolve_style_for_classes(ctx.world, ["download.button"]);
-    let state = ctx.world.resource::<DownloadState>();
+        let row_style = resolve_style_for_classes(ctx.world, ["download.row"]);
+        let button_style = resolve_style_for_classes(ctx.world, ["download.button"]);
+        let state = ctx.world.resource::<DownloadState>();
 
-    let button_text = if state.in_progress {
-        "Downloading..."
-    } else {
-        "Download"
-    };
+        let button_text = if state.in_progress {
+            "Downloading..."
+        } else {
+            "Download"
+        };
 
-    Arc::new(apply_widget_style(
-        flex_row((apply_widget_style(
-            button(ctx.entity, DownloadEvent::StartDownload, button_text),
-            &button_style,
-        ),))
-        .main_axis_alignment(MainAxisAlignment::Start),
-        &row_style,
-    ))
-}
+        Arc::new(apply_widget_style(
+            flex_row((apply_widget_style(
+                button(ctx.entity, DownloadEvent::StartDownload, button_text),
+                &button_style,
+            ),))
+            .main_axis_alignment(MainAxisAlignment::Start),
+            &row_style,
+        ))
+    }
 }
 
 impl UiComponentTemplate for DownloadDialogModeRow {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let row_style = resolve_style_for_classes(ctx.world, ["download.row"]);
-    let status_style = resolve_style_for_classes(ctx.world, ["download.status"]);
-    let state = ctx.world.resource::<DownloadState>();
+        let row_style = resolve_style_for_classes(ctx.world, ["download.row"]);
+        let status_style = resolve_style_for_classes(ctx.world, ["download.status"]);
+        let state = ctx.world.resource::<DownloadState>();
 
-    Arc::new(apply_widget_style(
-        flex_row((
-            apply_label_style(label("Completion dialog:"), &status_style),
-            switch(
-                ctx.entity,
-                state.use_system_dialog,
-                DownloadEvent::SetUseSystemDialog,
-            ),
-            apply_label_style(
-                label(if state.use_system_dialog {
-                    "System"
-                } else {
-                    "Modal"
-                }),
-                &status_style,
-            ),
+        Arc::new(apply_widget_style(
+            flex_row((
+                apply_label_style(label("Completion dialog:"), &status_style),
+                switch(
+                    ctx.entity,
+                    state.use_system_dialog,
+                    DownloadEvent::SetUseSystemDialog,
+                ),
+                apply_label_style(
+                    label(if state.use_system_dialog {
+                        "System"
+                    } else {
+                        "Modal"
+                    }),
+                    &status_style,
+                ),
+            ))
+            .main_axis_alignment(MainAxisAlignment::Start),
+            &row_style,
         ))
-        .main_axis_alignment(MainAxisAlignment::Start),
-        &row_style,
-    ))
-}
+    }
 }
 
 impl UiComponentTemplate for DownloadProgressPanel {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-    let status_style = resolve_style_for_classes(ctx.world, ["download.status"]);
-    let state = ctx.world.resource::<DownloadState>();
+        let status_style = resolve_style_for_classes(ctx.world, ["download.status"]);
+        let state = ctx.world.resource::<DownloadState>();
 
-    let progress_text = match state.total_bytes {
-        Some(total) if total > 0 => format!(
-            "{} / {} ({:.1}%)",
-            format_bytes(state.downloaded_bytes),
-            format_bytes(total),
-            (state.downloaded_bytes as f64 / total as f64) * 100.0
-        ),
-        _ => format!("{} downloaded", format_bytes(state.downloaded_bytes)),
-    };
+        let progress_text = match state.total_bytes {
+            Some(total) if total > 0 => format!(
+                "{} / {} ({:.1}%)",
+                format_bytes(state.downloaded_bytes),
+                format_bytes(total),
+                (state.downloaded_bytes as f64 / total as f64) * 100.0
+            ),
+            _ => format!("{} downloaded", format_bytes(state.downloaded_bytes)),
+        };
 
-    let target_text = state
-        .active_target
-        .as_deref()
-        .map(|target| format!("Target: {target}"))
-        .unwrap_or_else(|| "Target: (not started)".to_string());
+        let target_text = state
+            .active_target
+            .as_deref()
+            .map(|target| format!("Target: {target}"))
+            .unwrap_or_else(|| "Target: (not started)".to_string());
 
-    Arc::new(flex_col((
-        progress_bar(progress_value(state)).into_any_flex(),
-        apply_label_style(label(progress_text), &status_style).into_any_flex(),
-        apply_label_style(label(target_text), &status_style).into_any_flex(),
-        apply_label_style(label(state.status.clone()), &status_style).into_any_flex(),
-    )))
-}
+        Arc::new(flex_col((
+            progress_bar(progress_value(state)).into_any_flex(),
+            apply_label_style(label(progress_text), &status_style).into_any_flex(),
+            apply_label_style(label(target_text), &status_style).into_any_flex(),
+            apply_label_style(label(state.status.clone()), &status_style).into_any_flex(),
+        )))
+    }
 }
 
 fn setup_download_world(mut commands: Commands) {
@@ -590,8 +590,9 @@ fn main() -> Result<(), EventLoopError> {
 mod tests {
     #[test]
     fn embedded_async_downloader_theme_ron_parses() {
-        let sheet = picus::parse_stylesheet_ron(include_str!("../assets/themes/async_downloader.ron"))
-            .expect("embedded async_downloader stylesheet should parse");
+        let sheet =
+            picus::parse_stylesheet_ron(include_str!("../assets/themes/async_downloader.ron"))
+                .expect("embedded async_downloader stylesheet should parse");
         assert_eq!(sheet.default_variant.as_deref(), Some("dark"));
     }
 }
