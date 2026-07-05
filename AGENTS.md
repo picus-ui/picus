@@ -128,8 +128,8 @@ window; roots without it bind to the primary window.
 
 System stages:
 
-- `PreUpdate`: input, font, interaction, overlay-click, scroll-geometry, and widget
-  action synchronization.
+- `PreUpdate`: input, font, interaction, overlay-click, scroll-geometry, view
+  message routing, and widget action synchronization.
 - `Update`: overlay lifecycle, style/theme synchronization, dirty marking, action
   handling, and transition ticking.
 - `PostUpdate`: UI synthesis, retained-tree rebuild, and IME synchronization.
@@ -266,6 +266,15 @@ Interactive controls use the ECS event route:
 - Text input, slider, switch, and checkbox helpers map retained widget actions into
   `UiEventQueue`. Do not expose the old Xilem app-state callback model in
   Picus-facing view APIs.
+- Widget actions not consumed by ancestor `on_action` handlers are emitted as
+  `RenderRootSignal::Action` and captured per window in `WindowRuntime`. The
+  `route_masonry_view_messages` PreUpdate system (run after input injection,
+  before `handle_widget_actions`) dispatches each captured action to its source
+  view's `View::message` handler via the `ViewCtx` widget map, so
+  callback-based views (`text_input`, `slider`, `switch`, `checkbox`) fire their
+  `on_changed`/`on_enter` callbacks into `UiEventQueue` in the same frame.
+  Button widgets push to `UiEventQueue` directly from `on_pointer_event` and do
+  not rely on this routing path.
 - `UiEventQueue` stores type-erased actions and supports typed non-destructive
   drains through `drain_actions::<T>()`.
 - `UiPointerHitEvent` is the hit-tested source event; `UiPointerEvent` bubbles

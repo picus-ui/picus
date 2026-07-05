@@ -167,6 +167,22 @@
       ),
     ),
     (
+      selector: Class("picuscode.sidebar.scroll"),
+      setter: (
+        layout: (
+          padding: Var("space-none"),
+          gap: Var("space-none"),
+          flex_grow: 1.0,
+          corner_radius: Var("radius-lg"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+    (
       selector: Class("picuscode.sidebar.heading"),
       setter: (
         text: (

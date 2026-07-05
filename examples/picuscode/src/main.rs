@@ -81,8 +81,18 @@ fn setup_chat_world(mut commands: Commands) {
                 StyleClass(vec!["picuscode.body".to_string()])
                 Children [
                     (
-                        SidebarColumnView
-                        StyleClass(vec!["picuscode.sidebar".to_string()])
+                        template_value(
+                            UiScrollView::new(Vec2::new(220.0, 520.0), Vec2::new(220.0, 2400.0))
+                                .with_vertical_scrollbar(true)
+                                .with_horizontal_scrollbar(false)
+                        )
+                        StyleClass(vec!["picuscode.sidebar.scroll".to_string()])
+                        Children [
+                            (
+                                SidebarColumnView
+                                StyleClass(vec!["picuscode.sidebar".to_string()])
+                            ),
+                        ]
                     ),
                     (
                         template_value(
@@ -746,7 +756,8 @@ fn build_picuscode_app() -> App {
                 handle_picuscode_actions,
                 poll_bridge_events,
             )
-                .chain(),
+                .chain()
+                .after(picus::core::route_masonry_view_messages),
         )
         .add_systems(PreUpdate, refresh_thread_list(std::time::Duration::from_secs(3)));
 

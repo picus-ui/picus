@@ -25,9 +25,9 @@ use bevy_window::{
 use masonry_core::{
     app::{RenderRoot, RenderRootOptions, RenderRootSignal, VisualLayerKind, WindowSizePolicy},
     core::{
-        DefaultProperties, Handled, PointerButton, PointerButtonEvent, PointerEvent, PointerId,
-        PointerInfo, PointerScrollEvent, PointerState, PointerType, PointerUpdate, ScrollDelta,
-        TextEvent, Widget, WidgetId, WidgetRef, WindowEvent,
+        DefaultProperties, ErasedAction, Handled, PointerButton, PointerButtonEvent, PointerEvent,
+        PointerId, PointerInfo, PointerScrollEvent, PointerState, PointerType, PointerUpdate,
+        ScrollDelta, TextEvent, Widget, WidgetId, WidgetRef, WindowEvent,
         keyboard::{Key, KeyState, Modifiers, NamedKey},
     },
     dpi::{PhysicalPosition, PhysicalSize},
@@ -43,7 +43,10 @@ use picus_view::{
     view::{label, sized_box, zstack},
 };
 use wgpu::PresentMode;
-use xilem_core::{ProxyError, RawProxy, SendMessage, View, ViewId};
+use xilem_core::{
+    DynMessage, MessageCtx, MessageResult, ProxyError, RawProxy, SendMessage, View, ViewId,
+    ViewPathTracker,
+};
 
 use crate::{
     events::{UiEventQueue, install_global_ui_event_queue},
@@ -102,6 +105,7 @@ pub struct WindowRuntime {
     pointer_state: PointerState,
     keyboard_modifiers: Modifiers,
     ime_signal_receiver: mpsc::Receiver<ImeWindowSignal>,
+    action_signal_receiver: mpsc::Receiver<(ErasedAction, WidgetId)>,
     viewport_width: f64,
     viewport_height: f64,
     window_surface: Option<ExternalWindowSurface>,
@@ -117,6 +121,8 @@ impl WindowRuntime {
             Arc::new(tokio::runtime::Runtime::new().expect("tokio runtime should initialize")),
         );
         let (ime_signal_sender, ime_signal_receiver) = mpsc::channel::<ImeWindowSignal>();
+        let (action_signal_sender, action_signal_receiver) =
+            mpsc::channel::<(ErasedAction, WidgetId)>();
 
         let (initial_root_widget, view_state) = <UiAnyView as View<(), (), ViewCtx>>::build(
             initial_view.as_ref(),
@@ -149,6 +155,9 @@ impl WindowRuntime {
                         position.y as f32,
                     )));
                 }
+                RenderRootSignal::Action(action, source) => {
+                    let _ = action_signal_sender.send((action, source));
+                }
                 _ => {}
             },
             options,
@@ -177,6 +186,7 @@ impl WindowRuntime {
             pointer_state: PointerState::default(),
             keyboard_modifiers: Modifiers::empty(),
             ime_signal_receiver,
+            action_signal_receiver,
             viewport_width: initial_viewport.0,
             viewport_height: initial_viewport.1,
             window_surface: None,
@@ -410,6 +420,56 @@ impl WindowRuntime {
 
         if let Some(fallback) = focus_fallback_widget(&self.render_root) {
             let _ = self.render_root.set_focus_fallback(Some(fallback));
+        }
+    }
+
+    /// Route widget actions emitted since the last call back to their source
+    /// view's [`View::message`] handler.
+    ///
+    /// Masonry widgets submit actions during the rewrite passes (triggered by
+    /// input injection). Actions not consumed by ancestor widgets' `on_action`
+    /// are emitted as [`RenderRootSignal::Action`], which the per-window signal
+    /// sink captures into `action_signal_receiver`. This method drains that
+    /// queue and dispatches each action to the corresponding view via the
+    /// `ViewCtx` widget map, so callback-based views such as `text_input` can
+    /// fire their `on_changed`/`on_enter` callbacks.
+    ///
+    /// Must be called after input injection and before the ECS action-drain
+    /// systems run, so that callback-emitted UI actions are visible in the same
+    /// frame.
+    pub fn route_pending_view_messages(&mut self) {
+        let actions: Vec<(ErasedAction, WidgetId)> = self.action_signal_receiver.try_iter().collect();
+        if actions.is_empty() {
+            return;
+        }
+
+        for (action, source) in actions {
+            let Some(path) = self.view_ctx.get_id_path(source).cloned() else {
+                tracing::debug!(
+                    "route_pending_view_messages: no view path for widget {:?}, dropping {:?}",
+                    source,
+                    action.type_name()
+                );
+                continue;
+            };
+
+            let env = std::mem::take(self.view_ctx.environment());
+            let message = DynMessage::from(SendMessage(action));
+            let mut ctx = MessageCtx::new(env, path, message);
+
+            let _result: MessageResult<()> = self.render_root.edit_base_layer(|mut root| {
+                let mut root = root.downcast::<Passthrough>();
+                <UiAnyView as View<(), (), ViewCtx>>::message(
+                    self.current_view.as_ref(),
+                    &mut self.view_state,
+                    &mut ctx,
+                    root.reborrow_mut(),
+                    &mut (),
+                )
+            });
+
+            let (env, _, _) = ctx.finish();
+            *self.view_ctx.environment() = env;
         }
     }
 
@@ -1328,6 +1388,22 @@ pub fn rebuild_masonry_runtime(world: &mut World) {
             continue;
         };
         window_runtime.rebuild_root_view(window_view);
+    }
+}
+
+/// PreUpdate step: route widget actions emitted during input injection back to
+/// their source view's `message` handler, so callback-based views (such as
+/// `text_input`) fire their `on_changed`/`on_enter` callbacks into the global
+/// UI event queue before the ECS action-drain systems run.
+pub fn route_masonry_view_messages(runtime: Option<NonSendMut<MasonryRuntime>>) {
+    let Some(mut runtime) = runtime else {
+        return;
+    };
+    let entities: Vec<Entity> = runtime.window_entities().collect();
+    for entity in entities {
+        if let Some(window_runtime) = runtime.window_mut(entity) {
+            window_runtime.route_pending_view_messages();
+        }
     }
 }
 

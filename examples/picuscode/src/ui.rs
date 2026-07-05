@@ -210,8 +210,7 @@ pub fn project_sidebar_column(_: &SidebarColumnView, ctx: ProjectionCtx<'_>) -> 
 
     Arc::new(apply_widget_style(
         sized_box(flex_col(items).gap(Length::px(4.0)))
-            .width(Length::px(220.0))
-            .height(Dim::Stretch),
+            .width(Length::px(220.0)),
         &style,
     ))
 }
@@ -398,16 +397,18 @@ pub fn project_settings_form(_: &SettingsFormView, ctx: ProjectionCtx<'_>) -> Ui
     rows.push(settings_header(&ctx, state).into_any_flex());
 
     let values = state.map(|s| s.config_values.clone()).unwrap_or_default();
+    let active_provider = values.get("provider").cloned().unwrap_or_default();
     rows.push(
         settings_section(
             &ctx,
             "Connection",
             &values,
+            &active_provider,
             &[
-                ("provider", "Provider"),
-                ("model", "Model"),
-                ("api_key", "API Key"),
-                ("base_url", "Base URL"),
+                ("provider", "Provider", ConfigScope::Top),
+                ("model", "Model", ConfigScope::ProviderOrTop),
+                ("api_key", "API Key", ConfigScope::ProviderOrTop),
+                ("base_url", "Base URL", ConfigScope::ProviderOrTop),
             ],
         )
         .into_any_flex(),
@@ -417,7 +418,11 @@ pub fn project_settings_form(_: &SettingsFormView, ctx: ProjectionCtx<'_>) -> Ui
             &ctx,
             "Runtime",
             &values,
-            &[("auth_mode", "Auth Mode"), ("telemetry", "Telemetry")],
+            &active_provider,
+            &[
+                ("auth.mode", "Auth Mode", ConfigScope::Top),
+                ("telemetry", "Telemetry", ConfigScope::Top),
+            ],
         )
         .into_any_flex(),
     );
@@ -426,9 +431,10 @@ pub fn project_settings_form(_: &SettingsFormView, ctx: ProjectionCtx<'_>) -> Ui
             &ctx,
             "Safety",
             &values,
+            &active_provider,
             &[
-                ("approval_policy", "Approval Policy"),
-                ("sandbox_mode", "Sandbox Mode"),
+                ("approval_policy", "Approval Policy", ConfigScope::Top),
+                ("sandbox_mode", "Sandbox Mode", ConfigScope::Top),
             ],
         )
         .into_any_flex(),
@@ -725,13 +731,14 @@ fn settings_section(
     ctx: &ProjectionCtx<'_>,
     title: &'static str,
     values: &std::collections::BTreeMap<String, String>,
-    fields: &[(&'static str, &'static str)],
+    active_provider: &str,
+    fields: &[(&'static str, &'static str, ConfigScope)],
 ) -> UiView {
     let style = resolve_style_for_classes(ctx.world, ["picuscode.settings.section"]);
     let mut rows =
         vec![text_view(ctx, ["picuscode.settings.section.title"], title).into_any_flex()];
-    for (key, display) in fields {
-        let current = values.get(*key).cloned().unwrap_or_default();
+    for (key, display, scope) in fields {
+        let current = resolve_config_field(values, active_provider, key, *scope);
         let key_string = (*key).to_string();
         let row = flex_row(vec![
             sized_box(text_view(ctx, ["picuscode.settings.label"], *display))
@@ -753,6 +760,32 @@ fn settings_section(
             .gap(Length::px(9.0)),
         &style,
     ))
+}
+
+#[derive(Clone, Copy)]
+enum ConfigScope {
+    Top,
+    ProviderOrTop,
+}
+
+fn resolve_config_field(
+    values: &std::collections::BTreeMap<String, String>,
+    active_provider: &str,
+    key: &str,
+    scope: ConfigScope,
+) -> String {
+    match scope {
+        ConfigScope::Top => values.get(key).cloned().unwrap_or_default(),
+        ConfigScope::ProviderOrTop => {
+            if !active_provider.is_empty() {
+                let provider_key = format!("providers.{active_provider}.{key}");
+                if let Some(value) = values.get(&provider_key) {
+                    return value.clone();
+                }
+            }
+            values.get(key).cloned().unwrap_or_default()
+        }
+    }
 }
 
 fn config_summary_value(state: &PicusState, key: &str, fallback: &str) -> String {

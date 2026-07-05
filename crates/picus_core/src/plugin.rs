@@ -42,7 +42,8 @@ use crate::{
     projection::{UiProjectorRegistry, register_core_projectors},
     runtime::{
         MasonryRuntime, initialize_masonry_runtime_from_windows, inject_bevy_input_into_masonry,
-        paint_masonry_ui, rebuild_masonry_runtime, sync_masonry_ime_state_to_bevy_window,
+        paint_masonry_ui, rebuild_masonry_runtime, route_masonry_view_messages,
+        sync_masonry_ime_state_to_bevy_window,
         sync_masonry_window_lifecycle,
     },
     styling::{
@@ -159,6 +160,7 @@ impl Plugin for PicusPlugin {
                     handle_scroll_view_wheel,
                     handle_clipboard_events,
                     inject_bevy_input_into_masonry,
+                    route_masonry_view_messages,
                     sync_masonry_ime_state_to_bevy_window,
                     handle_widget_actions,
                     sync_ui_interaction_markers,

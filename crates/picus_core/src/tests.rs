@@ -4807,3 +4807,109 @@ fn scroll_view_left_aligns_narrow_content_after_viewport_stretch() {
         "scroll content should start at the viewport left edge, got scroll_x={scroll_x}, label_x={label_x}"
     );
 }
+
+#[derive(Component, Debug, Clone, Copy)]
+struct CallbackTextInputProbe;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum CallbackTextInputAction {
+    Changed(String),
+}
+
+fn project_callback_text_input_probe(
+    _: &CallbackTextInputProbe,
+    ctx: ProjectionCtx<'_>,
+) -> UiView {
+    Arc::new(crate::retained_bridge::text_input(
+        ctx.entity,
+        String::new(),
+        CallbackTextInputAction::Changed,
+    )
+    .placeholder("Type here"))
+}
+
+/// Verifies that widget actions emitted by callback-based views (such as the
+/// `text_input` helper) are routed back to the view's `message` handler by
+/// `route_masonry_view_messages`, so `on_changed` fires into `UiEventQueue`.
+///
+/// Before the routing system was added, the `RenderRootSignal::Action` was
+/// dropped by the per-window signal sink, so `on_changed`/`on_enter` callbacks
+/// never fired and the composer draft stayed empty (see picuscode issue 4).
+#[test]
+fn route_masonry_view_messages_dispatches_text_input_on_changed() {
+
+    let mut app = App::new();
+    app.add_plugins(PicusPlugin)
+        .register_ui_component::<CallbackTextInputProbe>();
+
+    crate::impl_ui_component_template!(
+        CallbackTextInputProbe,
+        project_callback_text_input_probe
+    );
+
+    let mut window = Window::default();
+    window.resolution.set(480.0, 320.0);
+    let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+    let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+    let input = app
+        .world_mut()
+        .spawn((CallbackTextInputProbe, ChildOf(root)))
+        .id();
+
+    // Two updates so synthesis builds the retained tree and the widget map.
+    app.update();
+    app.update();
+
+    // Prime the Masonry layout root with the window's logical size so hit
+    // testing matches the on-screen widget positions (the headless runtime
+    // otherwise defaults to 1024x768).
+    app.world_mut().write_message(bevy_window::WindowResized {
+        window: window_entity,
+        width: 480.0,
+        height: 320.0,
+    });
+    app.update();
+
+    // Focus the text input by moving the cursor over it and pressing/releasing.
+    // Use physical coordinates so Window::physical_cursor_position() resolves
+    // inside the window bounds.
+    let input_center = widget_center_for_entity(&app, input);
+    send_primary_click(&mut app, window_entity, input_center);
+
+    // Mark the window as focused so the text area accepts text events.
+    app.world_mut().write_message(bevy_window::WindowFocused {
+        window: window_entity,
+        focused: true,
+    });
+    app.update();
+
+    // Type a character via a keyboard input event. The runtime forwards
+    // Character keys as TextEvent::Keyboard, which the TextArea turns into an
+    // inserted glyph and a TextAction::Changed.
+    app.world_mut().write_message(bevy_input::keyboard::KeyboardInput {
+        key_code: bevy_input::keyboard::KeyCode::KeyH,
+        logical_key: bevy_input::keyboard::Key::Character("h".into()),
+        state: bevy_input::ButtonState::Pressed,
+        text: None,
+        repeat: false,
+        window: window_entity,
+    });
+    app.update();
+    app.update();
+
+    let changed: Vec<_> = app
+        .world_mut()
+        .resource_mut::<UiEventQueue>()
+        .drain_actions::<CallbackTextInputAction>();
+    assert!(
+        !changed.is_empty(),
+        "text_input on_changed should fire via route_masonry_view_messages, got: {changed:?}"
+    );
+    assert!(
+        changed
+            .iter()
+            .any(|event| event.action == CallbackTextInputAction::Changed("h".to_string())),
+        "at least one on_changed should carry the typed text, got: {changed:?}"
+    );
+}
