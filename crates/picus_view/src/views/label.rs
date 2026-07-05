@@ -1,6 +1,8 @@
 use picus_widget::core::{ArcStr, StyleProperty};
 use picus_widget::parley::style::FontWeight;
 use picus_widget::parley::{FontFamily, FontFamilyName, GenericFamily, LineHeight};
+use picus_widget::peniko::Color;
+use picus_widget::properties::ContentColor;
 use picus_widget::widgets;
 
 use crate::core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
@@ -38,6 +40,7 @@ pub fn label(label: impl Into<ArcStr>) -> Label {
         enable_hinting: true,
         line_height: LineHeight::default(),
         font: FontFamily::Single(FontFamilyName::Generic(GenericFamily::SystemUi)),
+        text_color: None,
         letter_spacing: 0.0,
         word_spacing: 0.0,
     }
@@ -55,6 +58,7 @@ pub struct Label {
     enable_hinting: bool,
     line_height: LineHeight,
     font: FontFamily<'static>,
+    text_color: Option<Color>,
     letter_spacing: f32,
     word_spacing: f32,
     // TODO: add more attributes of `picus_widget::widgets::Label`
@@ -113,6 +117,15 @@ impl Label {
         self.font = font.into();
         self
     }
+
+    /// Set the text color.
+    ///
+    /// When unset, the view writes transparent text so a Picus surface without
+    /// an active theme does not fall back to the retained widget's static black.
+    pub fn text_color(mut self, color: Color) -> Self {
+        self.text_color = Some(color);
+        self
+    }
 }
 
 impl<T> From<T> for Label
@@ -129,17 +142,22 @@ impl<State: 'static, Action> View<State, Action, ViewCtx> for Label {
     type Element = Pod<widgets::Label>;
     type ViewState = ();
 
-    fn build(&self, ctx: &mut ViewCtx, _: &mut State) -> (Self::Element, Self::ViewState) {
-        let pod = ctx.create_pod(
-            widgets::Label::new(self.label.clone())
-                .with_text_alignment(self.text_alignment)
-                .with_style(StyleProperty::FontSize(self.text_size))
-                .with_style(StyleProperty::FontWeight(self.weight))
-                .with_style(StyleProperty::LineHeight(self.line_height))
-                .with_style(StyleProperty::FontFamily(self.font.clone()))
-                .with_style(StyleProperty::WordSpacing(self.word_spacing))
-                .with_style(StyleProperty::LetterSpacing(self.letter_spacing))
-                .with_hint(self.enable_hinting),
+    fn build(&self, _ctx: &mut ViewCtx, _: &mut State) -> (Self::Element, Self::ViewState) {
+        let label = widgets::Label::new(self.label.clone())
+            .with_text_alignment(self.text_alignment)
+            .with_style(StyleProperty::FontSize(self.text_size))
+            .with_style(StyleProperty::FontWeight(self.weight))
+            .with_style(StyleProperty::LineHeight(self.line_height))
+            .with_style(StyleProperty::FontFamily(self.font.clone()))
+            .with_style(StyleProperty::WordSpacing(self.word_spacing))
+            .with_style(StyleProperty::LetterSpacing(self.letter_spacing))
+            .with_hint(self.enable_hinting);
+
+        let pod = Pod::new_with_props(
+            label,
+            ContentColor {
+                color: self.text_color.unwrap_or(Color::TRANSPARENT),
+            },
         );
         (pod, ())
     }
@@ -184,6 +202,11 @@ impl<State: 'static, Action> View<State, Action, ViewCtx> for Label {
                 &mut element,
                 StyleProperty::FontFamily(self.font.clone()),
             );
+        }
+        if prev.text_color != self.text_color {
+            element.insert_prop(ContentColor {
+                color: self.text_color.unwrap_or(Color::TRANSPARENT),
+            });
         }
         if prev.enable_hinting != self.enable_hinting {
             widgets::Label::set_hint(&mut element, self.enable_hinting);

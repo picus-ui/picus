@@ -425,8 +425,9 @@ mod tests {
 
     #[test]
     fn embedded_timer_theme_ron_parses() {
-        picus::parse_stylesheet_ron(include_str!("../assets/themes/timer.ron"))
+        let sheet = picus::parse_stylesheet_ron(include_str!("../assets/themes/timer.ron"))
             .expect("embedded timer stylesheet should parse");
+        assert_eq!(sheet.default_variant.as_deref(), Some("dark"));
     }
 
     #[test]

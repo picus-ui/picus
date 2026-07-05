@@ -73,7 +73,12 @@ const MD_HEADING: Color = Color::from_rgb8(0xFF, 0xFF, 0xFF);
 
 pub(crate) fn project_markdown(component: &UiMarkdown, ctx: ProjectionCtx<'_>) -> UiView {
     let base_style = resolve_style(ctx.world, ctx.entity);
-    let text_color = base_style.colors.text.unwrap_or(MD_TEXT);
+    let Some(text_color) = base_style.colors.text else {
+        return Arc::new(apply_widget_style(
+            flex_col(Vec::<picus_view::view::AnyFlexChild<(), ()>>::new()).width(Dim::Stretch),
+            &base_style,
+        ));
+    };
 
     let blocks = parse_markdown_blocks(&component.source, text_color);
 
@@ -165,7 +170,12 @@ pub(crate) fn project_streaming_markdown(
     ctx: ProjectionCtx<'_>,
 ) -> UiView {
     let base_style = resolve_style(ctx.world, ctx.entity);
-    let text_color = base_style.colors.text.unwrap_or(MD_TEXT);
+    let Some(text_color) = base_style.colors.text else {
+        return Arc::new(apply_widget_style(
+            flex_col(Vec::<picus_view::view::AnyFlexChild<(), ()>>::new()).width(Dim::Stretch),
+            &base_style,
+        ));
+    };
 
     let completed_blocks = ctx
         .world

@@ -565,8 +565,9 @@ mod tests {
     use super::*;
     #[test]
     fn embedded_calculator_theme_ron_parses() {
-        picus::parse_stylesheet_ron(include_str!("../assets/themes/calculator.ron"))
+        let sheet = picus::parse_stylesheet_ron(include_str!("../assets/themes/calculator.ron"))
             .expect("embedded calculator stylesheet should parse");
+        assert_eq!(sheet.default_variant.as_deref(), Some("dark"));
     }
 
     #[test]

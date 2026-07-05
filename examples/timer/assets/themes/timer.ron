@@ -1,4 +1,5 @@
 (
+  default_variant: "dark",
   rules: [
     (
       selector: Class("timer.root"),

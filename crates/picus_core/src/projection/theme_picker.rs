@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::xilem::{Color, palette::css::BLACK, style::BoxShadow, style::Style as _};
+use crate::xilem::style::Style as _;
 use masonry_core::layout::{Dim, Length};
 use picus_view::view::{
     CrossAxisAlignment, FlexExt as _, MainAxisAlignment, flex_col, flex_row, label, portal,
@@ -33,22 +33,11 @@ fn selected_theme_index(world: &bevy_ecs::world::World, picker: &UiThemePicker) 
 }
 
 pub(crate) fn project_theme_picker(_: &UiThemePicker, ctx: ProjectionCtx<'_>) -> UiView {
-    let mut style = resolve_style(ctx.world, ctx.entity);
-    if style.layout.padding <= 0.0 {
-        style.layout.padding = 6.0;
-    }
-    if style.layout.corner_radius <= 0.0 {
-        style.layout.corner_radius = 999.0;
-    }
-    if style.layout.border_width <= 0.0 {
-        style.layout.border_width = 1.0;
-    }
-
-    let icon_color = style
-        .colors
-        .text
-        .unwrap_or(Color::from_rgb8(0xF3, 0xF3, 0xF3));
-    let icon = vector_icon(VectorIcon::SunMoon, 16.0, icon_color);
+    let style = resolve_style(ctx.world, ctx.entity);
+    let icon: UiView = match style.colors.text {
+        Some(icon_color) => vector_icon(VectorIcon::SunMoon, 16.0, icon_color),
+        None => Arc::new(label("")),
+    };
 
     let button = apply_direct_widget_style(
         button_with_child_view(ctx.entity, OverlayUiAction::ToggleThemePicker, icon),
@@ -73,33 +62,8 @@ pub(crate) fn project_theme_picker_menu(
     };
 
     let mut menu_style = resolve_style_for_classes(ctx.world, ["overlay.dropdown.menu"]);
-    if menu_style.colors.bg.is_none() {
-        menu_style.colors.bg = Some(Color::from_rgb8(0x1F, 0x1F, 0x1F));
-    }
-    if menu_style.colors.border.is_none() {
-        menu_style.colors.border = Some(Color::from_rgb8(0x3F, 0x3F, 0x3F));
-    }
-    if menu_style.layout.padding <= 0.0 {
-        menu_style.layout.padding = 8.0;
-    }
-    if menu_style.layout.corner_radius <= 0.0 {
-        menu_style.layout.corner_radius = 10.0;
-    }
-    if menu_style.layout.border_width <= 0.0 {
-        menu_style.layout.border_width = 1.0;
-    }
-    if menu_style.box_shadow.is_none() {
-        menu_style.box_shadow =
-            Some(BoxShadow::new(BLACK.with_alpha(0.28), (0.0, 8.0)).blur(Length::px(16.0)));
-    }
 
     let mut item_style = resolve_style_for_classes(ctx.world, ["overlay.dropdown.item"]);
-    if item_style.layout.padding <= 0.0 {
-        item_style.layout.padding = 8.0;
-    }
-    if item_style.text.size <= 0.0 {
-        item_style.text.size = 15.0;
-    }
 
     if picker
         .options
@@ -117,10 +81,7 @@ pub(crate) fn project_theme_picker_menu(
         .collect::<Vec<_>>();
 
     let selected_index = selected_theme_index(ctx.world, picker);
-    let icon_color = item_style
-        .colors
-        .text
-        .unwrap_or(Color::from_rgb8(0xF3, 0xF3, 0xF3));
+    let icon_color = item_style.colors.text;
 
     let anchor_width = ctx
         .world
@@ -134,12 +95,11 @@ pub(crate) fn project_theme_picker_menu(
         item_style.text.size,
         item_style.layout.padding * 2.0 + menu_style.layout.padding * 2.0 + 18.0,
     );
-    let item_gap = menu_style.layout.gap.max(6.0);
     let estimated_height = estimate_dropdown_viewport_height_px(
         translated_options.len().max(1),
         item_style.text.size,
         item_style.layout.padding,
-        item_gap,
+        menu_style.layout.gap,
     );
 
     let computed_position = popover_geometry(
@@ -153,19 +113,23 @@ pub(crate) fn project_theme_picker_menu(
         .into_iter()
         .enumerate()
         .map(|(index, label_text)| {
-            let indicator = if selected_index == Some(index) {
-                vector_icon(VectorIcon::RadioOn, 14.0, icon_color)
-            } else {
-                vector_icon(VectorIcon::RadioOff, 14.0, icon_color)
-            };
-            let content = flex_row(vec![
-                indicator.into_any_flex(),
+            let mut content_items = Vec::new();
+            if let Some(icon_color) = icon_color {
+                let indicator = if selected_index == Some(index) {
+                    vector_icon(VectorIcon::RadioOn, 14.0, icon_color)
+                } else {
+                    vector_icon(VectorIcon::RadioOff, 14.0, icon_color)
+                };
+                content_items.push(indicator.into_any_flex());
+            }
+            content_items.push(
                 apply_label_style(label(label_text), &item_style)
                     .flex(1.0)
                     .into_any_flex(),
-            ])
+            );
+            let content = flex_row(content_items)
             .cross_axis_alignment(CrossAxisAlignment::Center)
-            .gap(Length::px(8.0));
+            .gap(Length::px(item_style.layout.gap));
 
             let item_button = button_with_child_view(
                 ctx.entity,
@@ -184,7 +148,7 @@ pub(crate) fn project_theme_picker_menu(
             &menu_style,
         )
         .width(Dim::Stretch)
-        .gap(Length::px(item_gap)),
+        .gap(Length::px(menu_style.layout.gap)),
     )
     .dims((
         Length::px(computed_position.width),

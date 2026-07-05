@@ -756,7 +756,8 @@ fn main() -> Result<(), EventLoopError> {
 mod tests {
     #[test]
     fn embedded_chess_theme_ron_parses() {
-        picus::parse_stylesheet_ron(include_str!("../assets/themes/chess_game.ron"))
+        let sheet = picus::parse_stylesheet_ron(include_str!("../assets/themes/chess_game.ron"))
             .expect("embedded chess stylesheet should parse");
+        assert_eq!(sheet.default_variant.as_deref(), Some("dark"));
     }
 }

@@ -495,6 +495,7 @@ impl StyleRule {
 /// Global class-based style table.
 #[derive(Resource, Asset, TypePath, Debug, Clone, Default)]
 pub struct StyleSheet {
+    pub default_variant: Option<String>,
     pub tokens: HashMap<String, TokenValue>,
     pub rules: Vec<StyleRule>,
 }
@@ -800,9 +801,12 @@ pub fn parse_stylesheet_ron(ron_text: &str) -> io::Result<StyleSheet> {
 ///
 /// This updates [`ActiveStyleSheet`] and overlays the parsed rules/tokens onto
 /// the runtime [`StyleSheet`] as the active tier (same precedence as file-based
-/// active stylesheets), without requiring filesystem asset loading.
+/// active stylesheets), without requiring filesystem asset loading. If the
+/// stylesheet declares `default_variant` and no active variant has already been
+/// selected, the registered variant with that name is applied first.
 pub fn apply_active_stylesheet_ron(world: &mut World, ron_text: &str) -> io::Result<()> {
     let sheet = parse_stylesheet_ron(ron_text)?;
+    apply_stylesheet_default_variant(world, &sheet)?;
     apply_active_stylesheet(world, sheet);
     Ok(())
 }
@@ -1049,7 +1053,34 @@ fn apply_active_stylesheet_impl(
     }
 }
 
+fn apply_stylesheet_default_variant(
+    world: &mut World,
+    loaded_stylesheet: &StyleSheet,
+) -> io::Result<()> {
+    let Some(default_variant) = loaded_stylesheet.default_variant.clone() else {
+        return Ok(());
+    };
+
+    let has_active_variant = world
+        .get_resource::<ActiveStyleVariant>()
+        .is_some_and(|active| active.0.is_some());
+    if has_active_variant {
+        return Ok(());
+    }
+
+    apply_registered_style_variant_by_name(world, default_variant.as_str())?;
+    world.insert_resource(ActiveStyleVariant(Some(default_variant.clone())));
+    world.insert_resource(AppliedStyleVariant(Some(default_variant)));
+    Ok(())
+}
+
 pub fn apply_active_stylesheet(world: &mut World, loaded_stylesheet: StyleSheet) {
+    if let Err(error) = apply_stylesheet_default_variant(world, &loaded_stylesheet) {
+        tracing::warn!(
+            default_variant = loaded_stylesheet.default_variant.as_deref(),
+            "failed to apply active stylesheet default variant: {error}"
+        );
+    }
     apply_active_stylesheet_impl(world, loaded_stylesheet, true);
 }
 
@@ -1104,6 +1135,12 @@ pub fn sync_stylesheet_asset_events(world: &mut World) {
         return;
     };
 
+    if let Err(error) = apply_stylesheet_default_variant(world, &loaded_stylesheet) {
+        tracing::warn!(
+            default_variant = loaded_stylesheet.default_variant.as_deref(),
+            "failed to apply active stylesheet default variant from asset: {error}"
+        );
+    }
     apply_active_stylesheet_impl(world, loaded_stylesheet, false);
 }
 
@@ -1557,7 +1594,7 @@ fn warn_missing_or_invalid_token(token: &str, field: &str, expected: &str) {
         token,
         field,
         expected,
-        "style token missing or has incompatible type; applying fallback"
+        "style token missing or has incompatible type; dropping declaration"
     );
 }
 
@@ -1565,14 +1602,14 @@ fn resolve_f64_value(
     tokens: &HashMap<String, TokenValue>,
     value: &StyleValue<f64>,
     field: &str,
-) -> f64 {
+) -> Option<f64> {
     match value {
-        StyleValue::Value(value) => *value,
+        StyleValue::Value(value) => Some(*value),
         StyleValue::Var(token) => match tokens.get(token) {
-            Some(TokenValue::Float(value)) => *value,
+            Some(TokenValue::Float(value)) => Some(*value),
             _ => {
                 warn_missing_or_invalid_token(token, field, "Float");
-                0.0
+                None
             }
         },
     }
@@ -1582,14 +1619,14 @@ fn resolve_f32_value(
     tokens: &HashMap<String, TokenValue>,
     value: &StyleValue<f32>,
     field: &str,
-) -> f32 {
+) -> Option<f32> {
     match value {
-        StyleValue::Value(value) => *value,
+        StyleValue::Value(value) => Some(*value),
         StyleValue::Var(token) => match tokens.get(token) {
-            Some(TokenValue::Float(value)) => *value as f32,
+            Some(TokenValue::Float(value)) => Some(*value as f32),
             _ => {
                 warn_missing_or_invalid_token(token, field, "Float");
-                0.0
+                None
             }
         },
     }
@@ -1599,14 +1636,14 @@ fn resolve_color_value(
     tokens: &HashMap<String, TokenValue>,
     value: &StyleValue<Color>,
     field: &str,
-) -> Color {
+) -> Option<Color> {
     match value {
-        StyleValue::Value(value) => *value,
+        StyleValue::Value(value) => Some(*value),
         StyleValue::Var(token) => match tokens.get(token) {
-            Some(TokenValue::Color(value)) => *value,
+            Some(TokenValue::Color(value)) => Some(*value),
             _ => {
                 warn_missing_or_invalid_token(token, field, "Color");
-                Color::TRANSPARENT
+                None
             }
         },
     }
@@ -1633,14 +1670,14 @@ fn resolve_box_shadow_value(
     tokens: &HashMap<String, TokenValue>,
     value: &StyleValue<BoxShadow>,
     field: &str,
-) -> BoxShadow {
+) -> Option<BoxShadow> {
     match value {
-        StyleValue::Value(value) => *value,
+        StyleValue::Value(value) => Some(*value),
         StyleValue::Var(token) => match tokens.get(token) {
-            Some(TokenValue::BoxShadow(value)) => *value,
+            Some(TokenValue::BoxShadow(value)) => Some(*value),
             _ => {
                 warn_missing_or_invalid_token(token, field, "BoxShadow");
-                BoxShadow::default()
+                None
             }
         },
     }
@@ -1650,39 +1687,36 @@ fn resolve_transition_value(
     tokens: &HashMap<String, TokenValue>,
     value: &StyleValue<StyleTransition>,
     field: &str,
-) -> StyleTransition {
+) -> Option<StyleTransition> {
     match value {
-        StyleValue::Value(value) => *value,
+        StyleValue::Value(value) => Some(*value),
         StyleValue::Var(token) => match tokens.get(token) {
-            Some(TokenValue::Transition(value)) => *value,
-            Some(TokenValue::Float(value)) => StyleTransition {
+            Some(TokenValue::Transition(value)) => Some(*value),
+            Some(TokenValue::Float(value)) => Some(StyleTransition {
                 duration: *value as f32,
                 easing: None,
-            },
+            }),
             _ => {
                 warn_missing_or_invalid_token(token, field, "Transition|Float");
-                StyleTransition {
-                    duration: 0.0,
-                    easing: None,
-                }
+                None
             }
         },
     }
 }
 
-fn resolve_enum_value<T: Copy + Default>(
+fn resolve_enum_value<T: Copy>(
     _tokens: &HashMap<String, TokenValue>,
     value: &StyleValue<T>,
     _field: &str,
-) -> T {
+) -> Option<T> {
     match value {
-        StyleValue::Value(value) => *value,
+        StyleValue::Value(value) => Some(*value),
         StyleValue::Var(_token) => {
             tracing::warn!(
                 field = _field,
                 "style enum values currently only support literal values; token reference ignored"
             );
-            T::default()
+            None
         }
     }
 }
@@ -1695,35 +1729,35 @@ fn resolve_layout_style(
         padding: layout
             .padding
             .as_ref()
-            .map(|value| resolve_f64_value(tokens, value, "layout.padding")),
+            .and_then(|value| resolve_f64_value(tokens, value, "layout.padding")),
         gap: layout
             .gap
             .as_ref()
-            .map(|value| resolve_f64_value(tokens, value, "layout.gap")),
+            .and_then(|value| resolve_f64_value(tokens, value, "layout.gap")),
         corner_radius: layout
             .corner_radius
             .as_ref()
-            .map(|value| resolve_f64_value(tokens, value, "layout.corner_radius")),
+            .and_then(|value| resolve_f64_value(tokens, value, "layout.corner_radius")),
         border_width: layout
             .border_width
             .as_ref()
-            .map(|value| resolve_f64_value(tokens, value, "layout.border_width")),
+            .and_then(|value| resolve_f64_value(tokens, value, "layout.border_width")),
         justify_content: layout
             .justify_content
             .as_ref()
-            .map(|value| resolve_enum_value(tokens, value, "layout.justify_content")),
+            .and_then(|value| resolve_enum_value(tokens, value, "layout.justify_content")),
         align_items: layout
             .align_items
             .as_ref()
-            .map(|value| resolve_enum_value(tokens, value, "layout.align_items")),
+            .and_then(|value| resolve_enum_value(tokens, value, "layout.align_items")),
         scale: layout
             .scale
             .as_ref()
-            .map(|value| resolve_f64_value(tokens, value, "layout.scale")),
+            .and_then(|value| resolve_f64_value(tokens, value, "layout.scale")),
         flex_grow: layout
             .flex_grow
             .as_ref()
-            .map(|value| resolve_f64_value(tokens, value, "layout.flex_grow")),
+            .and_then(|value| resolve_f64_value(tokens, value, "layout.flex_grow")),
     }
 }
 
@@ -1735,39 +1769,39 @@ fn resolve_color_style(
         bg: colors
             .bg
             .as_ref()
-            .map(|value| resolve_color_value(tokens, value, "colors.bg")),
+            .and_then(|value| resolve_color_value(tokens, value, "colors.bg")),
         text: colors
             .text
             .as_ref()
-            .map(|value| resolve_color_value(tokens, value, "colors.text")),
+            .and_then(|value| resolve_color_value(tokens, value, "colors.text")),
         border: colors
             .border
             .as_ref()
-            .map(|value| resolve_color_value(tokens, value, "colors.border")),
+            .and_then(|value| resolve_color_value(tokens, value, "colors.border")),
         hover_bg: colors
             .hover_bg
             .as_ref()
-            .map(|value| resolve_color_value(tokens, value, "colors.hover_bg")),
+            .and_then(|value| resolve_color_value(tokens, value, "colors.hover_bg")),
         hover_text: colors
             .hover_text
             .as_ref()
-            .map(|value| resolve_color_value(tokens, value, "colors.hover_text")),
+            .and_then(|value| resolve_color_value(tokens, value, "colors.hover_text")),
         hover_border: colors
             .hover_border
             .as_ref()
-            .map(|value| resolve_color_value(tokens, value, "colors.hover_border")),
+            .and_then(|value| resolve_color_value(tokens, value, "colors.hover_border")),
         pressed_bg: colors
             .pressed_bg
             .as_ref()
-            .map(|value| resolve_color_value(tokens, value, "colors.pressed_bg")),
+            .and_then(|value| resolve_color_value(tokens, value, "colors.pressed_bg")),
         pressed_text: colors
             .pressed_text
             .as_ref()
-            .map(|value| resolve_color_value(tokens, value, "colors.pressed_text")),
+            .and_then(|value| resolve_color_value(tokens, value, "colors.pressed_text")),
         pressed_border: colors
             .pressed_border
             .as_ref()
-            .map(|value| resolve_color_value(tokens, value, "colors.pressed_border")),
+            .and_then(|value| resolve_color_value(tokens, value, "colors.pressed_border")),
     }
 }
 
@@ -1776,19 +1810,19 @@ fn resolve_text_style(text: &TextStyleValue, tokens: &HashMap<String, TokenValue
         size: text
             .size
             .as_ref()
-            .map(|value| resolve_f32_value(tokens, value, "text.size")),
+            .and_then(|value| resolve_f32_value(tokens, value, "text.size")),
         text_align: text
             .text_align
             .as_ref()
-            .map(|value| resolve_enum_value(tokens, value, "text.text_align")),
+            .and_then(|value| resolve_enum_value(tokens, value, "text.text_align")),
         weight: text
             .weight
             .as_ref()
-            .map(|value| resolve_f32_value(tokens, value, "text.weight")),
+            .and_then(|value| resolve_f32_value(tokens, value, "text.weight")),
         line_height: text
             .line_height
             .as_ref()
-            .map(|value| resolve_f32_value(tokens, value, "text.line_height")),
+            .and_then(|value| resolve_f32_value(tokens, value, "text.line_height")),
     }
 }
 
@@ -1807,11 +1841,11 @@ fn resolve_setter_values(
         box_shadow: setter
             .box_shadow
             .as_ref()
-            .map(|value| resolve_box_shadow_value(tokens, value, "box_shadow")),
+            .and_then(|value| resolve_box_shadow_value(tokens, value, "box_shadow")),
         transition: setter
             .transition
             .as_ref()
-            .map(|value| resolve_transition_value(tokens, value, "transition")),
+            .and_then(|value| resolve_transition_value(tokens, value, "transition")),
     }
 }
 
@@ -1912,16 +1946,7 @@ pub fn resolve_style(world: &World, entity: Entity) -> ResolvedStyle {
         return style;
     }
 
-    compute_resolved_style(world, entity).unwrap_or(ResolvedStyle {
-        // When no stylesheet/inline style source is present, force transparent
-        // text to avoid falling back to retained-widget intrinsic text painting.
-        // This keeps "no theme selected" surfaces visually empty as intended.
-        colors: ResolvedColorStyle {
-            text: Some(Color::TRANSPARENT),
-            ..ResolvedColorStyle::default()
-        },
-        ..ResolvedStyle::default()
-    })
+    compute_resolved_style(world, entity).unwrap_or_default()
 }
 
 /// Resolve style from class names only, without inline entity overrides.
@@ -2586,13 +2611,13 @@ pub fn apply_label_style(view: Label, style: &ResolvedStyle) -> impl WidgetView<
         styled = styled.font(font_stack);
     }
 
-    styled
-        .color(style.colors.text.unwrap_or(Color::WHITE))
-        .line_break_mode(LineBreaking::WordWrap)
-}
+    let styled = if let Some(text_color) = style.colors.text {
+        styled.text_color(text_color)
+    } else {
+        styled
+    };
 
-fn placeholder_color_from_style(style: &ResolvedStyle) -> Color {
-    style.colors.text.unwrap_or(Color::WHITE).with_alpha(0.72)
+    styled.line_break_mode(LineBreaking::WordWrap)
 }
 
 /// Apply text + box styling to a text input view.
@@ -2606,13 +2631,9 @@ pub fn apply_text_input_style(
     if let Some(font_stack) = font_stack_from_style(style) {
         styled = styled.font(font_stack);
     }
-    if let Some(text_color) = style.colors.text {
-        return styled
-            .text_color(text_color)
-            .placeholder_color(placeholder_color_from_style(style));
-    }
-
-    styled.placeholder_color(placeholder_color_from_style(style))
+    styled
+        .maybe_text_color(style.colors.text)
+        .maybe_placeholder_color(style.colors.text.map(|color| color.with_alpha(0.72)))
 }
 
 /// Apply text-input styling directly on the widget itself.
@@ -2627,26 +2648,10 @@ pub fn apply_direct_text_input_style(
     if let Some(font_stack) = font_stack_from_style(style) {
         styled = styled.font(font_stack);
     }
-    if let Some(text_color) = style.colors.text {
-        return transformed(
-            styled
-                .text_color(text_color)
-                .placeholder_color(placeholder_color_from_style(style))
-                .padding(style_padding(style.layout.padding))
-                .corner_radius(style_length(style.layout.corner_radius))
-                .border(
-                    style.colors.border.unwrap_or(Color::TRANSPARENT),
-                    style_length(style.layout.border_width),
-                )
-                .background_color(style.colors.bg.unwrap_or(Color::TRANSPARENT))
-                .box_shadow(style.box_shadow.unwrap_or_default()),
-        )
-        .scale(scale);
-    }
-
     transformed(
         styled
-            .placeholder_color(placeholder_color_from_style(style))
+            .maybe_text_color(style.colors.text)
+            .maybe_placeholder_color(style.colors.text.map(|color| color.with_alpha(0.72)))
             .padding(style_padding(style.layout.padding))
             .corner_radius(style_length(style.layout.corner_radius))
             .border(
@@ -2661,6 +2666,8 @@ pub fn apply_direct_text_input_style(
 
 #[derive(Debug, Deserialize)]
 struct StyleSheetDef {
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
+    default_variant: Option<String>,
     #[serde(default)]
     tokens: HashMap<String, TokenDef>,
     #[serde(default)]
@@ -2676,6 +2683,73 @@ struct StyleSheetVariantsDef {
     rules: Vec<StyleRuleDef>,
     #[serde(default)]
     variants: HashMap<String, StyleSheetDef>,
+}
+
+fn deserialize_optional_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    struct OptionalStringVisitor;
+
+    impl<'de> Visitor<'de> for OptionalStringVisitor {
+        type Value = Option<String>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter.write_str("a string, Some(\"...\"), or None")
+        }
+
+        fn visit_none<E>(self) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(None)
+        }
+
+        fn visit_unit<E>(self) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(None)
+        }
+
+        fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+        where
+            D: serde::Deserializer<'de>,
+        {
+            String::deserialize(deserializer).map(Some)
+        }
+
+        fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(Some(value.to_string()))
+        }
+
+        fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(Some(value))
+        }
+
+        fn visit_enum<A>(self, data: A) -> Result<Self::Value, A::Error>
+        where
+            A: EnumAccess<'de>,
+        {
+            let (variant, variant_access) = data.variant::<String>()?;
+            match variant.as_str() {
+                "Some" => Ok(Some(variant_access.newtype_variant::<String>()?)),
+                "None" => {
+                    variant_access.unit_variant()?;
+                    Ok(None)
+                }
+                _ => Err(de::Error::unknown_variant(&variant, &["Some", "None"])),
+            }
+        }
+    }
+
+    deserializer.deserialize_any(OptionalStringVisitor)
 }
 
 #[derive(Debug, Deserialize)]
@@ -3336,6 +3410,7 @@ fn parse_hex_color(hex: &str) -> io::Result<Color> {
 
 fn stylesheet_from_def(parsed: StyleSheetDef) -> io::Result<StyleSheet> {
     let mut sheet = StyleSheet::default();
+    sheet.default_variant = parsed.default_variant;
     for (name, token) in parsed.tokens {
         sheet.tokens.insert(name, token.into_token_value()?);
     }
@@ -3378,6 +3453,7 @@ fn stylesheet_variants_from_ron_bytes(bytes: &[u8]) -> io::Result<RegisteredStyl
 
     let default_variant = parsed.default_variant;
     let base_sheet = stylesheet_from_def(StyleSheetDef {
+        default_variant: None,
         tokens: parsed.tokens,
         rules: parsed.rules,
     })?;

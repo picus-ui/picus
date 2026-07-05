@@ -30,6 +30,7 @@ where
         on_changed: Box::new(on_changed),
         on_enter: None,
         text_color: None,
+        placeholder_color: None,
         placeholder: ArcStr::default(),
         text_alignment: TextAlign::default(),
         text_size: picus_widget::theme::TEXT_SIZE_NORMAL,
@@ -51,6 +52,7 @@ pub struct TextInput<State: 'static = ()> {
     on_changed: Callback,
     on_enter: Option<Callback>,
     text_color: Option<Color>,
+    placeholder_color: Option<Color>,
     placeholder: ArcStr,
     text_alignment: TextAlign,
     text_size: f32,
@@ -69,6 +71,15 @@ impl<State: 'static> TextInput<State> {
     /// This overwrites the default `ContentColor` property for the inner `TextArea` widget.
     pub fn text_color(mut self, color: Color) -> Self {
         self.text_color = Some(color);
+        self
+    }
+
+    /// Set the text color without changing the view type.
+    ///
+    /// `None` writes transparent text instead of falling back to the retained
+    /// widget's static black.
+    pub fn maybe_text_color(mut self, color: Option<Color>) -> Self {
+        self.text_color = color;
         self
     }
 
@@ -95,6 +106,15 @@ impl<State: 'static> TextInput<State> {
     /// Set the [`PlaceholderColor`] property, which sets the color of the text shown when the input is empty.
     pub fn placeholder_color(self, color: Color) -> Prop<PlaceholderColor, Self, State, ()> {
         self.prop(PlaceholderColor::new(color))
+    }
+
+    /// Set the placeholder color without changing the view type.
+    ///
+    /// `None` writes transparent placeholder text instead of falling back to
+    /// the retained widget's static black.
+    pub fn maybe_placeholder_color(mut self, color: Option<Color>) -> Self {
+        self.placeholder_color = color;
+        self
     }
 
     /// Set the [text alignment](https://en.wikipedia.org/wiki/Typographic_alignment) of the text.
@@ -186,9 +206,9 @@ impl<State: 'static> View<State, (), ViewCtx> for TextInput<State> {
         // TODO - Replace this with properties on the TextInput view
         // once we implement property inheritance or something like it.
         let mut props = PropertySet::new();
-        if let Some(color) = self.text_color {
-            props.insert(ContentColor { color });
-        }
+        props.insert(ContentColor {
+            color: self.text_color.unwrap_or(Color::TRANSPARENT),
+        });
 
         let text_input =
             widgets::TextInput::from_text_area(NewWidget::new(text_area).with_props(props))
@@ -202,6 +222,11 @@ impl<State: 'static> View<State, (), ViewCtx> for TextInput<State> {
 
         let mut pod = ctx.create_pod(text_input);
         pod.new_widget.options.disabled = self.disabled;
+        pod.new_widget
+            .properties
+            .insert(PlaceholderColor::new(
+                self.placeholder_color.unwrap_or(Color::TRANSPARENT),
+            ));
         (pod, ())
     }
 
@@ -215,14 +240,17 @@ impl<State: 'static> View<State, (), ViewCtx> for TextInput<State> {
     ) {
         // TODO - Replace this with properties on the TextInput view
         if self.text_color != prev.text_color {
-            if let Some(color) = self.text_color {
-                element.insert_prop(ContentColor { color });
-            } else {
-                element.remove_prop::<ContentColor>();
-            }
+            element.insert_prop(ContentColor {
+                color: self.text_color.unwrap_or(Color::TRANSPARENT),
+            });
         }
         if self.placeholder != prev.placeholder {
             widgets::TextInput::set_placeholder(&mut element, self.placeholder.clone());
+        }
+        if self.placeholder_color != prev.placeholder_color {
+            element.insert_prop(PlaceholderColor::new(
+                self.placeholder_color.unwrap_or(Color::TRANSPARENT),
+            ));
         }
 
         if self.disabled != prev.disabled {

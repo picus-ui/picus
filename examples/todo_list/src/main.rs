@@ -429,7 +429,8 @@ fn main() -> Result<(), EventLoopError> {
 mod tests {
     #[test]
     fn embedded_todo_theme_ron_parses() {
-        picus::parse_stylesheet_ron(include_str!("../assets/themes/todo_list.ron"))
+        let sheet = picus::parse_stylesheet_ron(include_str!("../assets/themes/todo_list.ron"))
             .expect("embedded todo_list stylesheet should parse");
+        assert_eq!(sheet.default_variant.as_deref(), Some("dark"));
     }
 }

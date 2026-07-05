@@ -1184,6 +1184,48 @@
         ),
       ),
     ),
+    (
+      selector: Class("overlay.context_menu.panel"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+          gap: Var("space-xs"),
+        ),
+        colors: (
+          bg: Var("surface-elevated"),
+          border: Var("border-default"),
+        ),
+        box_shadow: Var("shadow-flyout"),
+      ),
+    ),
+    (
+      selector: Class("overlay.context_menu.item"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-sm"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          text: Var("text-primary"),
+          border: Var("border-default"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: Class("overlay.context_menu.separator"),
+      setter: (
+        layout: (
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("border-default"),
+        ),
+      ),
+    ),
 
     (
       selector: Class("overlay.tooltip"),
@@ -1307,6 +1349,17 @@
       ),
     ),
     (
+      selector: Class("overlay.color_picker.swatch.selected"),
+      setter: (
+        layout: (
+          border_width: 2.0,
+        ),
+        colors: (
+          border: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
       selector: Class("overlay.color_picker.value"),
       setter: (
         colors: (
@@ -1363,10 +1416,69 @@
       ),
     ),
     (
+      selector: Class("overlay.date_picker.cell.today"),
+      setter: (
+        colors: (
+          border: Var("surface-accent"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("overlay.date_picker.cell.selected"),
+      setter: (
+        colors: (
+          bg: Var("surface-accent"),
+          text: Var("text-on-accent"),
+          border: Var("surface-accent"),
+        ),
+      ),
+    ),
+    (
       selector: Class("overlay.date_picker.nav"),
       setter: (
         colors: (
           text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("overlay.time_picker.panel"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+          gap: Var("space-xs"),
+        ),
+        colors: (
+          bg: Var("surface-elevated"),
+          border: Var("border-default"),
+        ),
+        box_shadow: Var("shadow-flyout"),
+      ),
+    ),
+    (
+      selector: Class("overlay.time_picker.cell"),
+      setter: (
+        layout: (
+          padding: Var("space-xs"),
+          corner_radius: Var("radius-sm"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          text: Var("text-primary"),
+          border: Var("border-default"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: Class("overlay.time_picker.cell.selected"),
+      setter: (
+        colors: (
+          bg: Var("surface-accent"),
+          text: Var("text-on-accent"),
+          border: Var("surface-accent"),
         ),
       ),
     ),
@@ -1397,6 +1509,18 @@
       setter: (
         colors: (
           bg: Var("surface-overlay-item-pressed"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Class("widget.breadcrumb.separator"),
+      setter: (
+        colors: (
+          text: Var("text-tertiary"),
+        ),
+        text: (
+          size: Var("text-sm"),
         ),
       ),
     ),

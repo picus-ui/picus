@@ -104,11 +104,8 @@ where
             .with_style(StyleProperty::FontSize(self.text_size))
             .with_style(StyleProperty::FontFamily(self.font.clone()));
 
-        let label = if let Some(color) = self.text_color {
-            NewWidget::new(label).with_props(ContentColor::new(color))
-        } else {
-            NewWidget::new(label)
-        };
+        let label = NewWidget::new(label)
+            .with_props(ContentColor::new(self.text_color.unwrap_or(Color::TRANSPARENT)));
 
         let element = ctx.with_action_widget(|ctx| {
             let mut pod = ctx.create_pod(widgets::Checkbox::from_label(self.checked, label));
@@ -148,11 +145,9 @@ where
             widgets::Label::insert_style(&mut label, StyleProperty::FontFamily(self.font.clone()));
         }
         if prev.text_color != self.text_color {
-            if let Some(color) = self.text_color {
-                label.insert_prop(ContentColor::new(color));
-            } else {
-                label.remove_prop::<ContentColor>();
-            }
+            label.insert_prop(ContentColor::new(
+                self.text_color.unwrap_or(Color::TRANSPARENT),
+            ));
         }
         drop(label);
         if prev.checkmark_color != self.checkmark_color {
@@ -271,11 +266,8 @@ where
             .with_style(StyleProperty::FontSize(self.text_size))
             .with_style(StyleProperty::FontFamily(self.font.clone()));
 
-        let label = if let Some(color) = self.text_color {
-            NewWidget::new(label).with_props(ContentColor::new(color))
-        } else {
-            NewWidget::new(label)
-        };
+        let label = NewWidget::new(label)
+            .with_props(ContentColor::new(self.text_color.unwrap_or(Color::TRANSPARENT)));
 
         let element = ctx.with_action_widget(|ctx| {
             let mut pod = ctx.create_pod(widgets::RadioButton::from_label(self.checked, label));
@@ -314,11 +306,9 @@ where
             widgets::Label::insert_style(&mut label, StyleProperty::FontFamily(self.font.clone()));
         }
         if prev.text_color != self.text_color {
-            if let Some(color) = self.text_color {
-                label.insert_prop(ContentColor::new(color));
-            } else {
-                label.remove_prop::<ContentColor>();
-            }
+            label.insert_prop(ContentColor::new(
+                self.text_color.unwrap_or(Color::TRANSPARENT),
+            ));
         }
         drop(label);
         if prev.checkmark_color != self.checkmark_color {

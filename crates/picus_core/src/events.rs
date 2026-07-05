@@ -1,8 +1,9 @@
-use std::{
-    any::Any,
-    fmt,
-    sync::{Arc, OnceLock, PoisonError, RwLock},
-};
+use std::{any::Any, fmt, sync::Arc};
+
+#[cfg(test)]
+use std::cell::RefCell;
+#[cfg(not(test))]
+use std::sync::{OnceLock, PoisonError, RwLock};
 
 use bevy_ecs::{entity::Entity, prelude::Component, prelude::Resource};
 use bevy_input::mouse::MouseButton;
@@ -180,12 +181,21 @@ impl UiEventQueue {
     }
 }
 
+#[cfg(not(test))]
 static GLOBAL_UI_EVENT_QUEUE: OnceLock<RwLock<Option<Arc<SegQueue<UiEvent>>>>> = OnceLock::new();
 
+#[cfg(not(test))]
 fn global_ui_event_queue_slot() -> &'static RwLock<Option<Arc<SegQueue<UiEvent>>>> {
     GLOBAL_UI_EVENT_QUEUE.get_or_init(|| RwLock::new(None))
 }
 
+#[cfg(test)]
+thread_local! {
+    static GLOBAL_UI_EVENT_QUEUE: RefCell<Option<Arc<SegQueue<UiEvent>>>> =
+        const { RefCell::new(None) };
+}
+
+#[cfg(not(test))]
 pub(crate) fn install_global_ui_event_queue(queue: Arc<SegQueue<UiEvent>>) {
     let mut slot = global_ui_event_queue_slot()
         .write()
@@ -193,6 +203,14 @@ pub(crate) fn install_global_ui_event_queue(queue: Arc<SegQueue<UiEvent>>) {
     *slot = Some(queue);
 }
 
+#[cfg(test)]
+pub(crate) fn install_global_ui_event_queue(queue: Arc<SegQueue<UiEvent>>) {
+    GLOBAL_UI_EVENT_QUEUE.with(|slot| {
+        *slot.borrow_mut() = Some(queue);
+    });
+}
+
+#[cfg(not(test))]
 pub(crate) fn push_global_ui_event(event: UiEvent) {
     let queue = {
         let slot = global_ui_event_queue_slot()
@@ -200,6 +218,15 @@ pub(crate) fn push_global_ui_event(event: UiEvent) {
             .unwrap_or_else(PoisonError::into_inner);
         slot.as_ref().cloned()
     };
+
+    if let Some(queue) = queue {
+        queue.push(event);
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn push_global_ui_event(event: UiEvent) {
+    let queue = GLOBAL_UI_EVENT_QUEUE.with(|slot| slot.borrow().as_ref().cloned());
 
     if let Some(queue) = queue {
         queue.push(event);

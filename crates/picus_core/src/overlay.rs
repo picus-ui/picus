@@ -1468,26 +1468,9 @@ fn overlay_size_for_entity(
     anchor_rects: &HashMap<Entity, OverlayAnchorRect>,
 ) -> (f64, f64) {
     if let Some(dialog) = world.get::<UiDialog>(entity) {
-        let mut dialog_style = resolve_style_for_classes(world, ["overlay.dialog.surface"]);
-        let mut title_style = resolve_style_for_classes(world, ["overlay.dialog.title"]);
-        let mut body_style = resolve_style_for_classes(world, ["overlay.dialog.body"]);
-        let mut dismiss_style = resolve_style_for_classes(world, ["overlay.dialog.dismiss"]);
-
-        if dialog_style.layout.padding <= 0.0 {
-            dialog_style.layout.padding = 18.0;
-        }
-        if dialog_style.layout.gap <= 0.0 {
-            dialog_style.layout.gap = 10.0;
-        }
-        if title_style.text.size <= 0.0 {
-            title_style.text.size = 24.0;
-        }
-        if body_style.text.size <= 0.0 {
-            body_style.text.size = 16.0;
-        }
-        if dismiss_style.text.size <= 0.0 {
-            dismiss_style.text.size = 15.0;
-        }
+        let dialog_style = resolve_style_for_classes(world, ["overlay.dialog.surface"]);
+        let title_style = resolve_style_for_classes(world, ["overlay.dialog.title"]);
+        let body_style = resolve_style_for_classes(world, ["overlay.dialog.body"]);
 
         let title = translate_text(world, dialog.title_key.as_deref(), &dialog.title);
         let body = translate_text(world, dialog.body_key.as_deref(), &dialog.body);
@@ -1546,16 +1529,15 @@ fn overlay_size_for_entity(
         let width = estimate_dropdown_surface_width_px(
             anchor_width,
             translated_options.iter().map(String::as_str),
-            item_style.text.size.max(16.0),
+            item_style.text.size,
             item_style.layout.padding * 2.0 + menu_style.layout.padding * 2.0,
         );
 
-        let item_gap = menu_style.layout.gap.max(6.0);
         let height = estimate_dropdown_viewport_height_px(
             translated_options.len(),
-            item_style.text.size.max(16.0),
-            item_style.layout.padding.max(8.0),
-            item_gap,
+            item_style.text.size,
+            item_style.layout.padding,
+            menu_style.layout.gap,
         );
 
         return (width, height);
@@ -1581,16 +1563,15 @@ fn overlay_size_for_entity(
             let width = estimate_dropdown_surface_width_px(
                 anchor_width,
                 translated_options.iter().map(String::as_str),
-                item_style.text.size.max(15.0),
+                item_style.text.size,
                 item_style.layout.padding * 2.0 + menu_style.layout.padding * 2.0 + 18.0,
             );
 
-            let item_gap = menu_style.layout.gap.max(6.0);
             let height = estimate_dropdown_viewport_height_px(
                 translated_options.len().max(1),
-                item_style.text.size.max(15.0),
-                item_style.layout.padding.max(8.0),
-                item_gap,
+                item_style.text.size,
+                item_style.layout.padding,
+                menu_style.layout.gap,
             );
 
             return (width, height);
@@ -1609,15 +1590,14 @@ fn overlay_size_for_entity(
             let width = estimate_dropdown_surface_width_px(
                 anchor_width,
                 labels,
-                item_style.text.size.max(16.0),
+                item_style.text.size,
                 item_style.layout.padding * 2.0 + menu_style.layout.padding * 2.0,
             );
-            let item_gap = menu_style.layout.gap.max(6.0);
             let height = estimate_dropdown_viewport_height_px(
                 bar_item.items.len(),
-                item_style.text.size.max(16.0),
-                item_style.layout.padding.max(8.0),
-                item_gap,
+                item_style.text.size,
+                item_style.layout.padding,
+                menu_style.layout.gap,
             );
             return (width, height);
         }
@@ -1638,29 +1618,24 @@ fn overlay_size_for_entity(
 
     if let Some(ctx_menu) = world.get::<UiContextMenu>(entity) {
         let item_style = resolve_style_for_classes(world, ["overlay.context_menu.item"]);
-        let text_size = item_style.text.size.max(15.0);
-        let padding = item_style.layout.padding.max(6.0);
         let labels: Vec<&str> = ctx_menu.items.iter().map(|i| i.label.as_str()).collect();
-        let width =
-            estimate_dropdown_surface_width_px(160.0, labels, text_size, padding * 2.0 + 16.0);
+        let width = estimate_dropdown_surface_width_px(
+            160.0,
+            labels,
+            item_style.text.size,
+            item_style.layout.padding * 2.0 + 16.0,
+        );
         let height = estimate_dropdown_viewport_height_px(
             ctx_menu.items.len(),
-            text_size,
-            padding.max(8.0),
+            item_style.text.size,
+            item_style.layout.padding,
             4.0,
         );
         return (width.max(160.0), height.max(48.0));
     }
 
     if let Some(toast) = world.get::<UiToast>(entity) {
-        let mut style = resolve_style(world, entity);
-        let fallback_style = resolve_style_for_classes(world, ["overlay.toast"]);
-        if style.layout.padding <= 0.0 {
-            style.layout.padding = fallback_style.layout.padding.max(10.0);
-        }
-        if style.text.size <= 0.0 {
-            style.text.size = fallback_style.text.size.max(15.0);
-        }
+        let style = resolve_style(world, entity);
 
         let text_width = estimate_text_width_px(&toast.message, style.text.size);
         let min_width = toast.min_width.max(120.0);
@@ -1672,13 +1647,7 @@ fn overlay_size_for_entity(
     }
 
     if let Some(tooltip) = world.get::<UiTooltip>(entity) {
-        let mut style = resolve_style_for_classes(world, ["overlay.tooltip"]);
-        if style.layout.padding <= 0.0 {
-            style.layout.padding = 6.0;
-        }
-        if style.text.size <= 0.0 {
-            style.text.size = 14.0;
-        }
+        let style = resolve_style_for_classes(world, ["overlay.tooltip"]);
 
         let text_width = estimate_text_width_px(&tooltip.text, style.text.size);
         let width = (text_width + style.layout.padding * 2.0).clamp(96.0, 360.0);

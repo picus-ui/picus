@@ -114,13 +114,18 @@ pub trait AppPicusExt {
 
     /// Load a RON stylesheet asset and bind it as the active runtime style source.
     ///
-    /// The file is hot-reloaded through Bevy's asset pipeline.
+    /// The file is hot-reloaded through Bevy's asset pipeline. If it declares
+    /// `default_variant` and no active variant is already selected, that
+    /// registered variant is applied before the active stylesheet is overlaid.
     fn load_style_sheet(&mut self, asset_path: impl Into<String>) -> &mut Self;
 
     /// Parse and load an active stylesheet directly from embedded RON text.
     ///
     /// This bypasses filesystem asset loading and applies the stylesheet as the
-    /// active tier with the same precedence as file-based active stylesheets.
+    /// active tier with the same precedence as file-based active stylesheets. If
+    /// it declares `default_variant` and no active variant is already selected,
+    /// that registered variant is applied before the active stylesheet is
+    /// overlaid.
     fn load_style_sheet_ron(&mut self, ron_text: &str) -> &mut Self;
 
     /// Register a selector type alias usable by `Selector::Type("...")` in stylesheet RON.

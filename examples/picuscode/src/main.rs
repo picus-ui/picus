@@ -738,8 +738,9 @@ fn build_picuscode_app() -> App {
     init_logging();
 
     let mut app = App::new();
-    app.add_plugins(PicusPlugin)
-        .load_style_sheet_ron(include_str!("../assets/themes/picuscode.ron"))
+    app.add_plugins(PicusPlugin);
+
+    app.load_style_sheet_ron(include_str!("../assets/themes/picuscode.ron"))
         .register_ui_component::<ChatRootView>()
         .register_ui_component::<ChatTitleBarView>()
         .register_ui_component::<ChatBodyView>()
@@ -782,5 +783,29 @@ mod tests {
     fn embedded_picuscode_theme_ron_parses() {
         picus::parse_stylesheet_ron(include_str!("../assets/themes/picuscode.ron"))
             .expect("embedded picuscode stylesheet should parse");
+    }
+
+    #[test]
+    fn picuscode_theme_declares_fluent_dark_default_variant() {
+        let sheet = picus::parse_stylesheet_ron(include_str!("../assets/themes/picuscode.ron"))
+            .expect("embedded picuscode stylesheet should parse");
+        assert_eq!(sheet.default_variant.as_deref(), Some("dark"));
+    }
+
+    #[test]
+    fn picuscode_app_applies_stylesheet_default_variant() {
+        let app = super::build_picuscode_app();
+
+        let active = app.world().resource::<picus::ActiveStyleVariant>();
+        assert_eq!(active.0.as_deref(), Some("dark"));
+
+        let applied = app.world().resource::<picus::AppliedStyleVariant>();
+        assert_eq!(applied.0.as_deref(), Some("dark"));
+
+        let sheet = app.world().resource::<picus::StyleSheet>();
+        assert!(
+            sheet.tokens.contains_key("surface-bg"),
+            "picuscode stylesheet references Fluent tokens, so a Fluent variant must be active"
+        );
     }
 }

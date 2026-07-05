@@ -105,33 +105,13 @@ fn tree_node_depth(world: &bevy_ecs::world::World, entity: bevy_ecs::entity::Ent
     depth
 }
 
-/// Build a default dark panel style used by overlay panels.
+/// Resolve the panel style from the active theme.
 fn default_panel_style(world: &bevy_ecs::world::World, class: &str) -> ResolvedStyle {
-    let mut style = resolve_style_for_classes(world, [class]);
-    if style.colors.bg.is_none() {
-        style.colors.bg = Some(Color::from_rgb8(0x1F, 0x1F, 0x1F));
-    }
-    if style.colors.border.is_none() {
-        style.colors.border = Some(Color::from_rgb8(0x3F, 0x3F, 0x3F));
-    }
-    if style.layout.padding <= 0.0 {
-        style.layout.padding = 8.0;
-    }
-    if style.layout.corner_radius <= 0.0 {
-        style.layout.corner_radius = 8.0;
-    }
-    if style.layout.border_width <= 0.0 {
-        style.layout.border_width = 1.0;
-    }
-    style
+    resolve_style_for_classes(world, [class])
 }
 
 fn default_item_style(world: &bevy_ecs::world::World, class: &str) -> ResolvedStyle {
-    let mut style = resolve_style_for_classes(world, [class]);
-    if style.layout.padding <= 0.0 {
-        style.layout.padding = 6.0;
-    }
-    style
+    resolve_style_for_classes(world, [class])
 }
 
 fn apply_color_overrides(base: &mut ResolvedStyle, overrides: &ResolvedStyle) {
@@ -154,12 +134,6 @@ fn selected_row_style(
     let mut style = default_item_style(world, base_class);
     let overrides = resolve_style_for_classes(world, [base_class, selected_class]);
     apply_color_overrides(&mut style, &overrides);
-    if style.colors.bg.is_none() {
-        style.colors.bg = Some(Color::from_rgb8(0x00, 0x78, 0xD4));
-    }
-    if style.colors.text.is_none() {
-        style.colors.text = Some(Color::WHITE);
-    }
     style
 }
 
@@ -621,10 +595,7 @@ pub(crate) fn project_canvas(canvas_component: &UiCanvas, ctx: ProjectionCtx<'_>
 
 pub(crate) fn project_radio_group(radio_group: &UiRadioGroup, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
-    let mut item_style = resolve_style_for_classes(ctx.world, ["widget.radio.item"]);
-    if item_style.layout.padding <= 0.0 {
-        item_style.layout.padding = 4.0;
-    }
+    let item_style = resolve_style_for_classes(ctx.world, ["widget.radio.item"]);
 
     let items = radio_group
         .options
@@ -687,31 +658,15 @@ pub(crate) fn project_tab_bar(tab_bar: &UiTabBar, ctx: ProjectionCtx<'_>) -> UiV
         ));
     }
 
-    let mut header_style = resolve_style_for_classes(ctx.world, ["widget.tab.header"]);
-    if header_style.layout.padding <= 0.0 {
-        header_style.layout.padding = 8.0;
-    }
-    let mut active_style = resolve_style_for_classes(ctx.world, ["widget.tab.active"]);
-    if active_style.layout.padding <= 0.0 {
-        active_style.layout.padding = 8.0;
-    }
-    if active_style.colors.border.is_none() {
-        active_style.colors.border = Some(Color::from_rgb8(0x00, 0x78, 0xD4));
-    }
-    if active_style.layout.border_width <= 0.0 {
-        active_style.layout.border_width = 2.0;
-    }
+    let header_style = resolve_style_for_classes(ctx.world, ["widget.tab.header"]);
+    let active_style = resolve_style_for_classes(ctx.world, ["widget.tab.active"]);
 
     // Resolve the selected-indicator-pipe style.
     let pipe_style = resolve_style_for_classes(ctx.world, ["widget.tab.selected-pipe"]);
-    let pipe_color = pipe_style
-        .colors
-        .bg
-        .unwrap_or_else(|| Color::from_rgb8(0x00, 0x78, 0xD4));
     let pipe_height = if pipe_style.layout.border_width > 0.0 {
         pipe_style.layout.border_width
     } else {
-        3.0
+        0.0
     };
     let pipe_width = 28.0;
 
@@ -745,10 +700,12 @@ pub(crate) fn project_tab_bar(tab_bar: &UiTabBar, ctx: ProjectionCtx<'_>) -> UiV
                 easing: None,
             });
             indicator_style.layout.scale = if is_active { 1.0 } else { 0.45 };
-            indicator_style.colors.bg = Some(if is_active {
-                pipe_color
-            } else {
-                pipe_color.with_alpha(0.0)
+            indicator_style.colors.bg = pipe_style.colors.bg.map(|pipe_color| {
+                if is_active {
+                    pipe_color
+                } else {
+                    pipe_color.with_alpha(0.0)
+                }
             });
 
             let indicator = flex_row(vec![
@@ -788,21 +745,19 @@ pub(crate) fn project_tree_node(tree_node: &UiTreeNode, ctx: ProjectionCtx<'_>) 
     let indent = (depth as f64) * 16.0;
 
     let has_children = !ctx.children.is_empty();
-    let icon_color = style
-        .colors
-        .text
-        .unwrap_or(Color::from_rgb8(0xE7, 0xEC, 0xF8));
 
     let header: UiView = if has_children {
-        let icon = if tree_node.is_expanded {
-            vector_icon(VectorIcon::ChevronDown, 12.0, icon_color)
-        } else {
-            vector_icon(VectorIcon::ChevronRight, 12.0, icon_color)
-        };
-        let content = flex_row(vec![
-            icon.into_any_flex(),
-            apply_label_style(label(tree_node.label.clone()), &style).into_any_flex(),
-        ])
+        let mut items = Vec::new();
+        if let Some(icon_color) = style.colors.text {
+            let icon = if tree_node.is_expanded {
+                vector_icon(VectorIcon::ChevronDown, 12.0, icon_color)
+            } else {
+                vector_icon(VectorIcon::ChevronRight, 12.0, icon_color)
+            };
+            items.push(icon.into_any_flex());
+        }
+        items.push(apply_label_style(label(tree_node.label.clone()), &style).into_any_flex());
+        let content = flex_row(items)
         .gap(Length::px(6.0));
 
         let btn = button_with_child_view(
@@ -853,17 +808,8 @@ pub(crate) fn project_tree_node(tree_node: &UiTreeNode, ctx: ProjectionCtx<'_>) 
 
 pub(crate) fn project_table(table: &UiTable, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
-    let mut header_style = resolve_style_for_classes(ctx.world, ["widget.table.header"]);
-    if header_style.colors.bg.is_none() {
-        header_style.colors.bg = Some(Color::from_rgb8(0x2A, 0x2A, 0x2A));
-    }
-    if header_style.layout.padding <= 0.0 {
-        header_style.layout.padding = 6.0;
-    }
-    let mut cell_style = resolve_style_for_classes(ctx.world, ["widget.table.cell"]);
-    if cell_style.layout.padding <= 0.0 {
-        cell_style.layout.padding = 4.0;
-    }
+    let header_style = resolve_style_for_classes(ctx.world, ["widget.table.header"]);
+    let cell_style = resolve_style_for_classes(ctx.world, ["widget.table.cell"]);
 
     // Header row
     let header_cells = table
@@ -886,10 +832,8 @@ pub(crate) fn project_table(table: &UiTable, ctx: ProjectionCtx<'_>) -> UiView {
         .iter()
         .enumerate()
         .map(|(row_idx, row)| {
-            let mut row_style = cell_style.clone();
-            if row_idx % 2 == 0 && row_style.colors.bg.is_none() {
-                row_style.colors.bg = Some(Color::from_rgba8(255, 255, 255, 10));
-            }
+            let row_style = cell_style.clone();
+            let _ = row_idx;
             let cells = row
                 .iter()
                 .map(|cell| {
@@ -1002,12 +946,6 @@ pub(crate) fn project_list_view(list_view: &UiListView, ctx: ProjectionCtx<'_>) 
 pub(crate) fn project_data_table(table: &UiDataTable, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let mut header_style = resolve_style_for_classes(ctx.world, ["widget.data_table.header"]);
-    if header_style.colors.bg.is_none() {
-        header_style.colors.bg = Some(Color::from_rgb8(0x2A, 0x2A, 0x2A));
-    }
-    if header_style.layout.padding <= 0.0 {
-        header_style.layout.padding = 6.0;
-    }
     if header_style.colors.text.is_none() {
         header_style.colors.text = style.colors.text;
     }
@@ -1017,16 +955,10 @@ pub(crate) fn project_data_table(table: &UiDataTable, ctx: ProjectionCtx<'_>) ->
         cell_style.colors.text = style.colors.text;
     }
 
-    let mut row_style = resolve_style_for_classes(ctx.world, ["widget.data_table.row"]);
-    if row_style.layout.padding <= 0.0 {
-        row_style.layout.padding = 0.0;
-    }
+    let row_style = resolve_style_for_classes(ctx.world, ["widget.data_table.row"]);
     let mut striped_style = row_style.clone();
     let striped_overrides = resolve_style_for_classes(ctx.world, ["widget.data_table.row.striped"]);
     apply_color_overrides(&mut striped_style, &striped_overrides);
-    if striped_style.colors.bg.is_none() {
-        striped_style.colors.bg = Some(Color::from_rgba8(255, 255, 255, 18));
-    }
     let selected_style = selected_row_style(
         ctx.world,
         "widget.data_table.row",
@@ -1181,19 +1113,16 @@ pub(crate) fn project_menu_bar(_: &UiMenuBar, ctx: ProjectionCtx<'_>) -> UiView 
 
 pub(crate) fn project_menu_bar_item(item: &UiMenuBarItem, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
-    let icon_color = style
-        .colors
-        .text
-        .unwrap_or(Color::from_rgb8(0xE7, 0xEC, 0xF8));
-    let icon = if item.is_open {
-        vector_icon(VectorIcon::ChevronUp, 10.0, icon_color)
-    } else {
-        vector_icon(VectorIcon::ChevronDown, 10.0, icon_color)
-    };
-    let content = flex_row(vec![
-        apply_label_style(label(item.label.clone()), &style).into_any_flex(),
-        icon.into_any_flex(),
-    ])
+    let mut items = vec![apply_label_style(label(item.label.clone()), &style).into_any_flex()];
+    if let Some(icon_color) = style.colors.text {
+        let icon = if item.is_open {
+            vector_icon(VectorIcon::ChevronUp, 10.0, icon_color)
+        } else {
+            vector_icon(VectorIcon::ChevronDown, 10.0, icon_color)
+        };
+        items.push(icon.into_any_flex());
+    }
+    let content = flex_row(items)
     .gap(Length::px(4.0));
     Arc::new(apply_direct_widget_style(
         button_with_child_view(ctx.entity, OverlayUiAction::ToggleMenuBarItem, content),
@@ -1270,18 +1199,6 @@ pub(crate) fn project_menu_item_panel(_: &UiMenuItemPanel, ctx: ProjectionCtx<'_
 
 pub(crate) fn project_tooltip(tooltip: &UiTooltip, ctx: ProjectionCtx<'_>) -> UiView {
     let mut style = default_panel_style(ctx.world, "overlay.tooltip");
-    if style.colors.bg.is_none() {
-        style.colors.bg = Some(Color::from_rgb8(0x2B, 0x2B, 0x2B));
-    }
-    if style.colors.text.is_none() {
-        style.colors.text = Some(Color::from_rgb8(0xF3, 0xF3, 0xF3));
-    }
-    if style.layout.padding <= 0.0 {
-        style.layout.padding = 6.0;
-    }
-    if style.layout.corner_radius <= 0.0 {
-        style.layout.corner_radius = 4.0;
-    }
 
     let computed_pos = popover_geometry(ctx.world, ctx.entity, (96.0, 28.0), &mut [&mut style]);
 
@@ -1357,19 +1274,16 @@ const COLOR_SWATCHES: [(u8, u8, u8); 20] = [
 pub(crate) fn project_color_picker(picker: &UiColorPicker, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let hex = format!("#{:02X}{:02X}{:02X}", picker.r, picker.g, picker.b);
-    let icon_color = style
-        .colors
-        .text
-        .unwrap_or(Color::from_rgb8(0xE7, 0xEC, 0xF8));
-    let icon = if picker.is_open {
-        vector_icon(VectorIcon::ChevronUp, 10.0, icon_color)
-    } else {
-        vector_icon(VectorIcon::ChevronDown, 10.0, icon_color)
-    };
-    let content = flex_row(vec![
-        apply_label_style(label(hex), &style).into_any_flex(),
-        icon.into_any_flex(),
-    ])
+    let mut items = vec![apply_label_style(label(hex), &style).into_any_flex()];
+    if let Some(icon_color) = style.colors.text {
+        let icon = if picker.is_open {
+            vector_icon(VectorIcon::ChevronUp, 10.0, icon_color)
+        } else {
+            vector_icon(VectorIcon::ChevronDown, 10.0, icon_color)
+        };
+        items.push(icon.into_any_flex());
+    }
+    let content = flex_row(items)
     .gap(Length::px(6.0));
     Arc::new(apply_direct_widget_style(
         button_with_child_view(ctx.entity, OverlayUiAction::ToggleColorPicker, content),
@@ -1387,10 +1301,7 @@ pub(crate) fn project_color_picker_panel(
     };
 
     let panel_style = default_panel_style(ctx.world, "overlay.color_picker.panel");
-    let mut swatch_style = resolve_style_for_classes(ctx.world, ["overlay.color_picker.swatch"]);
-    if swatch_style.layout.corner_radius <= 0.0 {
-        swatch_style.layout.corner_radius = 3.0;
-    }
+    let swatch_style = resolve_style_for_classes(ctx.world, ["overlay.color_picker.swatch"]);
 
     let (cur_r, cur_g, cur_b) = ctx
         .world
@@ -1409,8 +1320,15 @@ pub(crate) fn project_color_picker_panel(
                 let mut sw_style = swatch_style.clone();
                 sw_style.colors.bg = Some(Color::from_rgb8(r, g, b));
                 if is_selected {
-                    sw_style.layout.border_width = 2.0;
-                    sw_style.colors.border = Some(Color::WHITE);
+                    let selected_swatch_style = resolve_style_for_classes(
+                        ctx.world,
+                        [
+                            "overlay.color_picker.swatch",
+                            "overlay.color_picker.swatch.selected",
+                        ],
+                    );
+                    sw_style.layout.border_width = selected_swatch_style.layout.border_width;
+                    sw_style.colors.border = selected_swatch_style.colors.border;
                 }
                 let swatch_view = sized_box(label(""))
                     .width(Dim::Fixed(Length::px(28.0)))
@@ -1486,7 +1404,7 @@ pub(crate) fn project_group_box(group_box: &UiGroupBox, ctx: ProjectionCtx<'_>) 
 
     Arc::new(apply_widget_style(
         apply_flex_alignment(flex_col(content_items), &style)
-            .gap(Length::px(style.layout.gap.max(6.0))),
+            .gap(Length::px(style.layout.gap)),
         &style,
     ))
 }
@@ -1537,26 +1455,8 @@ pub(crate) fn project_toast(toast: &UiToast, ctx: ProjectionCtx<'_>) -> UiView {
     apply_color_overrides(&mut style, &kind_style);
 
     let mut dismiss_style = resolve_style_for_classes(ctx.world, ["overlay.toast.dismiss"]);
-    if style.colors.text.is_none() {
-        style.colors.text = Some(Color::from_rgb8(0xF3, 0xF3, 0xF3));
-    }
     if dismiss_style.colors.text.is_none() {
         dismiss_style.colors.text = style.colors.text;
-    }
-    if dismiss_style.text.size <= 0.0 {
-        dismiss_style.text.size = style.text.size;
-    }
-    if style.layout.padding <= 0.0 {
-        style.layout.padding = 10.0;
-    }
-    if style.layout.corner_radius <= 0.0 {
-        style.layout.corner_radius = 6.0;
-    }
-    if style.layout.border_width <= 0.0 {
-        style.layout.border_width = 1.0;
-    }
-    if style.colors.border.is_none() {
-        style.colors.border = Some(Color::from_rgba8(255, 255, 255, 56));
     }
 
     let computed_pos = ctx
@@ -1603,19 +1503,16 @@ pub(crate) fn project_toast(toast: &UiToast, ctx: ProjectionCtx<'_>) -> UiView {
 pub(crate) fn project_date_picker(picker: &UiDatePicker, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let date_str = format!("{:04}-{:02}-{:02}", picker.year, picker.month, picker.day);
-    let icon_color = style
-        .colors
-        .text
-        .unwrap_or(Color::from_rgb8(0xE7, 0xEC, 0xF8));
-    let icon = if picker.is_open {
-        vector_icon(VectorIcon::ChevronUp, 10.0, icon_color)
-    } else {
-        vector_icon(VectorIcon::ChevronDown, 10.0, icon_color)
-    };
-    let content = flex_row(vec![
-        apply_label_style(label(date_str), &style).into_any_flex(),
-        icon.into_any_flex(),
-    ])
+    let mut items = vec![apply_label_style(label(date_str), &style).into_any_flex()];
+    if let Some(icon_color) = style.colors.text {
+        let icon = if picker.is_open {
+            vector_icon(VectorIcon::ChevronUp, 10.0, icon_color)
+        } else {
+            vector_icon(VectorIcon::ChevronDown, 10.0, icon_color)
+        };
+        items.push(icon.into_any_flex());
+    }
+    let content = flex_row(items)
     .gap(Length::px(6.0));
     Arc::new(apply_direct_widget_style(
         button_with_child_view(ctx.entity, OverlayUiAction::ToggleDatePicker, content),
@@ -1633,17 +1530,15 @@ pub(crate) fn project_date_picker_panel(
     };
 
     let panel_style = default_panel_style(ctx.world, "overlay.date_picker.panel");
-    let mut cell_style = resolve_style_for_classes(ctx.world, ["overlay.date_picker.cell"]);
-    if cell_style.layout.padding <= 0.0 {
-        cell_style.layout.padding = 4.0;
-    }
+    let cell_style = resolve_style_for_classes(ctx.world, ["overlay.date_picker.cell"]);
     let mut today_style = cell_style.clone();
-    if today_style.colors.border.is_none() {
-        today_style.colors.border = Some(Color::from_rgb8(0x00, 0x78, 0xD4));
-        today_style.layout.border_width = 1.0;
-    }
+    let today_overrides =
+        resolve_style_for_classes(ctx.world, ["overlay.date_picker.cell.today"]);
+    apply_color_overrides(&mut today_style, &today_overrides);
     let mut selected_style = cell_style.clone();
-    selected_style.colors.bg = Some(Color::from_rgb8(0x00, 0x78, 0xD4));
+    let selected_overrides =
+        resolve_style_for_classes(ctx.world, ["overlay.date_picker.cell.selected"]);
+    apply_color_overrides(&mut selected_style, &selected_overrides);
 
     let view_year = panel_comp.view_year;
     let view_month = panel_comp.view_month;
@@ -1832,12 +1727,9 @@ pub(crate) fn project_breadcrumb(ctx: ProjectionCtx<'_>) -> UiView {
     let mut items: Vec<picus_view::view::AnyFlexChild<(), ()>> = Vec::new();
     for (i, child) in child_views.iter().enumerate() {
         if i > 0 {
-            // Chevron separator using a Unicode character
-            let chevron: UiView = Arc::new(
-                label(" \u{203A} ")
-                    .text_size(14.0)
-                    .color(crate::xilem::Color::from_rgb8(0x70, 0x70, 0x70)),
-            );
+            let separator_style = resolve_style_for_classes(ctx.world, ["widget.breadcrumb.separator"]);
+            let chevron: UiView =
+                Arc::new(apply_label_style(label(" \u{203A} "), &separator_style));
             items.push(chevron.into_any_flex());
         }
         items.push(child.clone().into_any_flex());
@@ -1881,24 +1773,17 @@ pub(crate) fn project_message_bar(bar: &UiMessageBar, ctx: ProjectionCtx<'_>) ->
     if let Some(text) = kind_style.colors.text {
         style.colors.text = Some(text);
     }
-    if style.layout.padding <= 0.0 {
-        style.layout.padding = 10.0;
-    }
-    if style.layout.gap <= 0.0 {
-        style.layout.gap = 8.0;
-    }
-
     let message_label: UiView = Arc::new(apply_label_style(label(bar.message.clone()), &style));
 
     let mut row_children: Vec<UiView> = Vec::new();
     row_children.push(message_label);
 
     if bar.dismissible {
-        let dismiss: UiView = Arc::new(
-            label(" \u{00D7} ")
-                .text_size(16.0)
-                .color(crate::xilem::Color::from_rgb8(0x99, 0x99, 0x99)),
-        );
+        let mut dismiss_style = style.clone();
+        if let Some(text) = style.colors.text {
+            dismiss_style.colors.text = Some(text.with_alpha(0.6));
+        }
+        let dismiss: UiView = Arc::new(apply_label_style(label(" \u{00D7} "), &dismiss_style));
         row_children.push(dismiss);
     }
 
@@ -1922,27 +1807,20 @@ pub(crate) fn project_message_bar(bar: &UiMessageBar, ctx: ProjectionCtx<'_>) ->
 
 /// Project a `UiSearch` as a text input with a leading search icon.
 pub(crate) fn project_search(search: &UiSearch, ctx: ProjectionCtx<'_>) -> UiView {
-    let mut style = resolve_style(ctx.world, ctx.entity);
-    if style.layout.padding <= 0.0 {
-        style.layout.padding = 8.0;
-    }
-    if style.layout.gap <= 0.0 {
-        style.layout.gap = 6.0;
-    }
+    let style = resolve_style(ctx.world, ctx.entity);
 
     // Search icon using a Unicode magnifying glass character
-    let icon: UiView = Arc::new(
-        label(" \u{1F50D} ")
-            .text_size(14.0)
-            .color(crate::xilem::Color::from_rgb8(0x99, 0x99, 0x99)),
-    );
+    let mut muted_style = style.clone();
+    if let Some(text) = style.colors.text {
+        muted_style.colors.text = Some(text.with_alpha(0.6));
+    }
+    let icon: UiView = Arc::new(apply_label_style(label(" \u{1F50D} "), &muted_style));
 
     // Placeholder text shown until the user types
-    let placeholder: UiView = Arc::new(
-        label(search.placeholder.as_str())
-            .text_size(14.0)
-            .color(crate::xilem::Color::from_rgb8(0x99, 0x99, 0x99)),
-    );
+    let placeholder: UiView = Arc::new(apply_label_style(
+        label(search.placeholder.as_str()),
+        &muted_style,
+    ));
 
     let row: UiView = Arc::new(
         flex_row(vec![icon.into_any_flex(), placeholder.into_any_flex()])
@@ -1960,23 +1838,10 @@ pub(crate) fn project_search(search: &UiSearch, ctx: ProjectionCtx<'_>) -> UiVie
 pub(crate) fn project_navigation_view(nav: &UiNavigationView, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let sidebar_style = resolve_style_for_classes(ctx.world, ["nav.sidebar"]);
-    let mut base_item_style = resolve_style_for_classes(ctx.world, ["nav.item"]);
+    let base_item_style = resolve_style_for_classes(ctx.world, ["nav.item"]);
     let mut active_item_style =
         resolve_style_for_classes(ctx.world, ["nav.item", "nav.item.active"]);
 
-    // Default padding / spacing if the stylesheet didn't set any.
-    if base_item_style.layout.padding <= 0.0 {
-        base_item_style.layout.padding = 10.0;
-    }
-    if base_item_style.layout.gap <= 0.0 {
-        base_item_style.layout.gap = 6.0;
-    }
-    if active_item_style.layout.padding <= 0.0 {
-        active_item_style.layout.padding = 10.0;
-    }
-    if active_item_style.colors.bg.is_none() {
-        active_item_style.colors.bg = Some(Color::from_rgb8(0x33, 0x33, 0x33));
-    }
     // Smooth background transition for active item switching.
     if active_item_style.transition.is_none() {
         active_item_style.transition = Some(crate::styling::StyleTransition {
@@ -2002,7 +1867,7 @@ pub(crate) fn project_navigation_view(nav: &UiNavigationView, ctx: ProjectionCtx
             let icon_view: Option<UiView> = item.icon.map(|glyph| -> UiView {
                 let mut icon_style = ResolvedStyle::default();
                 icon_style.colors.text = item_style.colors.text;
-                icon_style.text.size = item_style.text.size.max(14.0);
+                icon_style.text.size = item_style.text.size;
                 icon_style.font_family = Some(vec![LUCIDE_FONT_FAMILY.to_string()]);
                 Arc::new(
                     sized_box(apply_label_style(label(glyph.to_string()), &icon_style))
@@ -2117,19 +1982,17 @@ pub(crate) fn project_time_picker(picker: &UiTimePicker, ctx: ProjectionCtx<'_>)
             if is_pm { "PM" } else { "AM" }
         )
     };
-    let icon_color = style
-        .colors
-        .text
-        .unwrap_or(Color::from_rgb8(0xE7, 0xEC, 0xF8));
-    let icon = if picker.is_open {
-        vector_icon(VectorIcon::ChevronUp, 10.0, icon_color)
-    } else {
-        vector_icon(VectorIcon::Clock, 12.0, icon_color)
-    };
-    let content = flex_row(vec![
-        icon.into_any_flex(),
-        apply_label_style(label(time_str), &style).into_any_flex(),
-    ])
+    let mut items = Vec::new();
+    if let Some(icon_color) = style.colors.text {
+        let icon = if picker.is_open {
+            vector_icon(VectorIcon::ChevronUp, 10.0, icon_color)
+        } else {
+            vector_icon(VectorIcon::Clock, 12.0, icon_color)
+        };
+        items.push(icon.into_any_flex());
+    }
+    items.push(apply_label_style(label(time_str), &style).into_any_flex());
+    let content = flex_row(items)
     .cross_axis_alignment(CrossAxisAlignment::Center)
     .gap(Length::px(6.0));
     Arc::new(apply_direct_widget_style(
@@ -2148,12 +2011,11 @@ pub(crate) fn project_time_picker_panel(
     };
 
     let panel_style = default_panel_style(ctx.world, "overlay.time_picker.panel");
-    let mut cell_style = resolve_style_for_classes(ctx.world, ["overlay.time_picker.cell"]);
-    if cell_style.layout.padding <= 0.0 {
-        cell_style.layout.padding = 4.0;
-    }
+    let cell_style = resolve_style_for_classes(ctx.world, ["overlay.time_picker.cell"]);
     let mut selected_style = cell_style.clone();
-    selected_style.colors.bg = Some(Color::from_rgb8(0x00, 0x78, 0xD4));
+    let selected_overrides =
+        resolve_style_for_classes(ctx.world, ["overlay.time_picker.cell.selected"]);
+    apply_color_overrides(&mut selected_style, &selected_overrides);
 
     let anchor_entity = ctx.world.get::<AnchoredTo>(ctx.entity).map(|a| a.0);
 
@@ -2300,20 +2162,20 @@ pub(crate) fn project_time_picker_panel(
 
 pub(crate) fn project_expander(expander: &UiExpander, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
-    let icon_color = style
-        .colors
-        .text
-        .unwrap_or(Color::from_rgb8(0xE7, 0xEC, 0xF8));
-
-    let chevron = if expander.is_expanded {
-        vector_icon(VectorIcon::ChevronDown, 10.0, icon_color)
-    } else {
-        vector_icon(VectorIcon::ChevronRight, 10.0, icon_color)
-    };
-
     let header_text = apply_label_style(label(expander.header.clone()), &style);
 
-    let header_row = flex_row(vec![chevron.into_any_flex(), header_text.into_any_flex()])
+    let mut header_items = Vec::new();
+    if let Some(icon_color) = style.colors.text {
+        let chevron = if expander.is_expanded {
+            vector_icon(VectorIcon::ChevronDown, 10.0, icon_color)
+        } else {
+            vector_icon(VectorIcon::ChevronRight, 10.0, icon_color)
+        };
+        header_items.push(chevron.into_any_flex());
+    }
+    header_items.push(header_text.into_any_flex());
+
+    let header_row = flex_row(header_items)
         .cross_axis_alignment(CrossAxisAlignment::Center)
         .gap(Length::px(6.0));
 
@@ -2362,8 +2224,7 @@ pub(crate) fn project_context_menu(menu: &UiContextMenu, ctx: ProjectionCtx<'_>)
             let separator = sized_box(label(""))
                 .height(Dim::Fixed(Length::px(1.0)))
                 .width(Dim::Stretch);
-            let mut sep_style = ResolvedStyle::default();
-            sep_style.colors.bg = Some(Color::from_rgba8(255, 255, 255, 40));
+            let sep_style = resolve_style_for_classes(ctx.world, ["overlay.context_menu.separator"]);
             menu_items.push(Arc::new(apply_widget_style(separator, &sep_style)));
         }
 

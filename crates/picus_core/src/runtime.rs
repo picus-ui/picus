@@ -39,7 +39,13 @@ use masonry_imaging::{Layer as ImagingLayer, PreparedFrame, texture_render::Rend
 use picus_surface::{ExistingWindowMetrics, ExternalWindowSurface};
 use picus_view::{
     ViewCtx,
-    picus_widget::widgets::Passthrough,
+    picus_widget::{
+        properties::{ContentColor, PlaceholderColor},
+        widgets::{
+            Divider, Label as WidgetLabel, Passthrough, Spinner, TextArea,
+            TextInput as WidgetTextInput,
+        },
+    },
     view::{label, sized_box, zstack},
 };
 use wgpu::PresentMode;
@@ -131,7 +137,7 @@ impl WindowRuntime {
         );
 
         let options = RenderRootOptions {
-            default_properties: Arc::new(DefaultProperties::new()),
+            default_properties: Arc::new(picus_default_properties()),
             use_system_fonts: true,
             size_policy: WindowSizePolicy::User,
             size: PhysicalSize::new(1024, 768),
@@ -445,33 +451,47 @@ impl WindowRuntime {
         }
 
         for (action, source) in actions {
-            let Some(path) = self.view_ctx.get_id_path(source).cloned() else {
-                tracing::debug!(
-                    "route_pending_view_messages: no view path for widget {:?}, dropping {:?}",
-                    source,
-                    action.type_name()
-                );
-                continue;
-            };
-
-            let env = std::mem::take(self.view_ctx.environment());
-            let message = DynMessage::from(SendMessage(action));
-            let mut ctx = MessageCtx::new(env, path, message);
-
-            let _result: MessageResult<()> = self.render_root.edit_base_layer(|mut root| {
-                let mut root = root.downcast::<Passthrough>();
-                <UiAnyView as View<(), (), ViewCtx>>::message(
-                    self.current_view.as_ref(),
-                    &mut self.view_state,
-                    &mut ctx,
-                    root.reborrow_mut(),
-                    &mut (),
-                )
-            });
-
-            let (env, _, _) = ctx.finish();
-            *self.view_ctx.environment() = env;
+            self.route_view_message(action, source);
         }
+    }
+
+    fn route_view_message(&mut self, action: ErasedAction, source: WidgetId) -> bool {
+        let Some(path) = self.view_ctx.get_id_path(source).cloned() else {
+            tracing::debug!(
+                "route_pending_view_messages: no view path for widget {:?}, dropping {:?}",
+                source,
+                action.type_name()
+            );
+            return false;
+        };
+
+        let env = std::mem::take(self.view_ctx.environment());
+        let message = DynMessage::from(SendMessage(action));
+        let mut ctx = MessageCtx::new(env, path, message);
+
+        let _result: MessageResult<()> = self.render_root.edit_base_layer(|mut root| {
+            let mut root = root.downcast::<Passthrough>();
+            <UiAnyView as View<(), (), ViewCtx>>::message(
+                self.current_view.as_ref(),
+                &mut self.view_state,
+                &mut ctx,
+                root.reborrow_mut(),
+                &mut (),
+            )
+        });
+
+        let (env, _, _) = ctx.finish();
+        *self.view_ctx.environment() = env;
+        true
+    }
+
+    #[cfg(test)]
+    pub(crate) fn route_test_view_message(
+        &mut self,
+        action: ErasedAction,
+        source: WidgetId,
+    ) -> bool {
+        self.route_view_message(action, source)
     }
 
     pub fn handle_cursor_moved(&mut self, x: f32, y: f32) -> Handled {
@@ -760,6 +780,20 @@ fn parse_entity_debug_binding(debug: &str) -> Option<(u64, bool)> {
     }
 
     None
+}
+
+fn picus_default_properties() -> DefaultProperties {
+    let mut properties = DefaultProperties::new();
+    let transparent = Color::TRANSPARENT;
+
+    properties.insert::<WidgetLabel, _>(ContentColor::new(transparent));
+    properties.insert::<TextArea<true>, _>(ContentColor::new(transparent));
+    properties.insert::<TextArea<false>, _>(ContentColor::new(transparent));
+    properties.insert::<WidgetTextInput, _>(PlaceholderColor::new(transparent));
+    properties.insert::<Divider, _>(ContentColor::new(transparent));
+    properties.insert::<Spinner, _>(ContentColor::new(transparent));
+
+    properties
 }
 
 /// Headless Masonry runtime owned by Bevy, keyed by window entity.

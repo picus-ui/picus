@@ -311,16 +311,25 @@ Runtime styling invariants:
 - `InteractionState { hovered, pressed }` is stable component state.
 - `StyleDirty`, `ComputedStyle`, and target color state cache resolved style.
 - Descendant selector invalidation propagates from changed ancestors.
-- Entities with no matched rules and no inline style resolve to transparent text
-  fallback.
+- Entities with no matched rules and no inline style resolve to an empty
+  `ResolvedStyle`; projectors must not inject visible no-theme fallback colors,
+  borders, padding, or shadows.
+- Picus' Masonry runtime and Picus-owned text views make retained text defaults
+  transparent so missing theme data does not fall through to backend static
+  black text.
+- Active stylesheet RON may declare `default_variant: "<name>"`; loading it
+  applies that registered variant only when no active variant has already been
+  selected.
 - `ComputedStyle.font_family` carries resolved font-family data for projectors.
 - Color transitions use `bevy_tween`; projectors read resolved plus animated style
   through `resolve_style`.
 
 Built-in Fluent theming is a multi-variant bundle at
 `crates/picus_core/src/theme/fluent_theme.ron` with `dark`, `light`, and
-`high-contrast` variants. Runtime selection uses `ActiveStyleVariant` and
-`set_active_style_variant_by_name(...)`.
+`high-contrast` variants. `PicusPlugin` registers these variants but does not
+select one automatically; applications must explicitly call
+`set_active_style_variant_by_name(...)` or load a stylesheet/theme that declares
+`default_variant`.
 Picus-only helpers that do not correspond to Fluent UI components, such as
 `UiGroupBox`, must not receive default box styling from this built-in Fluent
 bundle; examples or applications that want a visible group box provide their own

@@ -41,14 +41,6 @@ const PROGRESS_BAR_WIDTH: f64 = 240.0;
 const PROGRESS_BAR_HEIGHT: f64 = 8.0;
 const PROGRESS_INDETERMINATE_WIDTH: f64 = 80.0;
 
-fn placeholder_color_from_style(style: &crate::styling::ResolvedStyle) -> crate::xilem::Color {
-    style
-        .colors
-        .text
-        .unwrap_or(crate::xilem::Color::WHITE)
-        .with_alpha(0.72)
-}
-
 fn map_text_alignment_for_input(
     text_align: crate::styling::TextAlign,
 ) -> masonry_core::parley::Alignment {
@@ -214,11 +206,7 @@ pub(crate) fn project_checkbox(checkbox: &UiCheckbox, ctx: ProjectionCtx<'_>) ->
     };
     let mark_style =
         resolve_style_for_entity_classes(ctx.world, ctx.entity, ["template.checkbox.mark"]);
-    let mark_color = mark_style
-        .colors
-        .text
-        .or(style.colors.text)
-        .unwrap_or(crate::xilem::Color::WHITE);
+    let mark_color = mark_style.colors.text.or(style.colors.text);
     let mark_size = (mark_style.text.size as f64).clamp(10.0, CHECKBOX_MARK_SIZE);
 
     let box_layer: UiView = Arc::new(apply_widget_style(
@@ -228,7 +216,7 @@ pub(crate) fn project_checkbox(checkbox: &UiCheckbox, ctx: ProjectionCtx<'_>) ->
         &box_style,
     ));
     let mut indicator_layers = vec![box_layer];
-    if checkbox.checked {
+    if checkbox.checked && let Some(mark_color) = mark_color {
         indicator_layers.push(vector_icon(VectorIcon::Check, mark_size, mark_color));
     }
     let indicator = zstack(indicator_layers).alignment(UnitPoint::CENTER);
@@ -236,7 +224,7 @@ pub(crate) fn project_checkbox(checkbox: &UiCheckbox, ctx: ProjectionCtx<'_>) ->
 
     let content = flex_row(vec![indicator.into_any_flex(), label_child.into_any_flex()])
         .cross_axis_alignment(CrossAxisAlignment::Center)
-        .gap(Length::px(style.layout.gap.max(8.0)));
+        .gap(Length::px(style.layout.gap));
 
     Arc::new(apply_direct_widget_style(
         button_with_child_view(
@@ -322,7 +310,7 @@ pub(crate) fn project_switch(switch_component: &UiSwitch, ctx: ProjectionCtx<'_>
 
     let content = flex_row(items)
         .cross_axis_alignment(CrossAxisAlignment::Center)
-        .gap(Length::px(style.layout.gap.max(8.0)));
+        .gap(Length::px(style.layout.gap));
 
     Arc::new(apply_direct_widget_style(
         button_with_child_view(
@@ -490,7 +478,7 @@ fn project_text_input_view(
             transformed(
                 styled
                     .text_color(text_color)
-                    .placeholder_color(placeholder_color_from_style(&style))
+                    .placeholder_color(text_color.with_alpha(0.72))
                     .padding(style_padding(style.layout.padding))
                     .corner_radius(Length::px(style.layout.corner_radius))
                     .border(
@@ -510,7 +498,6 @@ fn project_text_input_view(
     Arc::new(
         transformed(
             styled
-                .placeholder_color(placeholder_color_from_style(&style))
                 .padding(style_padding(style.layout.padding))
                 .corner_radius(Length::px(style.layout.corner_radius))
                 .border(
@@ -567,34 +554,25 @@ pub(crate) fn project_avatar(avatar: &UiAvatar, ctx: ProjectionCtx<'_>) -> UiVie
     // Get an appropriate font size: ~40% of avatar size, clamped.
     let font_size = (size_f64 as f32 * 0.40).clamp(8.0, AVATAR_DEFAULT_FONT_SIZE * 2.0);
 
-    // Background colour from the avatar colour class, or fallback to accent.
-    let bg_color = color_style.colors.bg.unwrap_or(
-        style
-            .colors
-            .bg
-            .unwrap_or(crate::xilem::Color::from_rgb8(0x00, 0x78, 0xD4)),
-    );
-    let text_color = color_style
-        .colors
-        .text
-        .unwrap_or(crate::xilem::Color::WHITE);
+    let mut avatar_style = style.clone();
+    avatar_style.colors.bg = color_style.colors.bg.or(style.colors.bg);
+    avatar_style.layout.corner_radius = corner_radius;
+
+    let mut initials_style = style.clone();
+    initials_style.colors.text = color_style.colors.text.or(style.colors.text);
+    initials_style.text.size = font_size;
+    initials_style.text.weight = 600.0;
 
     let initials = crate::get_initials(&avatar.name);
 
     let avatar_view: UiView = Arc::new(
-        zstack(vec![Arc::new(
-            sized_box(
-                label(initials)
-                    .text_size(font_size)
-                    .weight(masonry_core::parley::style::FontWeight::SEMI_BOLD)
-                    .color(text_color),
-            )
-            .width(Dim::Fixed(Length::px(size_f64)))
-            .height(Dim::Fixed(Length::px(size_f64)))
-            .corner_radius(Length::px(corner_radius))
-            .background(bg_color),
-        )])
-        .alignment(masonry_core::layout::UnitPoint::CENTER),
+        sized_box(apply_widget_style(
+            zstack(vec![Arc::new(apply_label_style(label(initials), &initials_style))])
+                .alignment(masonry_core::layout::UnitPoint::CENTER),
+            &avatar_style,
+        ))
+        .width(Dim::Fixed(Length::px(size_f64)))
+        .height(Dim::Fixed(Length::px(size_f64))),
     );
 
     avatar_view

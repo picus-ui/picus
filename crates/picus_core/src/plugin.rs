@@ -52,8 +52,8 @@ use crate::{
         StyleSheetRonLoader, activate_debounced_hovers, animate_style_transitions,
         ensure_active_stylesheet_asset_handle, mark_style_dirty,
         register_builtin_style_type_aliases, register_embedded_fluent_theme_variants,
-        set_active_style_variant_to_registered_default, sync_active_style_variant,
-        sync_style_targets, sync_stylesheet_asset_events, sync_ui_interaction_markers,
+        sync_active_style_variant, sync_style_targets, sync_stylesheet_asset_events,
+        sync_ui_interaction_markers,
     },
     synthesize::{SynthesizedUiViews, UiSynthesisStats, sync_focus_state, synthesize_ui},
     track_window_size,
@@ -234,9 +234,6 @@ impl Plugin for PicusPlugin {
         register_builtin_style_type_aliases(app.world_mut());
         register_embedded_fluent_theme_variants(app.world_mut()).unwrap_or_else(|error| {
             panic!("failed to parse embedded Fluent theme bundle: {error}")
-        });
-        set_active_style_variant_to_registered_default(app.world_mut()).unwrap_or_else(|error| {
-            panic!("failed to select embedded Fluent default variant: {error}")
         });
 
         {

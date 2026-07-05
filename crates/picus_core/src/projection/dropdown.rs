@@ -1,4 +1,4 @@
-use crate::xilem::{palette::css::BLACK, style::BoxShadow, style::Style as _};
+use crate::xilem::style::Style as _;
 use crate::{
     ecs::{AnchoredTo, OverlayAnchorRect, UiComboBox, UiDropdownItem, UiDropdownMenu},
     overlay::OverlayUiAction,
@@ -359,22 +359,21 @@ pub(crate) fn project_combo_box(combo_box: &UiComboBox, ctx: ProjectionCtx<'_>) 
 
     let selected_label = combo_box_display_text(combo_box, ctx.world);
 
-    let icon_color = style
-        .colors
-        .text
-        .unwrap_or(crate::xilem::Color::from_rgb8(0xE7, 0xEC, 0xF8));
-    let chevron = if combo_box.is_open {
-        vector_icon(VectorIcon::ChevronUp, 10.0, icon_color)
-    } else {
-        vector_icon(VectorIcon::ChevronDown, 10.0, icon_color)
-    };
-
-    let button_content = flex_row(vec![
+    let mut button_items = vec![
         apply_label_style(label(selected_label), &style)
             .flex(1.0)
             .into_any_flex(),
-        chevron.into_any_flex(),
-    ])
+    ];
+    if let Some(icon_color) = style.colors.text {
+        let chevron = if combo_box.is_open {
+            vector_icon(VectorIcon::ChevronUp, 10.0, icon_color)
+        } else {
+            vector_icon(VectorIcon::ChevronDown, 10.0, icon_color)
+        };
+        button_items.push(chevron.into_any_flex());
+    }
+
+    let button_content = flex_row(button_items)
     .cross_axis_alignment(CrossAxisAlignment::Center)
     .gap(Length::px(6.0));
 
@@ -391,25 +390,6 @@ pub(crate) fn project_dropdown_menu(_: &UiDropdownMenu, ctx: ProjectionCtx<'_>) 
         .map(|anchored| anchored.0);
 
     let mut menu_style = resolve_style_for_classes(ctx.world, ["overlay.dropdown.menu"]);
-    if menu_style.colors.bg.is_none() {
-        menu_style.colors.bg = Some(crate::xilem::Color::from_rgb8(0x16, 0x1C, 0x2A));
-    }
-    if menu_style.colors.border.is_none() {
-        menu_style.colors.border = Some(crate::xilem::Color::from_rgb8(0x38, 0x46, 0x64));
-    }
-    if menu_style.layout.padding <= 0.0 {
-        menu_style.layout.padding = 8.0;
-    }
-    if menu_style.layout.corner_radius <= 0.0 {
-        menu_style.layout.corner_radius = 10.0;
-    }
-    if menu_style.layout.border_width <= 0.0 {
-        menu_style.layout.border_width = 1.0;
-    }
-    if menu_style.box_shadow.is_none() {
-        menu_style.box_shadow =
-            Some(BoxShadow::new(BLACK.with_alpha(0.28), (0.0, 8.0)).blur(Length::px(16.0)));
-    }
 
     let mut item_style = resolve_style_for_classes(ctx.world, ["overlay.dropdown.item"]);
     apply_app_i18n_font_stack_if_missing(&mut item_style, ctx.world);
@@ -438,12 +418,11 @@ pub(crate) fn project_dropdown_menu(_: &UiDropdownMenu, ctx: ProjectionCtx<'_>) 
         item_style.layout.padding * 2.0 + menu_style.layout.padding * 2.0,
     );
 
-    let item_gap = menu_style.layout.gap.max(6.0);
     let estimated_dropdown_height = estimate_dropdown_viewport_height_px(
         translated_options.len(),
         item_style.text.size,
         item_style.layout.padding,
-        item_gap,
+        menu_style.layout.gap,
     );
 
     let computed_position = popover_geometry(
@@ -468,7 +447,7 @@ pub(crate) fn project_dropdown_menu(_: &UiDropdownMenu, ctx: ProjectionCtx<'_>) 
             &menu_style,
         )
         .width(Dim::Stretch)
-        .gap(Length::px(item_gap)),
+        .gap(Length::px(menu_style.layout.gap)),
     )
     .dims((
         Length::px(computed_position.width),
@@ -505,27 +484,24 @@ pub(crate) fn project_dropdown_item(item: &UiDropdownItem, ctx: ProjectionCtx<'_
     let mut item_style = resolve_style(ctx.world, ctx.entity);
     apply_app_i18n_font_stack_if_missing(&mut item_style, ctx.world);
 
-    let icon_color = item_style
-        .colors
-        .text
-        .unwrap_or(crate::xilem::Color::from_rgb8(0xE7, 0xEC, 0xF8));
-    let indicator = vector_icon(
-        VectorIcon::Check,
-        14.0,
-        if is_selected {
-            icon_color
-        } else {
-            crate::xilem::Color::from_rgba8(0, 0, 0, 0)
-        },
-    );
     let label_text = translate_text(ctx.world, option.label_key.as_deref(), &option.label);
 
-    let content = flex_row(vec![
-        indicator.into_any_flex(),
+    let mut content_items = Vec::new();
+    if let Some(icon_color) = item_style.colors.text {
+        let indicator_color = if is_selected {
+            icon_color
+        } else {
+            icon_color.with_alpha(0.0)
+        };
+        content_items.push(vector_icon(VectorIcon::Check, 14.0, indicator_color).into_any_flex());
+    }
+    content_items.push(
         apply_label_style(label(label_text), &item_style)
             .flex(1.0)
             .into_any_flex(),
-    ])
+    );
+
+    let content = flex_row(content_items)
     .cross_axis_alignment(CrossAxisAlignment::Center)
     .gap(Length::px(8.0));
 

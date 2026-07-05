@@ -1480,7 +1480,8 @@ mod tests {
 
     #[test]
     fn embedded_theme_ron_parses() {
-        picus::parse_stylesheet_ron(include_str!("../assets/themes/game_2048.ron"))
+        let sheet = picus::parse_stylesheet_ron(include_str!("../assets/themes/game_2048.ron"))
             .expect("embedded game_2048 stylesheet should parse");
+        assert_eq!(sheet.default_variant.as_deref(), Some("dark"));
     }
 }

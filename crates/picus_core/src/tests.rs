@@ -33,6 +33,7 @@ use masonry_core::{
     core::{Widget, WidgetId, WidgetRef, WindowEvent},
     dpi::PhysicalSize,
 };
+use picus_view::picus_widget::{properties::ContentColor, widgets::TextAction};
 
 #[derive(Component, Debug, Clone, Copy)]
 struct TestRoot;
@@ -317,7 +318,7 @@ fn plugin_auto_registers_builtin_ui_components_without_manual_setup() {
 }
 
 #[test]
-fn plugin_boots_with_embedded_fluent_dark_theme_and_applies_on_first_update() {
+fn plugin_registers_embedded_fluent_variants_without_activating_theme() {
     let mut app = App::new();
     app.add_plugins(PicusPlugin);
 
@@ -325,25 +326,99 @@ fn plugin_boots_with_embedded_fluent_dark_theme_and_applies_on_first_update() {
     assert!(active.path.is_none());
 
     let active_variant = app.world().resource::<crate::ActiveStyleVariant>();
-    assert_eq!(active_variant.0.as_deref(), Some("dark"));
+    assert_eq!(active_variant.0.as_deref(), None);
 
     let applied_variant_before_update = app.world().resource::<crate::AppliedStyleVariant>();
     assert_eq!(applied_variant_before_update.0.as_deref(), None);
 
+    let variants = app.world().resource::<crate::RegisteredStyleVariants>();
+    assert!(variants.variants.contains_key("dark"));
+    assert!(variants.variants.contains_key("light"));
+    assert!(variants.variants.contains_key("high-contrast"));
+
     app.update();
 
     let sheet = app.world().resource::<crate::StyleSheet>();
-    assert!(!sheet.rules.is_empty());
-    assert!(sheet.tokens.contains_key("surface-bg"));
+    assert!(sheet.rules.is_empty());
+    assert!(sheet.tokens.is_empty());
 
     let applied_variant = app.world().resource::<crate::AppliedStyleVariant>();
-    assert_eq!(applied_variant.0.as_deref(), Some("dark"));
+    assert_eq!(applied_variant.0.as_deref(), None);
+}
+
+#[test]
+fn no_active_theme_projects_label_text_as_transparent() {
+    let mut app = App::new();
+    app.add_plugins(PicusPlugin);
+
+    let mut window = Window::default();
+    window.resolution.set(320.0, 200.0);
+    app.world_mut().spawn((window, PrimaryWindow));
+
+    let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+    app.world_mut()
+        .spawn((crate::UiLabel::new("Hidden text"), ChildOf(root)));
+
+    app.update();
+    app.update();
+
+    let text_color = {
+        let runtime = app.world().non_send::<crate::MasonryRuntime>();
+        let window_runtime = runtime
+            .primary()
+            .expect("primary window runtime should exist");
+        let label = first_widget_by_short_name_and_debug_text(
+            window_runtime.render_root.get_layer_root(0),
+            "Label",
+            "Hidden text",
+        )
+        .expect("projected label should exist");
+        label.get_prop::<ContentColor>().color
+    };
+
+    assert_eq!(text_color, crate::xilem::Color::TRANSPARENT);
+}
+
+#[test]
+fn no_active_theme_projects_text_input_text_as_transparent() {
+    let mut app = App::new();
+    app.add_plugins(PicusPlugin);
+
+    let mut window = Window::default();
+    window.resolution.set(320.0, 200.0);
+    app.world_mut().spawn((window, PrimaryWindow));
+
+    let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+    app.world_mut().spawn((
+        crate::UiTextInput::new("Typed").with_placeholder("Placeholder"),
+        ChildOf(root),
+    ));
+
+    app.update();
+    app.update();
+
+    let text_color = {
+        let runtime = app.world().non_send::<crate::MasonryRuntime>();
+        let window_runtime = runtime
+            .primary()
+            .expect("primary window runtime should exist");
+        let text_area = first_widget_by_short_name_and_debug_text(
+            window_runtime.render_root.get_layer_root(0),
+            "TextArea",
+            "Typed",
+        )
+        .expect("projected text input should build an inner TextArea");
+        text_area.get_prop::<ContentColor>().color
+    };
+
+    assert_eq!(text_color, crate::xilem::Color::TRANSPARENT);
 }
 
 #[test]
 fn embedded_fluent_theme_defines_priority_control_visual_styles() {
     let mut app = App::new();
     app.add_plugins(PicusPlugin);
+    crate::set_active_style_variant_by_name(app.world_mut(), "dark");
     app.update();
 
     let badge = app.world_mut().spawn((crate::UiBadge::new("Beta"),)).id();
@@ -381,6 +456,7 @@ fn embedded_fluent_theme_defines_priority_control_visual_styles() {
 fn embedded_fluent_theme_does_not_style_picus_only_group_box() {
     let mut app = App::new();
     app.add_plugins(PicusPlugin);
+    crate::set_active_style_variant_by_name(app.world_mut(), "dark");
     app.update();
 
     let group_box = app
@@ -548,6 +624,66 @@ fn load_style_sheet_ron_applies_and_persists_across_variant_switches() {
     app.update();
 
     assert_eq!(resolve_style(app.world(), entity).colors.bg, Some(expected));
+}
+
+#[test]
+fn load_style_sheet_ron_default_variant_applies_registered_variant_when_unset() {
+    let mut app = App::new();
+    app.add_plugins(PicusPlugin).load_style_sheet_ron(
+        r##"(
+            default_variant: "light",
+            rules: [
+                (
+                    selector: Class("demo.uses-theme-token"),
+                    setter: (
+                        colors: (
+                            bg: Var("surface-bg"),
+                        ),
+                    ),
+                ),
+            ],
+        )"##,
+    );
+
+    let active_variant = app.world().resource::<crate::ActiveStyleVariant>();
+    assert_eq!(active_variant.0.as_deref(), Some("light"));
+
+    let applied_variant = app.world().resource::<crate::AppliedStyleVariant>();
+    assert_eq!(applied_variant.0.as_deref(), Some("light"));
+
+    let entity = app
+        .world_mut()
+        .spawn((crate::StyleClass(vec![
+            "demo.uses-theme-token".to_string(),
+        ]),))
+        .id();
+
+    assert_eq!(
+        resolve_style(app.world(), entity).colors.bg,
+        Some(crate::xilem::Color::from_rgb8(0xFF, 0xFF, 0xFF))
+    );
+}
+
+#[test]
+fn load_style_sheet_ron_default_variant_preserves_existing_active_variant() {
+    let mut app = App::new();
+    app.add_plugins(PicusPlugin);
+    crate::set_active_style_variant_by_name(app.world_mut(), "dark");
+    crate::apply_active_style_variant(app.world_mut())
+        .expect("embedded Fluent dark theme should apply");
+
+    app.load_style_sheet_ron(
+        r##"(
+            default_variant: "light",
+            rules: [],
+        )"##,
+    );
+
+    let active_variant = app.world().resource::<crate::ActiveStyleVariant>();
+    assert_eq!(active_variant.0.as_deref(), Some("dark"));
+
+    let applied_variant = app.world().resource::<crate::AppliedStyleVariant>();
+    assert_eq!(applied_variant.0.as_deref(), Some("dark"));
 }
 
 #[test]
@@ -822,6 +958,7 @@ fn input_bridge_uses_primary_window_logical_size_for_resize_events() {
 fn clicking_text_input_enables_window_ime() {
     let mut app = App::new();
     app.add_plugins(PicusPlugin);
+    crate::set_active_style_variant_by_name(app.world_mut(), "dark");
 
     let mut window = Window::default();
     window.resolution.set(800.0, 600.0);
@@ -1216,13 +1353,13 @@ fn resolve_style_for_entity_classes_applies_hover_pseudo_state() {
 }
 
 #[test]
-fn resolve_style_without_any_style_source_uses_transparent_text_fallback() {
+fn resolve_style_without_any_style_source_has_no_theme_values() {
     let mut world = World::new();
     let entity = world.spawn_empty().id();
 
     let resolved = resolve_style(&world, entity);
 
-    assert_eq!(resolved.colors.text, Some(crate::xilem::Color::TRANSPARENT));
+    assert_eq!(resolved, crate::ResolvedStyle::default());
 }
 
 #[test]
@@ -3308,6 +3445,44 @@ fn collect_widget_bounds_by_short_name(
     }
 }
 
+fn first_widget_id_by_short_name(
+    widget: WidgetRef<'_, dyn Widget>,
+    short_type_name: &str,
+) -> Option<WidgetId> {
+    if widget.short_type_name() == short_type_name {
+        return Some(widget.id());
+    }
+
+    widget
+        .children()
+        .into_iter()
+        .find_map(|child| first_widget_id_by_short_name(child, short_type_name))
+}
+
+fn first_widget_by_short_name_and_debug_text<'w>(
+    widget: WidgetRef<'w, dyn Widget>,
+    short_type_name: &str,
+    debug_text: &str,
+) -> Option<WidgetRef<'w, dyn Widget>> {
+    if widget.short_type_name() == short_type_name
+        && widget
+            .get_debug_text()
+            .as_deref()
+            .is_some_and(|text| text == debug_text)
+    {
+        return Some(widget);
+    }
+
+    widget
+        .children()
+        .into_iter()
+        .find_map(|child| first_widget_by_short_name_and_debug_text(
+            child,
+            short_type_name,
+            debug_text,
+        ))
+}
+
 #[test]
 fn dialog_body_click_does_not_dismiss_overlay() {
     let mut app = App::new();
@@ -3378,6 +3553,7 @@ fn dialog_padding_click_is_in_overlay_hit_path_and_does_not_dismiss() {
 fn dialog_dismiss_button_targets_dialog_entity() {
     let mut app = App::new();
     app.add_plugins(PicusPlugin);
+    crate::set_active_style_variant_by_name(app.world_mut(), "dark");
 
     let mut window = Window::default();
     window.resolution.set(800.0, 600.0);
@@ -3567,6 +3743,7 @@ fn overlay_action_dismiss_dialog_emits_optional_close_hook_before_despawn() {
 fn handle_global_overlay_clicks_closes_when_clicking_anchor_and_suppresses_pointer() {
     let mut app = App::new();
     app.add_plugins(PicusPlugin);
+    crate::set_active_style_variant_by_name(app.world_mut(), "dark");
 
     let mut window = Window::default();
     window.resolution.set(800.0, 600.0);
@@ -4342,7 +4519,7 @@ fn embedded_fluent_theme_color_fields_do_not_parse_hex_literals_as_var_tokens() 
 }
 
 #[test]
-fn stylesheet_var_missing_token_falls_back_to_transparent_or_zero() {
+fn stylesheet_var_missing_token_drops_that_declaration() {
     let ron = r##"(
     rules: [
         (
@@ -4369,7 +4546,7 @@ fn stylesheet_var_missing_token_falls_back_to_transparent_or_zero() {
 
     let resolved = crate::resolve_style(&world, entity);
     assert_eq!(resolved.layout.padding, 0.0);
-    assert_eq!(resolved.colors.bg, Some(crate::xilem::Color::TRANSPARENT));
+    assert_eq!(resolved.colors.bg, None);
 }
 
 #[test]
@@ -4718,6 +4895,7 @@ fn scroll_view_geometry_sync_clamps_out_of_bounds_offset() {
 fn scroll_view_geometry_sync_expands_viewport_width_to_parent_width() {
     let mut app = App::new();
     app.add_plugins(PicusPlugin);
+    crate::set_active_style_variant_by_name(app.world_mut(), "dark");
 
     let mut window = Window::default();
     window.resolution.set(900.0, 640.0);
@@ -4829,30 +5007,9 @@ fn scroll_view_left_aligns_narrow_content_after_viewport_stretch() {
     );
 }
 
-#[derive(Component, Debug, Clone, Copy)]
-struct CallbackTextInputProbe;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum CallbackTextInputAction {
-    Changed(String),
-}
-
-fn project_callback_text_input_probe(_: &CallbackTextInputProbe, ctx: ProjectionCtx<'_>) -> UiView {
-    Arc::new(
-        crate::retained_bridge::text_input(
-            ctx.entity,
-            String::new(),
-            CallbackTextInputAction::Changed,
-        )
-        .placeholder("Type here"),
-    )
-}
-
-crate::impl_ui_component_template!(CallbackTextInputProbe, project_callback_text_input_probe);
-
 /// Verifies that widget actions emitted by callback-based views (such as the
 /// `text_input` helper) are routed back to the view's `message` handler by
-/// `route_masonry_view_messages`, so `on_changed` fires into `UiEventQueue`.
+/// `route_masonry_view_messages`, so `on_changed` reaches the ECS action path.
 ///
 /// Before the routing system was added, the `RenderRootSignal::Action` was
 /// dropped by the per-window signal sink, so `on_changed`/`on_enter` callbacks
@@ -4860,73 +5017,58 @@ crate::impl_ui_component_template!(CallbackTextInputProbe, project_callback_text
 #[test]
 fn route_masonry_view_messages_dispatches_text_input_on_changed() {
     let mut app = App::new();
-    app.add_plugins(PicusPlugin)
-        .register_ui_component::<CallbackTextInputProbe>();
+    app.add_plugins(PicusPlugin);
 
     let mut window = Window::default();
     window.resolution.set(480.0, 320.0);
-    let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+    app.world_mut().spawn((window, PrimaryWindow));
 
     let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
     let input = app
         .world_mut()
-        .spawn((CallbackTextInputProbe, ChildOf(root)))
+        .spawn((
+            crate::UiTextInput::new("").with_placeholder("Type here"),
+            ChildOf(root),
+        ))
         .id();
 
     // Two updates so synthesis builds the retained tree and the widget map.
     app.update();
     app.update();
 
-    // Prime the Masonry layout root with the window's logical size so hit
-    // testing matches the on-screen widget positions (the headless runtime
-    // otherwise defaults to 1024x768).
-    app.world_mut().write_message(bevy_window::WindowResized {
-        window: window_entity,
-        width: 480.0,
-        height: 320.0,
-    });
-    app.update();
+    let text_area_id = {
+        let runtime = app.world().non_send::<crate::MasonryRuntime>();
+        let window_runtime = runtime
+            .primary()
+            .expect("primary window runtime should exist");
+        first_widget_id_by_short_name(window_runtime.render_root.get_layer_root(0), "TextArea")
+            .expect("text input should build an inner TextArea widget")
+    };
 
-    // Focus the text input by moving the cursor over it and pressing/releasing.
-    // Use physical coordinates so Window::physical_cursor_position() resolves
-    // inside the window bounds.
-    let input_center = widget_center_for_entity(&app, input);
-    send_primary_click(&mut app, window_entity, input_center);
-
-    // Mark the window as focused so the text area accepts text events.
-    app.world_mut().write_message(bevy_window::WindowFocused {
-        window: window_entity,
-        focused: true,
-    });
-    app.update();
-
-    // Type a character via a keyboard input event. The runtime forwards
-    // Character keys as TextEvent::Keyboard, which the TextArea turns into an
-    // inserted glyph and a TextAction::Changed.
-    app.world_mut()
-        .write_message(bevy_input::keyboard::KeyboardInput {
-            key_code: bevy_input::keyboard::KeyCode::KeyH,
-            logical_key: bevy_input::keyboard::Key::Character("h".into()),
-            state: bevy_input::ButtonState::Pressed,
-            text: None,
-            repeat: false,
-            window: window_entity,
-        });
-    app.update();
-    app.update();
+    let routed = {
+        let mut runtime = app.world_mut().non_send_mut::<crate::MasonryRuntime>();
+        let window_runtime = runtime
+            .primary_mut()
+            .expect("primary window runtime should exist");
+        window_runtime.route_test_view_message(
+            Box::new(TextAction::Changed("h".to_string())),
+            text_area_id,
+        )
+    };
+    assert!(routed, "text input should register a view action source");
 
     let changed: Vec<_> = app
         .world_mut()
         .resource_mut::<UiEventQueue>()
-        .drain_actions::<CallbackTextInputAction>();
+        .drain_actions::<crate::WidgetUiAction>();
     assert!(
-        !changed.is_empty(),
-        "text_input on_changed should fire via route_masonry_view_messages, got: {changed:?}"
-    );
-    assert!(
-        changed
-            .iter()
-            .any(|event| event.action == CallbackTextInputAction::Changed("h".to_string())),
-        "at least one on_changed should carry the typed text, got: {changed:?}"
+        changed.iter().any(|event| {
+            matches!(
+                &event.action,
+                crate::WidgetUiAction::SetTextInput { input: changed_input, value }
+                    if *changed_input == input && value == "h"
+            )
+        }),
+        "text_input on_changed should route through route_masonry_view_messages, got: {changed:?}"
     );
 }

@@ -5,7 +5,7 @@ use super::{
         hide_style_without_collapsing_layout, translate_text, vector_icon,
     },
 };
-use crate::xilem::{palette::css::BLACK, style::BoxShadow, style::Style as _};
+use crate::xilem::style::Style as _;
 use crate::{
     ecs::{OverlayComputedPosition, PartDialogBody, PartDialogDismiss, PartDialogTitle, UiDialog},
     overlay::OverlayUiAction,
@@ -28,11 +28,11 @@ pub(crate) const DIALOG_DISMISS_ICON_SIZE_PX: f64 = 16.0;
 pub(crate) const DIALOG_DISMISS_BUTTON_SIZE_PX: f64 = 32.0;
 
 pub(crate) fn dialog_surface_padding(layout_padding: f64) -> f64 {
-    layout_padding.max(12.0)
+    layout_padding
 }
 
 pub(crate) fn dialog_surface_gap(layout_gap: f64) -> f64 {
-    layout_gap.max(10.0)
+    layout_gap
 }
 
 pub(crate) fn estimate_dialog_surface_width_px(
@@ -84,32 +84,10 @@ pub(crate) fn estimate_dialog_surface_height_px(
 
 pub(crate) fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiView {
     let mut dialog_style = resolve_style(ctx.world, ctx.entity);
-    if dialog_style.colors.bg.is_none() {
-        dialog_style.colors.bg = Some(crate::xilem::Color::from_rgb8(0x18, 0x1E, 0x2D));
-    }
-    if dialog_style.colors.border.is_none() {
-        dialog_style.colors.border = Some(crate::xilem::Color::from_rgb8(0x3A, 0x48, 0x68));
-    }
-    if dialog_style.layout.padding <= 0.0 {
-        dialog_style.layout.padding = 18.0;
-    }
-    if dialog_style.layout.corner_radius <= 0.0 {
-        dialog_style.layout.corner_radius = 12.0;
-    }
-    if dialog_style.layout.border_width <= 0.0 {
-        dialog_style.layout.border_width = 1.0;
-    }
-    if dialog_style.box_shadow.is_none() {
-        dialog_style.box_shadow =
-            Some(BoxShadow::new(BLACK.with_alpha(0.36), (0.0, 10.0)).blur(Length::px(22.0)));
-    }
 
     let mut title_style = resolve_style_for_classes(ctx.world, ["overlay.dialog.title"]);
     let mut body_style = resolve_style_for_classes(ctx.world, ["overlay.dialog.body"]);
     let mut dismiss_style = resolve_style_for_classes(ctx.world, ["overlay.dialog.dismiss"]);
-    if dismiss_style.layout.padding <= 0.0 {
-        dismiss_style.layout.padding = 8.0;
-    }
 
     let title = translate_text(ctx.world, dialog.title_key.as_deref(), &dialog.title);
     let body = translate_text(ctx.world, dialog.body_key.as_deref(), &dialog.body);
@@ -146,12 +124,12 @@ pub(crate) fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiVie
         &body,
         title_style.text.size,
         body_style.text.size,
-        dialog_style.layout.padding.max(12.0),
+        dialog_style.layout.padding,
     );
 
     let hinted_width = dialog.width.unwrap_or(estimated_width);
 
-    let dialog_gap = dialog_style.layout.gap.max(10.0);
+    let dialog_gap = dialog_style.layout.gap;
     let estimated_height = estimate_dialog_surface_height_px(
         &title,
         &body,
@@ -214,14 +192,12 @@ pub(crate) fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiVie
         button_with_child_view(
             ctx.entity,
             OverlayUiAction::DismissDialog,
-            vector_icon(
-                VectorIcon::X,
-                DIALOG_DISMISS_ICON_SIZE_PX,
-                dismiss_style
-                    .colors
-                    .text
-                    .unwrap_or(crate::xilem::Color::WHITE),
-            ),
+            match dismiss_style.colors.text {
+                Some(text_color) => {
+                    vector_icon(VectorIcon::X, DIALOG_DISMISS_ICON_SIZE_PX, text_color)
+                }
+                None => Arc::new(picus_view::view::label("")),
+            },
         ),
         &dismiss_style,
     )

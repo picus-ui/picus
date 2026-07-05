@@ -585,7 +585,8 @@ fn main() -> Result<(), EventLoopError> {
 mod tests {
     #[test]
     fn embedded_async_downloader_theme_ron_parses() {
-        picus::parse_stylesheet_ron(include_str!("../assets/themes/async_downloader.ron"))
+        let sheet = picus::parse_stylesheet_ron(include_str!("../assets/themes/async_downloader.ron"))
             .expect("embedded async_downloader stylesheet should parse");
+        assert_eq!(sheet.default_variant.as_deref(), Some("dark"));
     }
 }
