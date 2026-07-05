@@ -878,6 +878,16 @@ mod tests {
     }
 
     #[test]
+    fn picuscode_theme_uses_registered_fluent_tokens_without_overrides() {
+        let sheet = picus::parse_stylesheet_ron(include_str!("../assets/themes/picuscode.ron"))
+            .expect("embedded picuscode stylesheet should parse");
+        assert!(
+            sheet.tokens.is_empty(),
+            "picuscode should use the registered Fluent light/dark token values"
+        );
+    }
+
+    #[test]
     fn picuscode_app_applies_stylesheet_default_variant() {
         let app = super::build_picuscode_app();
 
