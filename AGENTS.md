@@ -191,13 +191,18 @@ Projection uses `entity.to_bits()` for stable node identities. Core root/contain
 types include `UiRoot`, `UiOverlayRoot`, `UiFlexColumn`, `UiFlexRow`, `UiGrid`
 with MewUI-style `UiGridLength` track intent and `UiGridCell` attached
 placement, `UiLabel`, `UiButton`, `UiCanvas`/`UiCanvasCommand` plus
-`UiCanvasPosition` child positioning, `UiImage`, `UiTextInput`,
-`UiPasswordInput`, `UiMultilineTextInput`, `UiListView`, `UiTable`,
-`UiDataTable`, `UiMarkdown`, `UiStreamingMarkdown`, and `LocalizeText`.
+`UiCanvasPosition` child positioning (with `right`/`bottom` anchoring against
+`UiCanvas::size`), `UiImage`, `UiTextInput`, `UiPasswordInput`,
+`UiMultilineTextInput`, `UiListView`, `UiTable`, `UiDataTable` with `UiDataCell`
+text/image cell templates, `UiNumericUpDown`, `UiMarkdown`, `UiStreamingMarkdown`,
+and `LocalizeText`.
 
 Priority built-ins (`UiButton`, `UiBadge`, `UiProgressBar`, `UiSwitch`, and
 `UiCheckbox`) own their Picus-composed visual structure instead of exposing raw
-compatibility widget appearance.
+compatibility widget appearance. `UiButton.disabled` renders a non-interactive
+styled container that never emits click actions. `UiCheckbox.indeterminate` adds
+a tri-state dash appearance; clicking an indeterminate checkbox transitions to
+checked.
 
 ## 6. BSN UI Authoring and Migration
 
@@ -361,7 +366,9 @@ Scroll invariants:
 The overlay system uses Masonry Core floating/portal roots and `OverlayStack` ordering.
 `OverlayPlacement` handles screen placement, clamping, and auto-flip behavior.
 `UiPopover` is the shared anchored-placement model for dropdowns, tooltips, picker
-panels, popovers, and related floating surfaces.
+panels, popovers, and related floating surfaces. `spawn_manual_overlay_at` places a
+floating panel at an explicit `(x, y)` pixel coordinate, bypassing anchor-based
+placement.
 
 Overlay invariants:
 

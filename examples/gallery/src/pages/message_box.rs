@@ -1,4 +1,4 @@
-use crate::helpers::{card, grid, note, placeholder};
+use crate::helpers::{card, dialog_button, grid, note};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 use picus::{
     UiButton,
@@ -18,18 +18,27 @@ pub fn spawn_message_box_page(commands: &mut Commands, parent: Entity) -> Entity
             ChildOf(dialog)
         })
         .id();
-    commands.spawn_scene(bsn! {
-        template_value(UiButton::new("Info Dialog"))
-        ChildOf(dialog)
-    });
-    commands.spawn_scene(bsn! {
-        template_value(UiButton::new("Warning Dialog"))
-        ChildOf(dialog)
-    });
-    commands.spawn_scene(bsn! {
-        template_value(UiButton::new("Error Dialog"))
-        ChildOf(dialog)
-    });
+    dialog_button(
+        commands,
+        dialog,
+        "Info Dialog",
+        "Info",
+        "This is an informational dialog spawned from the MessageBox page.",
+    );
+    dialog_button(
+        commands,
+        dialog,
+        "Warning Dialog",
+        "Warning",
+        "This is a warning dialog spawned from the MessageBox page.",
+    );
+    dialog_button(
+        commands,
+        dialog,
+        "Error Dialog",
+        "Error",
+        "This is an error dialog spawned from the MessageBox page.",
+    );
     note(
         commands,
         dialog,
@@ -37,19 +46,21 @@ pub fn spawn_message_box_page(commands: &mut Commands, parent: Entity) -> Entity
     );
 
     let prompt = card(commands, g, "Prompt");
-    placeholder(
+    dialog_button(
         commands,
         prompt,
-        "Prompt text dialog",
-        "UiDialog has title/body/dismiss fields but no built-in input slot or confirm/cancel result contract.",
+        "Prompt Placeholder",
+        "Prompt Placeholder",
+        "Picus UiDialog does not yet expose an input slot, so the prompt sample is represented here.",
     );
 
     let native = card(commands, g, "Native Message Hook");
-    placeholder(
+    dialog_button(
         commands,
         native,
-        "Native message hook",
-        "Masonry runtime is abstracted behind Picus; platform-native message hooks are not public API.",
+        "Native Message Hook",
+        "Native Hook Placeholder",
+        "Platform-native message hooks are not part of the public Picus runtime API.",
     );
 
     error_btn

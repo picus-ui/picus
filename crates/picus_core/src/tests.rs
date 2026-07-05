@@ -234,6 +234,8 @@ fn public_ui_authoring_types_are_bsn_template_ready() {
     assert_component::<crate::UiTimePicker>();
     assert_component::<crate::UiTimePickerPanel>();
     assert_component::<crate::UiTitleBar>();
+    assert_component::<crate::UiNumericUpDown>();
+    assert_value::<crate::UiDataCell>();
     assert_component::<crate::UiToolbar>();
     assert_component::<crate::UiToast>();
     assert_component::<crate::UiTooltip>();
@@ -1830,6 +1832,34 @@ fn direct_checkbox_action_sets_checkbox_state() {
 }
 
 #[test]
+fn indeterminate_checkbox_toggle_transitions_to_checked() {
+    let mut world = World::new();
+    world.insert_resource(UiEventQueue::default());
+
+    let checkbox = world
+        .spawn((crate::UiCheckbox::new("tri-state", false).indeterminate(true),))
+        .id();
+
+    world
+        .resource::<UiEventQueue>()
+        .push_typed(checkbox, crate::WidgetUiAction::ToggleCheckbox { checkbox });
+    crate::handle_widget_actions(&mut world);
+
+    let state = world
+        .get::<crate::UiCheckbox>(checkbox)
+        .expect("checkbox should exist");
+    assert!(!state.indeterminate, "indeterminate should clear on toggle");
+    assert!(state.checked, "indeterminate toggle should land on checked");
+
+    let changed = world
+        .resource_mut::<UiEventQueue>()
+        .drain_actions::<crate::UiCheckboxChanged>();
+    assert_eq!(changed.len(), 1);
+    assert!(changed[0].action.checked);
+    assert!(!changed[0].action.indeterminate);
+}
+
+#[test]
 fn direct_text_input_actions_update_new_input_state() {
     let mut world = World::new();
     world.insert_resource(UiEventQueue::default());
@@ -2140,9 +2170,37 @@ fn new_grid_canvas_and_image_options_are_data_complete() {
         });
     assert_eq!(canvas.commands.len(), 2);
     assert_eq!(
-        crate::UiCanvasPosition::new(12.0, 24.0).offset(),
+        crate::UiCanvasPosition::new(12.0, 24.0).offset((0.0, 0.0)),
         (12.0, 24.0)
     );
+
+    // Right/bottom anchoring resolves against the canvas size.
+    let right_bottom = crate::UiCanvasPosition::default()
+        .with_right(10.0)
+        .with_bottom(20.0);
+    assert_eq!(
+        right_bottom.offset((300.0, 200.0)),
+        (290.0, 180.0),
+        "right/bottom should offset from the far edges of the canvas"
+    );
+
+    // Gradient commands carry their stops through the canvas component.
+    let gradient_canvas =
+        crate::UiCanvas::new().with_command(crate::UiCanvasCommand::FillLinearGradientRect {
+            x: 0.0,
+            y: 0.0,
+            width: 100.0,
+            height: 100.0,
+            start_x: 0.0,
+            start_y: 0.0,
+            end_x: 100.0,
+            end_y: 0.0,
+            stops: vec![
+                crate::UiGradientStop::new(0.0, crate::xilem::Color::from_rgb8(0, 0, 0)),
+                crate::UiGradientStop::new(1.0, crate::xilem::Color::from_rgb8(255, 255, 255)),
+            ],
+        });
+    assert_eq!(gradient_canvas.commands.len(), 1);
 
     let image = crate::UiImage::from_bgra8(2, 1, vec![0, 0, 255, 255, 0, 255, 0, 128])
         .quality(masonry_core::peniko::ImageQuality::High)
@@ -4015,6 +4073,139 @@ fn ui_button_projects_to_action_button_with_child_widget() {
     };
 
     assert_eq!(short_type, "ActionButtonWithChildWidget");
+}
+
+#[test]
+fn ui_button_disabled_does_not_project_action_button_widget() {
+    let mut app = App::new();
+    app.add_plugins(PicusPlugin);
+
+    let mut window = Window::default();
+    window.resolution.set(800.0, 600.0);
+    app.world_mut().spawn((window, PrimaryWindow));
+
+    let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+    let button = app
+        .world_mut()
+        .spawn((
+            crate::UiButton::new("Disabled").disabled(true),
+            ChildOf(root),
+        ))
+        .id();
+
+    app.update();
+
+    // A disabled button should NOT project an ActionButtonWithChildWidget;
+    // it renders as a plain styled container so it cannot emit click actions.
+    let debug = format!("entity={}", button.to_bits());
+    let runtime = app.world().non_send::<crate::MasonryRuntime>();
+    let root = runtime
+        .primary()
+        .expect("primary window runtime should exist")
+        .render_root
+        .get_layer_root(0);
+    let widget_id = find_widget_id_by_debug_text(root, &debug);
+    assert!(
+        widget_id.is_none(),
+        "disabled UiButton should not project an entity-tagged action button widget"
+    );
+}
+
+#[test]
+fn ui_button_disabled_builder_sets_disabled_field() {
+    let button = crate::UiButton::new("Label").disabled(true);
+    assert!(
+        button.disabled,
+        "disabled(true) should set the disabled field"
+    );
+    let enabled = crate::UiButton::new("Label").disabled(false);
+    assert!(!enabled.disabled);
+    let default = crate::UiButton::new("Label");
+    assert!(!default.disabled, "default UiButton should not be disabled");
+}
+
+#[test]
+fn numeric_up_down_step_action_updates_value() {
+    let mut world = World::new();
+    world.insert_resource(UiEventQueue::default());
+
+    let numeric = world
+        .spawn((crate::UiNumericUpDown::new(0.0, 100.0, 20.0).with_step(5.0),))
+        .id();
+
+    world.resource::<UiEventQueue>().push_typed(
+        numeric,
+        crate::WidgetUiAction::StepNumericUpDown {
+            numeric,
+            delta: 1.0,
+        },
+    );
+    crate::handle_widget_actions(&mut world);
+
+    let state = world
+        .get::<crate::UiNumericUpDown>(numeric)
+        .expect("numeric should exist");
+    assert_eq!(state.value, 25.0);
+
+    let changed = world
+        .resource_mut::<UiEventQueue>()
+        .drain_actions::<crate::UiNumericUpDownChanged>();
+    assert_eq!(changed.len(), 1);
+    assert_eq!(changed[0].action.value, 25.0);
+}
+
+#[test]
+fn numeric_up_down_clamps_to_range() {
+    let mut world = World::new();
+    world.insert_resource(UiEventQueue::default());
+
+    let numeric = world
+        .spawn((crate::UiNumericUpDown::new(0.0, 10.0, 8.0).with_step(5.0),))
+        .id();
+
+    // Step beyond max should clamp.
+    world.resource::<UiEventQueue>().push_typed(
+        numeric,
+        crate::WidgetUiAction::StepNumericUpDown {
+            numeric,
+            delta: 1.0,
+        },
+    );
+    crate::handle_widget_actions(&mut world);
+
+    let state = world
+        .get::<crate::UiNumericUpDown>(numeric)
+        .expect("numeric should exist");
+    assert_eq!(state.value, 10.0, "value should clamp to max");
+}
+
+#[test]
+fn numeric_up_down_formats_value_with_precision_and_suffix() {
+    let n = crate::UiNumericUpDown::new(0.0, 1.0, 0.30)
+        .with_step(0.05)
+        .with_precision(2)
+        .with_suffix(" s");
+    assert_eq!(n.formatted_value(), "0.30 s");
+
+    let integer = crate::UiNumericUpDown::new(0.0, 100.0, 25.0).with_suffix(" px");
+    assert_eq!(integer.formatted_value(), "25 px");
+
+    let prefixed = crate::UiNumericUpDown::new(0.0, 1000.0, 42.0).with_prefix("$");
+    assert_eq!(prefixed.formatted_value(), "$42");
+}
+
+#[test]
+fn data_row_accepts_image_cell_templates() {
+    let row = crate::UiDataRow::new("1", ["text", "more text"])
+        .with_cell_image(0, crate::UiImage::empty().with_alt_text("icon"));
+    assert!(matches!(row.cells[0], crate::UiDataCell::Image(_)));
+    assert!(matches!(row.cells[1], crate::UiDataCell::Text(_)));
+    assert_eq!(
+        row.cells[0].text(),
+        "icon",
+        "image cell text falls back to alt_text"
+    );
+    assert_eq!(row.cells[1].text(), "more text");
 }
 
 #[test]

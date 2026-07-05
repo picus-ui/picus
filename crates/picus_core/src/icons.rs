@@ -79,6 +79,8 @@ pub enum PicusIcon {
     Loader,
     /// Folder (for workspace / cwd display).
     Folder,
+    /// Horizontal minus / dash (for indeterminate checkbox).
+    Minus,
 }
 
 impl PicusIcon {
@@ -127,6 +129,7 @@ impl PicusIcon {
             Self::Globe => lucide_icons::Icon::Globe,
             Self::Loader => lucide_icons::Icon::Loader,
             Self::Folder => lucide_icons::Icon::Folder,
+            Self::Minus => lucide_icons::Icon::Minus,
         }
     }
 

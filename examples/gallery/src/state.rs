@@ -8,7 +8,7 @@
 //! are organized under category headings.
 
 use bevy_ecs::prelude::*;
-use picus::PicusIcon;
+use picus::{PicusIcon, ToastKind};
 
 /// A sidebar category heading that groups related pages.
 #[allow(dead_code)]
@@ -181,7 +181,25 @@ impl GalleryPage {
     }
 }
 
-/// Runtime state: tracks the last user interaction event for the status bar display.
+/// Marker describing what a gallery demo button should do on click.
+///
+/// Attached to showcase buttons that only need to echo a toast, dialog, or
+/// status-bar message. The gallery event dispatcher reads this component when
+/// a `BuiltinUiAction::Clicked` does not match a named `GalleryRuntime` entity.
+#[derive(Component, Debug, Clone)]
+pub enum GalleryButtonAction {
+    /// Spawn a toast notification with the given message, kind, and duration
+    /// in seconds. A duration of `0.0` produces a persistent toast.
+    Toast {
+        message: String,
+        kind: ToastKind,
+        duration: f32,
+    },
+    /// Spawn a modal dialog overlay with the given title and body.
+    Dialog { title: String, body: String },
+    /// Update the gallery status bar with the given message.
+    Status { message: String },
+}
 #[derive(Resource, Debug, Clone)]
 pub struct GalleryState {
     pub last_event: String,

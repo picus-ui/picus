@@ -426,6 +426,20 @@ mod tests {
     }
 
     #[test]
+    fn gallery_demo_buttons_carry_echo_actions() {
+        let mut app = build_gallery_app();
+        app.update();
+
+        let world = app.world_mut();
+        let mut query = world.query::<&state::GalleryButtonAction>();
+        let count = query.iter(world).count();
+        assert!(
+            count >= 15,
+            "gallery should attach GalleryButtonAction markers to at least 15 demo buttons, got {count}"
+        );
+    }
+
+    #[test]
     fn gallery_typography_page_exposes_markdown_sample() {
         let mut app = build_gallery_app();
         app.update();

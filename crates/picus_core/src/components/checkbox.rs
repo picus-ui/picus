@@ -6,10 +6,18 @@ use crate::{
 };
 
 /// Built-in checkbox UI component with ECS-native state.
+///
+/// Supports a tri-state cycle via the optional `indeterminate` flag:
+/// - `checked = false, indeterminate = false` → unchecked (☐)
+/// - `checked = true,  indeterminate = false` → checked (☑)
+/// - `indeterminate = true`                   → indeterminate (▬)
 #[derive(Component, Debug, Clone, Default, PartialEq, Eq)]
 pub struct UiCheckbox {
     pub label: String,
     pub checked: bool,
+    /// When true the checkbox renders in the indeterminate state regardless of
+    /// `checked`. Clicking an indeterminate checkbox transitions to checked.
+    pub indeterminate: bool,
 }
 
 impl UiCheckbox {
@@ -18,7 +26,15 @@ impl UiCheckbox {
         Self {
             label: label.into(),
             checked,
+            indeterminate: false,
         }
+    }
+
+    /// Mark this checkbox as indeterminate (tri-state dash appearance).
+    #[must_use]
+    pub fn indeterminate(mut self, indeterminate: bool) -> Self {
+        self.indeterminate = indeterminate;
+        self
     }
 }
 
@@ -27,6 +43,8 @@ impl UiCheckbox {
 pub struct UiCheckboxChanged {
     pub checkbox: Entity,
     pub checked: bool,
+    /// True when the new state is indeterminate.
+    pub indeterminate: bool,
 }
 
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -56,7 +74,9 @@ impl UiComponentTemplate for UiCheckbox {
         });
 
         if let Some(mut label) = world.get_mut::<UiLabel>(indicator) {
-            label.text = if checkbox.checked {
+            label.text = if checkbox.indeterminate {
+                "▬".to_string()
+            } else if checkbox.checked {
                 "☑".to_string()
             } else {
                 "☐".to_string()

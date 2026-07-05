@@ -26,11 +26,18 @@ pub fn spawn_transitions_page(commands: &mut Commands, parent: Entity) -> Entity
         theme,
         "Changing theme variants exercises style target sync and color transition animation.",
     );
-    commands.spawn_scene(bsn! {
-        template_value(UiButton::new("Hover / press transition"))
-        template_value(class("gallery.accent_button"))
-        ChildOf(theme)
-    });
+    let hover_btn = commands
+        .spawn_scene(bsn! {
+            template_value(UiButton::new("Hover / press transition"))
+            template_value(class("gallery.accent_button"))
+            ChildOf(theme)
+        })
+        .id();
+    commands
+        .entity(hover_btn)
+        .insert(crate::state::GalleryButtonAction::Status {
+            message: "Transitions: hover/press transition clicked.".to_string(),
+        });
     commands.spawn_scene(bsn! {
         template_value(UiSwitch::new(true).with_label("Animated switch target"))
         ChildOf(theme)

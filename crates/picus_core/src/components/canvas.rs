@@ -31,6 +31,28 @@ pub enum UiCanvasPathCommand {
     ClosePath,
 }
 
+/// A color stop in a gradient brush.
+///
+/// `offset` is a normalized position in `[0.0, 1.0]` along the gradient axis.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct UiGradientStop {
+    pub offset: f32,
+    pub color: Color,
+}
+
+impl UiGradientStop {
+    #[must_use]
+    pub const fn new(offset: f32, color: Color) -> Self {
+        Self { offset, color }
+    }
+}
+
+impl From<(f32, Color)> for UiGradientStop {
+    fn from((offset, color): (f32, Color)) -> Self {
+        Self { offset, color }
+    }
+}
+
 /// Primitive drawing command for [`UiCanvas`].
 #[derive(Debug, Clone, PartialEq)]
 pub enum UiCanvasCommand {
@@ -103,6 +125,29 @@ pub enum UiCanvasCommand {
         color: Color,
         stroke_width: f64,
     },
+    /// Fill a rectangle with a linear gradient between two points.
+    FillLinearGradientRect {
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+        /// Start point of the gradient axis in canvas coordinates.
+        start_x: f64,
+        start_y: f64,
+        /// End point of the gradient axis in canvas coordinates.
+        end_x: f64,
+        end_y: f64,
+        stops: Vec<UiGradientStop>,
+    },
+    /// Fill a circle with a radial gradient radiating from a center point.
+    FillRadialGradientCircle {
+        cx: f64,
+        cy: f64,
+        radius: f64,
+        /// Center and radius of the inner circle of the radial gradient.
+        inner_radius: f64,
+        stops: Vec<UiGradientStop>,
+    },
 }
 
 /// Drawable surface backed by Masonry's native canvas widget.
@@ -110,6 +155,12 @@ pub enum UiCanvasCommand {
 pub struct UiCanvas {
     pub alt_text: Option<String>,
     pub commands: Vec<UiCanvasCommand>,
+    /// Logical size `(width, height)` of the canvas surface in pixels.
+    ///
+    /// When non-zero, enables `UiCanvasPosition::right`/`bottom` anchoring so
+    /// children can be positioned relative to the far edges. When zero,
+    /// only `left`/`top` offsets are applied.
+    pub size: (f64, f64),
 }
 
 impl UiCanvas {
@@ -127,6 +178,13 @@ impl UiCanvas {
     #[must_use]
     pub fn with_command(mut self, command: UiCanvasCommand) -> Self {
         self.commands.push(command);
+        self
+    }
+
+    /// Set the logical canvas size used for `right`/`bottom` child anchoring.
+    #[must_use]
+    pub fn with_size(mut self, width: f64, height: f64) -> Self {
+        self.size = (width.max(0.0), height.max(0.0));
         self
     }
 
@@ -183,9 +241,20 @@ impl UiCanvasPosition {
         self
     }
 
+    /// Resolve the `(x, y)` translation for this position.
+    ///
+    /// When `canvas_size` is provided and `left`/`top` are unset, `right`/`bottom`
+    /// anchor the child relative to the far edges of the canvas.
     #[must_use]
-    pub fn offset(self) -> (f64, f64) {
-        (self.left.unwrap_or(0.0), self.top.unwrap_or(0.0))
+    pub fn offset(self, canvas_size: (f64, f64)) -> (f64, f64) {
+        let (canvas_w, canvas_h) = canvas_size;
+        let x = self
+            .left
+            .unwrap_or_else(|| (canvas_w - self.right.unwrap_or(0.0)).max(0.0));
+        let y = self
+            .top
+            .unwrap_or_else(|| (canvas_h - self.bottom.unwrap_or(0.0)).max(0.0));
+        (x, y)
     }
 }
 

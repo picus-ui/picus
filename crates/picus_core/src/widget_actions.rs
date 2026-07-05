@@ -12,11 +12,11 @@ use crate::{
     OverlayComputedPosition, OverlayConfig, OverlayPlacement, OverlayState, ScrollAxis, UiCheckbox,
     UiCheckboxChanged, UiDataTable, UiDataTableSelectionChanged, UiDataTableSortChanged,
     UiListSelectionMode, UiListView, UiListViewSelectionChanged, UiMultilineTextInput,
-    UiMultilineTextInputChanged, UiNavigationSelectionChanged, UiNavigationView, UiOverlayRoot,
-    UiPasswordInput, UiPasswordInputChanged, UiRadioGroup, UiRadioGroupChanged, UiRating,
-    UiRatingChanged, UiScrollView, UiScrollViewChanged, UiSlider, UiSliderChanged, UiSwitch,
-    UiSwitchChanged, UiTabBar, UiTabChanged, UiTextInput, UiTextInputChanged, UiTooltip,
-    UiTreeNode, UiTreeNodeToggled, events::UiEventQueue,
+    UiMultilineTextInputChanged, UiNavigationSelectionChanged, UiNavigationView, UiNumericUpDown,
+    UiNumericUpDownChanged, UiOverlayRoot, UiPasswordInput, UiPasswordInputChanged, UiRadioGroup,
+    UiRadioGroupChanged, UiRating, UiRatingChanged, UiScrollView, UiScrollViewChanged, UiSlider,
+    UiSliderChanged, UiSwitch, UiSwitchChanged, UiTabBar, UiTabChanged, UiTextInput,
+    UiTextInputChanged, UiTooltip, UiTreeNode, UiTreeNodeToggled, events::UiEventQueue,
 };
 
 /// Internal action enum for non-overlay widget interactions.
@@ -60,6 +60,8 @@ pub enum WidgetUiAction {
     SortDataTableColumn { table: Entity, column: usize },
     /// Change a rating value.
     RatingChanged { rating: Entity, value: f64 },
+    /// Step a numeric up-down value by `delta` multiples of its step.
+    StepNumericUpDown { numeric: Entity, delta: f64 },
     /// Drag an ECS scroll-thumb by a physical pixel delta.
     DragScrollThumb {
         thumb: Entity,
@@ -377,16 +379,29 @@ pub fn handle_widget_actions(world: &mut World) {
 
                 let changed =
                     if let Some(mut checkbox_state) = world.get_mut::<UiCheckbox>(checkbox) {
-                        checkbox_state.checked = !checkbox_state.checked;
-                        Some(checkbox_state.checked)
+                        // Tri-state toggle: indeterminate → checked → unchecked → checked.
+                        // If currently indeterminate, clear indeterminate and set checked.
+                        if checkbox_state.indeterminate {
+                            checkbox_state.indeterminate = false;
+                            checkbox_state.checked = true;
+                            Some((true, false))
+                        } else {
+                            checkbox_state.checked = !checkbox_state.checked;
+                            Some((checkbox_state.checked, false))
+                        }
                     } else {
                         None
                     };
 
-                if let Some(checked) = changed {
-                    world
-                        .resource::<UiEventQueue>()
-                        .push_typed(checkbox, UiCheckboxChanged { checkbox, checked });
+                if let Some((checked, indeterminate)) = changed {
+                    world.resource::<UiEventQueue>().push_typed(
+                        checkbox,
+                        UiCheckboxChanged {
+                            checkbox,
+                            checked,
+                            indeterminate,
+                        },
+                    );
                 }
             }
 
@@ -397,10 +412,11 @@ pub fn handle_widget_actions(world: &mut World) {
 
                 let changed =
                     if let Some(mut checkbox_state) = world.get_mut::<UiCheckbox>(checkbox) {
-                        if checkbox_state.checked == checked {
+                        if checkbox_state.checked == checked && !checkbox_state.indeterminate {
                             None
                         } else {
                             checkbox_state.checked = checked;
+                            checkbox_state.indeterminate = false;
                             Some(checked)
                         }
                     } else {
@@ -408,9 +424,14 @@ pub fn handle_widget_actions(world: &mut World) {
                     };
 
                 if let Some(checked) = changed {
-                    world
-                        .resource::<UiEventQueue>()
-                        .push_typed(checkbox, UiCheckboxChanged { checkbox, checked });
+                    world.resource::<UiEventQueue>().push_typed(
+                        checkbox,
+                        UiCheckboxChanged {
+                            checkbox,
+                            checked,
+                            indeterminate: false,
+                        },
+                    );
                 }
             }
 
@@ -451,6 +472,30 @@ pub fn handle_widget_actions(world: &mut World) {
                 world
                     .resource::<UiEventQueue>()
                     .push_typed(rating, UiRatingChanged { rating, value });
+            }
+
+            WidgetUiAction::StepNumericUpDown { numeric, delta } => {
+                if world.get_entity(numeric).is_err() {
+                    continue;
+                }
+
+                if let Some(mut numeric_state) = world.get_mut::<UiNumericUpDown>(numeric)
+                    && !numeric_state.disabled
+                {
+                    let step = numeric_state.step.max(f64::EPSILON);
+                    let next = (numeric_state.value + delta * step)
+                        .clamp(numeric_state.min, numeric_state.max);
+                    if (next - numeric_state.value).abs() > f64::EPSILON {
+                        numeric_state.value = next;
+                        world.resource::<UiEventQueue>().push_typed(
+                            numeric,
+                            UiNumericUpDownChanged {
+                                numeric,
+                                value: next,
+                            },
+                        );
+                    }
+                }
             }
 
             WidgetUiAction::SetSliderValue { slider, value } => {

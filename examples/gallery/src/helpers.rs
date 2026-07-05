@@ -6,11 +6,13 @@
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 use bevy_math::Vec2;
 use picus::{
-    StyleClass, UiAvatar, UiCanvas, UiCanvasCommand, UiCanvasPathCommand, UiDivider, UiFlexColumn,
-    UiGrid, UiImage, UiLabel, avatar_sizes,
+    StyleClass, ToastKind, UiAvatar, UiButton, UiCanvas, UiCanvasCommand, UiCanvasPathCommand,
+    UiDivider, UiFlexColumn, UiGrid, UiImage, UiLabel, avatar_sizes,
     scene::{CommandsSceneExt, bsn, template_value},
     xilem::Color,
 };
+
+use crate::state::GalleryButtonAction;
 
 /// Create a single class name for an entity.
 pub fn class(name: &str) -> StyleClass {
@@ -200,3 +202,66 @@ pub fn brand_avatar(name: &str) -> UiAvatar {
 /// Fluent UI-style page viewport and content dimensions.
 pub const PAGE_VIEWPORT: Vec2 = Vec2::new(1040.0, 560.0);
 pub const PAGE_CONTENT: Vec2 = Vec2::new(1040.0, 5200.0);
+
+/// Spawn a button that spawns a toast notification on click.
+pub fn toast_button(
+    commands: &mut Commands,
+    parent: Entity,
+    label: &str,
+    message: impl Into<String>,
+    kind: ToastKind,
+    duration: f32,
+) -> Entity {
+    let id = commands
+        .spawn_scene(bsn! {
+            template_value(UiButton::new(label))
+            ChildOf(parent)
+        })
+        .id();
+    commands.entity(id).insert(GalleryButtonAction::Toast {
+        message: message.into(),
+        kind,
+        duration,
+    });
+    id
+}
+
+/// Spawn a button that opens a modal dialog on click.
+pub fn dialog_button(
+    commands: &mut Commands,
+    parent: Entity,
+    label: &str,
+    title: impl Into<String>,
+    body: impl Into<String>,
+) -> Entity {
+    let id = commands
+        .spawn_scene(bsn! {
+            template_value(UiButton::new(label))
+            ChildOf(parent)
+        })
+        .id();
+    commands.entity(id).insert(GalleryButtonAction::Dialog {
+        title: title.into(),
+        body: body.into(),
+    });
+    id
+}
+
+/// Spawn a button that updates the gallery status bar on click.
+pub fn status_button(
+    commands: &mut Commands,
+    parent: Entity,
+    label: &str,
+    message: impl Into<String>,
+) -> Entity {
+    let id = commands
+        .spawn_scene(bsn! {
+            template_value(UiButton::new(label))
+            ChildOf(parent)
+        })
+        .id();
+    commands.entity(id).insert(GalleryButtonAction::Status {
+        message: message.into(),
+    });
+    id
+}

@@ -6,8 +6,8 @@ use crate::{
     ecs::{
         ButtonAppearance, ButtonIconPosition, ButtonShape, ButtonSize, LocalizeText,
         TypographyPreset, UiAvatar, UiBadge, UiButton, UiCheckbox, UiImage, UiLabel, UiLink,
-        UiMultilineTextInput, UiPasswordInput, UiProgressBar, UiRating, UiSlider, UiSwitch, UiText,
-        UiTextInput,
+        UiMultilineTextInput, UiNumericUpDown, UiPasswordInput, UiProgressBar, UiRating, UiSlider,
+        UiSwitch, UiText, UiTextInput,
     },
     i18n::resolve_localized_text,
     icons::{LUCIDE_FONT_FAMILY, PicusIcon},
@@ -117,11 +117,20 @@ pub(crate) fn project_button(button_component: &UiButton, ctx: ProjectionCtx<'_>
     };
 
     // Resolve style including the variant classes so theme selectors match.
-    let mut style = resolve_style_for_entity_classes(
-        ctx.world,
-        ctx.entity,
-        [appearance_class, size_class, shape_class],
-    );
+    // When disabled, also include `button.disabled` for dimmed/non-interactive styling.
+    let mut style = if button_component.disabled {
+        resolve_style_for_entity_classes(
+            ctx.world,
+            ctx.entity,
+            [appearance_class, size_class, shape_class, "button.disabled"],
+        )
+    } else {
+        resolve_style_for_entity_classes(
+            ctx.world,
+            ctx.entity,
+            [appearance_class, size_class, shape_class],
+        )
+    };
     let button_label_text = resolve_localized_text(ctx.world, ctx.entity, &button_component.label);
     if let Some(stack) = localized_font_stack(ctx.world, ctx.entity) {
         style.font_family = Some(stack);
@@ -135,6 +144,7 @@ pub(crate) fn project_button(button_component: &UiButton, ctx: ProjectionCtx<'_>
         localization_key = ?localization_key,
         fallback_text = %button_component.label,
         resolved_text = %button_label_text,
+        disabled = button_component.disabled,
         "projected UiButton label"
     );
 
@@ -164,10 +174,16 @@ pub(crate) fn project_button(button_component: &UiButton, ctx: ProjectionCtx<'_>
         label_child
     };
 
-    Arc::new(apply_direct_widget_style(
-        button_with_child_view(ctx.entity, BuiltinUiAction::Clicked, content),
-        &style,
-    ))
+    if button_component.disabled {
+        // Disabled buttons render as a styled non-interactive container so they
+        // never emit click actions, accept focus, or respond to hover/press.
+        Arc::new(apply_direct_widget_style(content, &style))
+    } else {
+        Arc::new(apply_direct_widget_style(
+            button_with_child_view(ctx.entity, BuiltinUiAction::Clicked, content),
+            &style,
+        ))
+    }
 }
 
 pub(crate) fn project_badge(badge_component: &UiBadge, ctx: ProjectionCtx<'_>) -> UiView {
@@ -195,7 +211,16 @@ pub(crate) fn project_checkbox(checkbox: &UiCheckbox, ctx: ProjectionCtx<'_>) ->
         style.font_family = Some(stack);
     }
 
-    let box_style = if checkbox.checked {
+    let box_style = if checkbox.indeterminate {
+        resolve_style_for_entity_classes(
+            ctx.world,
+            ctx.entity,
+            [
+                "template.checkbox.box",
+                "template.checkbox.box.indeterminate",
+            ],
+        )
+    } else if checkbox.checked {
         resolve_style_for_entity_classes(
             ctx.world,
             ctx.entity,
@@ -216,7 +241,12 @@ pub(crate) fn project_checkbox(checkbox: &UiCheckbox, ctx: ProjectionCtx<'_>) ->
         &box_style,
     ));
     let mut indicator_layers = vec![box_layer];
-    if checkbox.checked
+    if checkbox.indeterminate
+        && let Some(mark_color) = mark_color
+    {
+        // Indeterminate renders a horizontal dash instead of a check mark.
+        indicator_layers.push(vector_icon(VectorIcon::Minus, mark_size, mark_color));
+    } else if checkbox.checked
         && let Some(mark_color) = mark_color
     {
         indicator_layers.push(vector_icon(VectorIcon::Check, mark_size, mark_color));
@@ -255,6 +285,56 @@ pub(crate) fn project_slider(slider: &UiSlider, ctx: ProjectionCtx<'_>) -> UiVie
         ),
         &style,
     ))
+}
+
+pub(crate) fn project_numeric_up_down(numeric: &UiNumericUpDown, ctx: ProjectionCtx<'_>) -> UiView {
+    let mut style = resolve_style(ctx.world, ctx.entity);
+    if let Some(stack) = localized_font_stack(ctx.world, ctx.entity) {
+        style.font_family = Some(stack);
+    }
+
+    let dec_style =
+        resolve_style_for_entity_classes(ctx.world, ctx.entity, ["numericUpDown.decrease"]);
+    let inc_style =
+        resolve_style_for_entity_classes(ctx.world, ctx.entity, ["numericUpDown.increase"]);
+    let value_style =
+        resolve_style_for_entity_classes(ctx.world, ctx.entity, ["numericUpDown.value"]);
+
+    let value_text = numeric.formatted_value();
+    let value_label = apply_label_style(label(value_text), &value_style);
+
+    let dec_btn: UiView = Arc::new(apply_direct_widget_style(
+        button_view(
+            ctx.entity,
+            WidgetUiAction::StepNumericUpDown {
+                numeric: ctx.entity,
+                delta: -1.0,
+            },
+            "−",
+        ),
+        &dec_style,
+    ));
+    let inc_btn: UiView = Arc::new(apply_direct_widget_style(
+        button_view(
+            ctx.entity,
+            WidgetUiAction::StepNumericUpDown {
+                numeric: ctx.entity,
+                delta: 1.0,
+            },
+            "+",
+        ),
+        &inc_style,
+    ));
+
+    let content = flex_row(vec![
+        dec_btn.into_any_flex(),
+        Arc::new(apply_widget_style(value_label, &value_style)).into_any_flex(),
+        inc_btn.into_any_flex(),
+    ])
+    .cross_axis_alignment(CrossAxisAlignment::Center)
+    .gap(Length::px(style.layout.gap));
+
+    Arc::new(apply_direct_widget_style(content, &style))
 }
 
 pub(crate) fn project_switch(switch_component: &UiSwitch, ctx: ProjectionCtx<'_>) -> UiView {

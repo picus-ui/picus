@@ -400,6 +400,19 @@
       ),
     ),
 
+    // ===== Button disabled state =====
+    // Dimmed, non-interactive appearance applied when UiButton.disabled is true.
+    (
+      selector: And([Type("UiButton"), Class("button.disabled")]),
+      setter: (
+        colors: (
+          bg: Var("surface-disabled"),
+          border: Var("border-disabled"),
+          text: Var("text-disabled"),
+        ),
+      ),
+    ),
+
     (
       selector: Type("UiBadge"),
       setter: (
@@ -2002,6 +2015,21 @@
     ),
     (
       selector: Class("template.checkbox.box.checked"),
+      setter: (
+        layout: (
+          padding: 0.0,
+          corner_radius: 3.0,
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-accent"),
+          border: Var("surface-accent"),
+        ),
+      ),
+    ),
+    // Indeterminate checkbox box uses the same accent fill as checked.
+    (
+      selector: Class("template.checkbox.box.indeterminate"),
       setter: (
         layout: (
           padding: 0.0,

@@ -3,10 +3,10 @@
 //! Corresponds to Fluent UI's localization pattern — switching display language
 //! and verifying CJK font fallback behavior through registered i18n bundles.
 
-use crate::helpers::{card, class, grid, note};
+use crate::helpers::{card, class, grid, note, status_button};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 use picus::{
-    LocalizeText, UiButton, UiComboBox, UiComboOption, UiFlexColumn, UiFlexRow, UiLabel,
+    LocalizeText, UiComboBox, UiComboOption, UiFlexColumn, UiFlexRow, UiLabel,
     UiMultilineTextInput,
     scene::{CommandsSceneExt, bsn, template_value},
 };
@@ -107,10 +107,12 @@ pub fn spawn_i18n_page(commands: &mut Commands, parent: Entity) -> Entity {
         template_value(LocalizeText::new("gallery-locale-action"))
         ChildOf(key_demo)
     });
-    commands.spawn_scene(bsn! {
-        template_value(UiButton::new("Demo Button (static)"))
-        ChildOf(key_demo)
-    });
+    status_button(
+        commands,
+        key_demo,
+        "Demo Button (static)",
+        "I18n: Demo Button (static) clicked.",
+    );
 
     locale_combo
 }

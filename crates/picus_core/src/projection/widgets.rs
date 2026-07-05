@@ -9,14 +9,15 @@ use bevy_ecs::{
 };
 use masonry_core::imaging::Painter;
 use masonry_core::kurbo::{Axis, BezPath, Circle, Line, Point, Rect, Stroke};
+use masonry_core::peniko::{self, Gradient};
 use masonry_core::{
     layout::{Dim, Length},
     properties::Dimensions,
 };
 use picus_view::view::{
     CrossAxisAlignment, FlexExt as _, MainAxisAlignment, canvas, divider_h, divider_v, flex_col,
-    flex_item, flex_row, label, radio_group as xilem_radio_group, sized_box, spinner, split,
-    transformed, zstack,
+    flex_item, flex_row, image as xilem_image, label, radio_group as xilem_radio_group, sized_box,
+    spinner, split, transformed, zstack,
 };
 
 use crate::{
@@ -26,10 +27,10 @@ use crate::{
         PartScrollViewport, ScrollAxis, SplitDirection, ToastKind, UiBreadcrumbItem, UiCanvas,
         UiCanvasCommand, UiCanvasPathCommand, UiCanvasPosition, UiColorPicker, UiColorPickerPanel,
         UiContextMenu, UiDataTable, UiDatePicker, UiDatePickerPanel, UiDivider, UiExpander,
-        UiGroupBox, UiListSelectionMode, UiListView, UiMenuBar, UiMenuBarItem, UiMenuItemPanel,
-        UiMessageBar, UiNavigationView, UiRadioGroup, UiScrollView, UiSearch, UiSortDirection,
-        UiSpinner, UiSplitPane, UiTabBar, UiTable, UiTimePicker, UiTimePickerPanel, UiToast,
-        UiTooltip, UiTreeNode,
+        UiGradientStop, UiGroupBox, UiListSelectionMode, UiListView, UiMenuBar, UiMenuBarItem,
+        UiMenuItemPanel, UiMessageBar, UiNavigationView, UiRadioGroup, UiScrollView, UiSearch,
+        UiSortDirection, UiSpinner, UiSplitPane, UiTabBar, UiTable, UiTimePicker,
+        UiTimePickerPanel, UiToast, UiTooltip, UiTreeNode,
     },
     icons::LUCIDE_FONT_FAMILY,
     overlay::OverlayUiAction,
@@ -429,6 +430,38 @@ fn canvas_path(commands: &[UiCanvasPathCommand]) -> BezPath {
     path
 }
 
+/// Build a peniko linear gradient from picus gradient stops.
+fn linear_gradient(start: (f64, f64), end: (f64, f64), stops: &[UiGradientStop]) -> Gradient {
+    let mut gradient = Gradient::new_linear(start, end);
+    gradient.stops = peniko::ColorStops::from(
+        stops
+            .iter()
+            .map(|stop| peniko::ColorStop::from((stop.offset, stop.color)))
+            .collect::<Vec<_>>()
+            .as_slice(),
+    );
+    gradient
+}
+
+/// Build a peniko radial gradient from picus gradient stops.
+fn radial_gradient(
+    center: (f64, f64),
+    inner_radius: f32,
+    outer_radius: f32,
+    stops: &[UiGradientStop],
+) -> Gradient {
+    let mut gradient = Gradient::new_radial(center, outer_radius);
+    gradient.stops = peniko::ColorStops::from(
+        stops
+            .iter()
+            .map(|stop| peniko::ColorStop::from((stop.offset, stop.color)))
+            .collect::<Vec<_>>()
+            .as_slice(),
+    );
+    let _ = inner_radius; // inner radius uses two-point radial; single-radius uses center
+    gradient
+}
+
 pub(crate) fn project_canvas(canvas_component: &UiCanvas, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let commands = canvas_component.commands.clone();
@@ -567,6 +600,40 @@ pub(crate) fn project_canvas(canvas_component: &UiCanvas, ctx: ProjectionCtx<'_>
                             .stroke(canvas_path(commands), &Stroke::new(*stroke_width), *color)
                             .draw();
                     }
+                    UiCanvasCommand::FillLinearGradientRect {
+                        x,
+                        y,
+                        width,
+                        height,
+                        start_x,
+                        start_y,
+                        end_x,
+                        end_y,
+                        stops,
+                    } => {
+                        let gradient =
+                            linear_gradient((*start_x, *start_y), (*end_x, *end_y), stops);
+                        painter
+                            .fill(Rect::new(*x, *y, *x + *width, *y + *height), &gradient)
+                            .draw();
+                    }
+                    UiCanvasCommand::FillRadialGradientCircle {
+                        cx,
+                        cy,
+                        radius,
+                        inner_radius,
+                        stops,
+                    } => {
+                        let gradient = radial_gradient(
+                            (*cx, *cy),
+                            *inner_radius as f32,
+                            *radius as f32,
+                            stops,
+                        );
+                        painter
+                            .fill(Circle::new((*cx, *cy), *radius), &gradient)
+                            .draw();
+                    }
                 }
             }
         },
@@ -582,7 +649,7 @@ pub(crate) fn project_canvas(canvas_component: &UiCanvas, ctx: ProjectionCtx<'_>
             .get::<UiCanvasPosition>(entity)
             .copied()
             .unwrap_or_default()
-            .offset();
+            .offset(canvas_component.size);
         layers.push(Arc::new(transformed(child).translate(offset)));
     }
 
@@ -1037,11 +1104,34 @@ pub(crate) fn project_data_table(table: &UiDataTable, ctx: ProjectionCtx<'_>) ->
             };
             let cells = (0..column_count)
                 .map(|column_index| {
-                    let text = row.cells.get(column_index).cloned().unwrap_or_default();
-                    let cell = Arc::new(apply_widget_style(
-                        sized_box(apply_label_style(label(text), &cell_style)).width(Dim::Stretch),
-                        &cell_style,
-                    ));
+                    let cell_content = row.cells.get(column_index).cloned().unwrap_or_default();
+                    let cell: UiView = match cell_content {
+                        crate::ecs::UiDataCell::Text(text) => Arc::new(apply_widget_style(
+                            sized_box(apply_label_style(label(text), &cell_style))
+                                .width(Dim::Stretch),
+                            &cell_style,
+                        )),
+                        crate::ecs::UiDataCell::Image(image) => {
+                            if let Some(brush) = image.image_brush() {
+                                let mut image_view =
+                                    xilem_image(brush).decorative(image.decorative);
+                                if let Some(alt) = &image.alt_text {
+                                    image_view = image_view.alt_text(alt.clone());
+                                }
+                                Arc::new(apply_widget_style(
+                                    sized_box(image_view.fit(image.fit)).width(Dim::Stretch),
+                                    &cell_style,
+                                ))
+                            } else {
+                                let fallback = image.alt_text.clone().unwrap_or_default();
+                                Arc::new(apply_widget_style(
+                                    sized_box(apply_label_style(label(fallback), &cell_style))
+                                        .width(Dim::Stretch),
+                                    &cell_style,
+                                ))
+                            }
+                        }
+                    };
                     if let Some(width) = table
                         .columns
                         .get(column_index)

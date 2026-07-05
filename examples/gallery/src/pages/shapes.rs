@@ -5,8 +5,9 @@
 use crate::helpers::{card, class, grid, placeholder, sample_canvas};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 use picus::{
-    UiLabel,
+    UiCanvas, UiCanvasCommand, UiGradientStop, UiLabel,
     scene::{CommandsSceneExt, bsn, template_value},
+    xilem::Color,
 };
 
 /// Canvas shapes and brush/swatch color component examples.
@@ -45,12 +46,51 @@ pub fn spawn_shapes_page(commands: &mut Commands, parent: Entity) -> Entity {
         ChildOf(fills)
     });
 
-    placeholder(
-        commands,
-        g,
-        "Gradient / transform brushes",
-        "UiCanvasCommand supports solid-color fills and strokes; gradient brush stops are not exposed.",
-    );
+    // Linear and radial gradient brush demos.
+    let gradients = card(commands, g, "Gradient brushes");
+    commands.spawn_scene(bsn! {
+        template_value(
+            UiCanvas::new()
+                .with_alt_text("Linear gradient sample")
+                .with_size(320.0, 120.0)
+                .with_command(UiCanvasCommand::FillLinearGradientRect {
+                    x: 8.0,
+                    y: 8.0,
+                    width: 304.0,
+                    height: 104.0,
+                    start_x: 8.0,
+                    start_y: 8.0,
+                    end_x: 312.0,
+                    end_y: 8.0,
+                    stops: vec![
+                        UiGradientStop::new(0.0, Color::from_rgb8(0x25, 0x63, 0xEB)),
+                        UiGradientStop::new(0.5, Color::from_rgb8(0x7C, 0x3A, 0xED)),
+                        UiGradientStop::new(1.0, Color::from_rgb8(0xDB, 0x27, 0x77)),
+                    ],
+                })
+        )
+        template_value(class("gallery.canvas"))
+        ChildOf(gradients)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(
+            UiCanvas::new()
+                .with_alt_text("Radial gradient sample")
+                .with_size(320.0, 120.0)
+                .with_command(UiCanvasCommand::FillRadialGradientCircle {
+                    cx: 160.0,
+                    cy: 60.0,
+                    radius: 52.0,
+                    inner_radius: 0.0,
+                    stops: vec![
+                        UiGradientStop::new(0.0, Color::from_rgb8(0xF9, 0x73, 0x16)),
+                        UiGradientStop::new(1.0, Color::from_rgb8(0x1E, 0x29, 0x3B)),
+                    ],
+                })
+        )
+        template_value(class("gallery.canvas"))
+        ChildOf(gradients)
+    });
 
     placeholder(
         commands,

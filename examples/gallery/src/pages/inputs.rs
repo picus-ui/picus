@@ -1,8 +1,8 @@
 use crate::helpers::{card, grid, placeholder};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 use picus::{
-    HasTooltip, UiButton, UiComboBox, UiComboOption, UiMultilineTextInput, UiPasswordInput,
-    UiSlider, UiTextInput,
+    HasTooltip, UiButton, UiComboBox, UiComboOption, UiContextMenuItem, UiContextMenuTrigger,
+    UiMultilineTextInput, UiNumericUpDown, UiPasswordInput, UiSlider, UiTextInput,
     scene::{CommandsSceneExt, bsn, template_value},
 };
 
@@ -65,12 +65,23 @@ pub fn spawn_inputs_page(commands: &mut Commands, parent: Entity) -> Entity {
         template_value(UiSlider::new(0.0, 100.0, 42.5).with_step(0.5))
         ChildOf(combo)
     });
-    placeholder(
-        commands,
-        combo,
-        "NumericUpDown",
-        "Picus has UiSlider but no spinner/text hybrid numeric-up-down control yet.",
-    );
+    commands.spawn_scene(bsn! {
+        template_value(
+            UiNumericUpDown::new(0.0, 100.0, 25.0)
+                .with_step(5.0)
+                .with_suffix(" px")
+        )
+        ChildOf(combo)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(
+            UiNumericUpDown::new(0.0, 1.0, 0.30)
+                .with_step(0.05)
+                .with_precision(2)
+                .with_suffix(" s")
+        )
+        ChildOf(combo)
+    });
 
     let tooltip = card(commands, g, "ToolTip / Context");
     commands.spawn_scene(bsn! {
@@ -78,12 +89,20 @@ pub fn spawn_inputs_page(commands: &mut Commands, parent: Entity) -> Entity {
         template_value(HasTooltip::new("Tooltip overlay anchored to this button."))
         ChildOf(tooltip)
     });
-    placeholder(
-        commands,
-        tooltip,
-        "Context menu",
-        "Picus has menu-bar overlays, but no right-click ContextMenu component or key gesture model yet.",
-    );
+    // Right-click on the button below to open a context menu.
+    let ctx_btn = commands
+        .spawn_scene(bsn! {
+            template_value(UiButton::new("Right-click for context menu"))
+            ChildOf(tooltip)
+        })
+        .id();
+    commands.entity(ctx_btn).insert(UiContextMenuTrigger::new([
+        UiContextMenuItem::new("Cut"),
+        UiContextMenuItem::new("Copy"),
+        UiContextMenuItem::new("Paste"),
+        UiContextMenuItem::new("Separator").with_separator(),
+        UiContextMenuItem::new("Select All"),
+    ]));
 
     let drag_drop = card(commands, g, "Drag and Drop");
     placeholder(

@@ -1,4 +1,4 @@
-use crate::helpers::{card, grid, note, placeholder};
+use crate::helpers::{card, grid, note};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 use picus::{
     UiButton, UiDataColumn, UiDataRow, UiDataTable,
@@ -36,18 +36,30 @@ pub fn spawn_grid_view_page(commands: &mut Commands, parent: Entity) -> Entity {
         ChildOf(data)
     });
 
-    let visual = card(commands, g, "Template Columns");
+    let visual = card(commands, g, "Cell templates / images");
     note(
         commands,
         visual,
-        "String-backed selectable rows, sortable headers, widths, selected row, and stripes are supported.",
+        "UiDataCell::Image renders an inline image inside a data table cell.",
     );
-    placeholder(
-        commands,
-        visual,
-        "Cell templates / images",
-        "UiDataTable currently stores text cells, so per-cell templates and embedded images are not public yet.",
-    );
+    commands.spawn_scene(bsn! {
+        template_value(
+            UiDataTable::new([
+                UiDataColumn::new("icon", "Icon").width(64.0),
+                UiDataColumn::new("name", "Name"),
+                UiDataColumn::new("status", "Status"),
+            ])
+            .with_row(
+                UiDataRow::new("1", ["", "Project Alpha", "Active"])
+                    .with_cell_image(0, crate::helpers::generated_image()),
+            )
+            .with_row(
+                UiDataRow::new("2", ["", "Project Beta", "Archived"])
+                    .with_cell_image(0, crate::helpers::generated_image()),
+            )
+        )
+        ChildOf(visual)
+    });
 
     commands
         .spawn_scene(bsn! {

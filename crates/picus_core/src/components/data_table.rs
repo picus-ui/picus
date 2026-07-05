@@ -1,6 +1,6 @@
 use bevy_ecs::{entity::Entity, prelude::*};
 
-use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
+use crate::{ProjectionCtx, UiImage, UiView, components::UiComponentTemplate};
 
 use super::UiListSelectionMode;
 
@@ -33,6 +33,51 @@ impl UiDataTableSort {
     #[must_use]
     pub const fn new(column: usize, direction: UiSortDirection) -> Self {
         Self { column, direction }
+    }
+}
+
+/// Cell content for a [`UiDataTable`] row.
+///
+/// `Text` cells render as styled labels. `Image` cells render an inline image,
+/// enabling per-cell templates without changing the row constructor contract.
+#[derive(Debug, Clone, PartialEq)]
+pub enum UiDataCell {
+    Text(String),
+    Image(UiImage),
+}
+
+impl Default for UiDataCell {
+    fn default() -> Self {
+        Self::Text(String::new())
+    }
+}
+
+impl From<String> for UiDataCell {
+    fn from(value: String) -> Self {
+        Self::Text(value)
+    }
+}
+
+impl From<&str> for UiDataCell {
+    fn from(value: &str) -> Self {
+        Self::Text(value.to_string())
+    }
+}
+
+impl From<UiImage> for UiDataCell {
+    fn from(image: UiImage) -> Self {
+        Self::Image(image)
+    }
+}
+
+impl UiDataCell {
+    /// The cell's text representation, used for sorting and fallback display.
+    #[must_use]
+    pub fn text(&self) -> &str {
+        match self {
+            Self::Text(text) => text,
+            Self::Image(image) => image.alt_text.as_deref().unwrap_or(""),
+        }
     }
 }
 
@@ -70,19 +115,31 @@ impl UiDataColumn {
 }
 
 /// Data row for [`UiDataTable`].
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct UiDataRow {
     pub id: String,
-    pub cells: Vec<String>,
+    pub cells: Vec<UiDataCell>,
 }
 
 impl UiDataRow {
     #[must_use]
-    pub fn new(id: impl Into<String>, cells: impl IntoIterator<Item = impl Into<String>>) -> Self {
+    pub fn new(
+        id: impl Into<String>,
+        cells: impl IntoIterator<Item = impl Into<UiDataCell>>,
+    ) -> Self {
         Self {
             id: id.into(),
             cells: cells.into_iter().map(Into::into).collect(),
         }
+    }
+
+    /// Replace a single cell with an image template.
+    #[must_use]
+    pub fn with_cell_image(mut self, column: usize, image: UiImage) -> Self {
+        if column < self.cells.len() {
+            self.cells[column] = UiDataCell::Image(image);
+        }
+        self
     }
 }
 
@@ -145,7 +202,7 @@ impl UiDataTable {
     pub fn with_cells(
         mut self,
         id: impl Into<String>,
-        cells: impl IntoIterator<Item = impl Into<String>>,
+        cells: impl IntoIterator<Item = impl Into<UiDataCell>>,
     ) -> Self {
         self.rows.push(UiDataRow::new(id, cells));
         self
@@ -239,12 +296,12 @@ impl UiDataTable {
             let lhs = self.rows[*left]
                 .cells
                 .get(sort.column)
-                .map(String::as_str)
+                .map(UiDataCell::text)
                 .unwrap_or_default();
             let rhs = self.rows[*right]
                 .cells
                 .get(sort.column)
-                .map(String::as_str)
+                .map(UiDataCell::text)
                 .unwrap_or_default();
             match sort.direction {
                 UiSortDirection::Ascending => lhs.cmp(rhs),

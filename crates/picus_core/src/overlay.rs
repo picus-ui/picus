@@ -268,6 +268,40 @@ pub fn spawn_popover_in_overlay_root<B: Bundle>(
     )
 }
 
+/// Spawn an overlay at an explicit pixel `(x, y)` position relative to the
+/// window's top-left corner, bypassing anchor-based placement.
+///
+/// This is the manual-positioning entry point for floating panels that are not
+/// anchored to an existing widget (e.g. a palette opened at a fixed location).
+pub fn spawn_manual_overlay_at<B: Bundle>(world: &mut World, bundle: B, x: f64, y: f64) -> Entity {
+    let overlay_root = ensure_overlay_root_entity(world);
+    let entity = world
+        .spawn((
+            bundle,
+            ChildOf(overlay_root),
+            OverlayState {
+                is_modal: false,
+                anchor: None,
+            },
+            OverlayConfig {
+                placement: OverlayPlacement::TopStart,
+                anchor: None,
+                auto_flip: false,
+            },
+            OverlayComputedPosition {
+                x,
+                y,
+                width: 0.0,
+                height: 0.0,
+                placement: OverlayPlacement::TopStart,
+                is_positioned: true,
+            },
+        ))
+        .id();
+    push_overlay_to_stack(world, entity);
+    entity
+}
+
 fn collect_dropdowns_for_combo(world: &mut World, combo: Entity) -> Vec<Entity> {
     let mut query = world.query::<(Entity, &AnchoredTo, &UiDropdownMenu)>();
     query

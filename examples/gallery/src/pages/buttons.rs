@@ -1,4 +1,5 @@
-use crate::helpers::{card, class, grid, note, placeholder};
+use crate::helpers::{card, class, grid, note, placeholder, status_button};
+use crate::state::GalleryButtonAction;
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 use picus::{
     UiButton, UiCheckbox, UiProgressBar, UiSlider, UiSwitch,
@@ -12,24 +13,36 @@ pub fn spawn_buttons_page(commands: &mut Commands, parent: Entity) -> Entity {
     let g = grid(commands, parent, 3);
 
     let buttons = card(commands, g, "Buttons");
-    commands.spawn_scene(bsn! {
-        template_value(UiButton::new("Default"))
-        ChildOf(buttons)
+    status_button(commands, buttons, "Default", "Buttons: Default clicked.");
+    let accent = commands
+        .spawn_scene(bsn! {
+            template_value(UiButton::new("Accent"))
+            template_value(class("gallery.accent_button"))
+            ChildOf(buttons)
+        })
+        .id();
+    commands.entity(accent).insert(GalleryButtonAction::Status {
+        message: "Buttons: Accent clicked.".to_string(),
     });
-    commands.spawn_scene(bsn! {
-        template_value(UiButton::new("Accent"))
-        template_value(class("gallery.accent_button"))
-        ChildOf(buttons)
+    let flat = commands
+        .spawn_scene(bsn! {
+            template_value(UiButton::new("Flat"))
+            template_value(class("gallery.flat_button"))
+            ChildOf(buttons)
+        })
+        .id();
+    commands.entity(flat).insert(GalleryButtonAction::Status {
+        message: "Buttons: Flat clicked.".to_string(),
     });
-    commands.spawn_scene(bsn! {
-        template_value(UiButton::new("Flat"))
-        template_value(class("gallery.flat_button"))
-        ChildOf(buttons)
-    });
-    commands.spawn_scene(bsn! {
-        template_value(UiButton::new("Danger"))
-        template_value(class("gallery.danger_button"))
-        ChildOf(buttons)
+    let danger = commands
+        .spawn_scene(bsn! {
+            template_value(UiButton::new("Danger"))
+            template_value(class("gallery.danger_button"))
+            ChildOf(buttons)
+        })
+        .id();
+    commands.entity(danger).insert(GalleryButtonAction::Status {
+        message: "Buttons: Danger clicked.".to_string(),
     });
     let open_dialog_btn = commands
         .spawn_scene(bsn! {
@@ -85,9 +98,21 @@ pub fn spawn_buttons_page(commands: &mut Commands, parent: Entity) -> Entity {
     placeholder(
         commands,
         g,
-        "Disabled / double-click button states",
-        "Picus UiButton currently exposes click events but not disabled state or double-click action routing.",
+        "Double-click button state",
+        "Picus UiButton exposes single-click actions; double-click detection is not a built-in button contract yet.",
     );
+
+    // Disabled button state — supported by UiButton.disabled.
+    let disabled_card = card(commands, g, "Disabled button");
+    commands.spawn_scene(bsn! {
+        template_value(UiButton::new("Disabled default").disabled(true))
+        ChildOf(disabled_card)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(UiButton::new("Disabled accent").disabled(true))
+        template_value(class("gallery.accent_button"))
+        ChildOf(disabled_card)
+    });
 
     open_dialog_btn
 }

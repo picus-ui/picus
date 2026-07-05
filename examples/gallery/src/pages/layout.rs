@@ -1,8 +1,8 @@
-use crate::helpers::{card, class, grid, placeholder, sample_canvas};
+use crate::helpers::{card, class, grid, sample_canvas};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 use picus::{
-    UiBadge, UiButton, UiFlexRow, UiGrid, UiGridCell, UiGridLength, UiLabel, UiResponsiveGrid,
-    UiResponsiveRow, UiTextInput, UiVisibleResponsive,
+    UiBadge, UiButton, UiCanvasPosition, UiFlexRow, UiGrid, UiGridCell, UiGridLength, UiLabel,
+    UiResponsiveGrid, UiResponsiveRow, UiTextInput, UiVisibleResponsive,
     scene::{CommandsSceneExt, bsn, template_value},
 };
 
@@ -225,17 +225,24 @@ pub fn spawn_layout_page(commands: &mut Commands, parent: Entity) -> Entity {
     // 6. Canvas / Absolute
     // ------------------------------------------------------------------
     let canvas_panel = card(commands, g, "Canvas / Absolute");
-    commands.spawn_scene(bsn! {
-        template_value(sample_canvas())
-        template_value(class("gallery.canvas"))
-        ChildOf(canvas_panel)
-    });
-    placeholder(
-        commands,
-        canvas_panel,
-        "Right/bottom attached canvas children",
-        "UiCanvasPosition stores right/bottom intent, but the current projector only applies left/top offsets.",
-    );
+    let canvas_size = (320.0, 200.0);
+    let demo_canvas = commands
+        .spawn_scene(bsn! {
+            template_value(sample_canvas().with_size(canvas_size.0, canvas_size.1))
+            template_value(class("gallery.canvas"))
+            ChildOf(canvas_panel)
+        })
+        .id();
+    // A child anchored to the right/bottom edge of the canvas.
+    let anchored = commands
+        .spawn_scene(bsn! {
+            template_value(UiLabel::new("↘ right/bottom"))
+            template_value(class("gallery.swatch.gold"))
+            template_value(UiCanvasPosition::default().with_right(8.0).with_bottom(8.0))
+            ChildOf(demo_canvas)
+        })
+        .id();
+    let _ = anchored;
 
     commands
         .spawn_scene(bsn! {

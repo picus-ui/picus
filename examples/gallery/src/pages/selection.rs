@@ -21,12 +21,10 @@ pub fn spawn_selection_page(commands: &mut Commands, parent: Entity) -> Entity {
         template_value(UiCheckbox::new("Checked", true))
         ChildOf(check)
     });
-    placeholder(
-        commands,
-        check,
-        "Three-state CheckBox",
-        "UiCheckbox currently stores a bool, so indeterminate state is not represented.",
-    );
+    commands.spawn_scene(bsn! {
+        template_value(UiCheckbox::new("Indeterminate", false).indeterminate(true))
+        ChildOf(check)
+    });
 
     let radio = card(commands, g, "RadioButton");
     commands.spawn_scene(bsn! {

@@ -30,6 +30,7 @@ mod menu;
 mod message_bar;
 mod multiline_text_input;
 mod navigation_view;
+mod numeric_up_down;
 mod password_input;
 mod popover;
 mod progress_bar;
@@ -79,6 +80,7 @@ pub use menu::*;
 pub use message_bar::*;
 pub use multiline_text_input::*;
 pub use navigation_view::*;
+pub use numeric_up_down::*;
 pub use password_input::*;
 pub use popover::*;
 pub use progress_bar::*;
@@ -221,5 +223,6 @@ pub fn register_builtin_ui_components(app: &mut App) {
         .register_ui_component::<theme_picker::UiThemePickerMenu>()
         .register_ui_component::<navigation_view::UiNavigationView>()
         .register_ui_component::<titlebar::UiTitleBar>()
+        .register_ui_component::<numeric_up_down::UiNumericUpDown>()
         .register_ui_component::<toolbar::UiToolbar>();
 }

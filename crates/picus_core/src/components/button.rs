@@ -60,6 +60,9 @@ pub struct UiButton {
     pub shape: ButtonShape,
     pub icon: Option<PicusIcon>,
     pub icon_position: ButtonIconPosition,
+    /// When true the button is non-interactive: it does not emit click actions
+    /// and is rendered with the `button.disabled` style class.
+    pub disabled: bool,
 }
 
 impl UiButton {
@@ -72,6 +75,7 @@ impl UiButton {
             shape: ButtonShape::default(),
             icon: None,
             icon_position: ButtonIconPosition::Before,
+            disabled: false,
         }
     }
 
@@ -102,6 +106,13 @@ impl UiButton {
     #[must_use]
     pub fn with_icon_position(mut self, icon_position: ButtonIconPosition) -> Self {
         self.icon_position = icon_position;
+        self
+    }
+
+    /// Mark this button as disabled (non-interactive).
+    #[must_use]
+    pub fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
         self
     }
 }

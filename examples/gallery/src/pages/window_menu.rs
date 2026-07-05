@@ -2,10 +2,10 @@
 //!
 //! Corresponds to Fluent UI's CommandBar and ContextualMenu components.
 
-use crate::helpers::{card, grid, note, placeholder};
+use crate::helpers::{card, grid, note, toast_button};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 use picus::{
-    UiButton, UiMenuBar, UiMenuBarItem, UiMenuItem,
+    ToastKind, UiMenuBar, UiMenuBarItem, UiMenuItem, UiTitleBar,
     scene::{CommandsSceneExt, bsn, template_value},
 };
 
@@ -59,17 +59,28 @@ pub fn spawn_window_menu_page(commands: &mut Commands, parent: Entity) -> Entity
         "MenuBar supports nested items and dropdown overlay panels.",
     );
 
-    placeholder(
+    // Picus provides a UiTitleBar component that draws a custom title bar with
+    // minimize/maximize/close buttons emitting TitleBarAction events.
+    let chrome = card(commands, g, "Custom title bar");
+    commands.spawn_scene(bsn! {
+        template_value(UiTitleBar {
+            title: "Picus Gallery — custom title bar".to_string(),
+            ..Default::default()
+        })
+        ChildOf(chrome)
+    });
+    note(
         commands,
-        g,
-        "Native window chrome / title bar",
-        "The Masonry winit window provides its own decoration; Picus does not draw a custom title bar.",
+        chrome,
+        "UiTitleBar draws a custom window chrome with minimize/maximize/close controls.",
     );
 
-    commands
-        .spawn_scene(bsn! {
-            template_value(UiButton::new("Warning Toast"))
-            ChildOf(menu)
-        })
-        .id()
+    toast_button(
+        commands,
+        menu,
+        "Warning Toast",
+        "Window/Menu placeholder warning.",
+        ToastKind::Warning,
+        3.2,
+    )
 }

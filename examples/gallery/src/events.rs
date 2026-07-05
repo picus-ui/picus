@@ -25,6 +25,7 @@ use picus::{
     UiMultilineTextInputChanged,
     UiNavigationSelectionChanged,
     UiNavigationView,
+    UiNumericUpDownChanged,
     UiPasswordInputChanged,
     UiRadioGroupChanged,
     UiScrollViewChanged,
@@ -38,7 +39,7 @@ use picus::{
     spawn_in_overlay_root,
 };
 
-use crate::state::{GalleryPage, GalleryRuntime, GalleryState};
+use crate::state::{GalleryButtonAction, GalleryPage, GalleryRuntime, GalleryState};
 
 /// Main event handler system: drains all UI action queues and updates gallery state.
 ///
@@ -127,6 +128,41 @@ pub fn drain_gallery_events(world: &mut World) {
                 ToastKind::Warning,
                 3.5,
             );
+        } else if let Some(action) = world.get::<GalleryButtonAction>(event.entity).cloned() {
+            match action {
+                GalleryButtonAction::Toast {
+                    message,
+                    kind,
+                    duration,
+                } => {
+                    spawn_toast(world, &message, kind, duration);
+                }
+                GalleryButtonAction::Dialog { title, body } => {
+                    spawn_dialog(world, &title, &body);
+                }
+                GalleryButtonAction::Status { message } => {
+                    update_status(world, message);
+                }
+            }
+        } else if world
+            .get::<crate::pages::overlay::ManualOverlayMarker>(event.entity)
+            .is_some()
+        {
+            // Spawn a manually-positioned popover at a fixed pixel location.
+            picus::spawn_manual_overlay_at(
+                world,
+                picus::UiDialog::new(
+                    "Manual overlay",
+                    "This popover was positioned at a fixed (x, y) pixel coordinate via spawn_manual_overlay_at.",
+                )
+                .with_fixed_width(360.0),
+                120.0,
+                80.0,
+            );
+            update_status(
+                world,
+                "Overlay: opened a manually-positioned popover at (120, 80).".to_string(),
+            );
         }
     }
 
@@ -149,17 +185,16 @@ pub fn drain_gallery_events(world: &mut World) {
         .resource_mut::<UiEventQueue>()
         .drain_actions::<UiCheckboxChanged>()
     {
+        let state = if event.action.indeterminate {
+            "indeterminate"
+        } else if event.action.checked {
+            "checked"
+        } else {
+            "unchecked"
+        };
         update_status(
             world,
-            format!(
-                "CheckBox {:?}: {}",
-                event.action.checkbox,
-                if event.action.checked {
-                    "checked"
-                } else {
-                    "unchecked"
-                }
-            ),
+            format!("CheckBox {:?}: {}", event.action.checkbox, state),
         );
     }
 
@@ -186,6 +221,19 @@ pub fn drain_gallery_events(world: &mut World) {
             format!(
                 "Slider {:?}: value {:.2}",
                 event.action.slider, event.action.value
+            ),
+        );
+    }
+
+    for event in world
+        .resource_mut::<UiEventQueue>()
+        .drain_actions::<UiNumericUpDownChanged>()
+    {
+        update_status(
+            world,
+            format!(
+                "NumericUpDown {:?}: value {:.2}",
+                event.action.numeric, event.action.value
             ),
         );
     }
