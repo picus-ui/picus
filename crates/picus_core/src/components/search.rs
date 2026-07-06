@@ -1,4 +1,4 @@
-use bevy_ecs::prelude::*;
+use bevy_ecs::{entity::Entity, prelude::*};
 
 use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 
@@ -10,6 +10,13 @@ pub struct UiSearch {
     /// Placeholder text shown when the field is empty.
     pub placeholder: String,
     /// Current text value.
+    pub value: String,
+}
+
+/// Emitted when [`UiSearch`] value changes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UiSearchChanged {
+    pub search: Entity,
     pub value: String,
 }
 

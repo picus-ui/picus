@@ -2195,4 +2195,59 @@ mod tests {
             "text_input on_changed should route through route_masonry_view_messages, got: {changed:?}"
         );
     }
+
+    #[test]
+    fn route_masonry_view_messages_dispatches_search_on_changed() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let mut window = Window::default();
+        window.resolution.set(480.0, 320.0);
+        app.world_mut().spawn((window, PrimaryWindow));
+
+        let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+        let search = app
+            .world_mut()
+            .spawn((crate::UiSearch::new("Find"), ChildOf(root)))
+            .id();
+
+        app.update();
+        app.update();
+
+        let text_area_id = {
+            let runtime = app.world().non_send::<crate::MasonryRuntime>();
+            let window_runtime = runtime
+                .primary()
+                .expect("primary window runtime should exist");
+            first_widget_id_by_short_name(window_runtime.render_root.get_layer_root(0), "TextArea")
+                .expect("search should build an inner TextArea widget")
+        };
+
+        let routed = {
+            let mut runtime = app.world_mut().non_send_mut::<crate::MasonryRuntime>();
+            let window_runtime = runtime
+                .primary_mut()
+                .expect("primary window runtime should exist");
+            window_runtime.route_test_view_message(
+                Box::new(TextAction::Changed("button".to_string())),
+                text_area_id,
+            )
+        };
+        assert!(routed, "search should register a view action source");
+
+        let changed: Vec<_> = app
+            .world_mut()
+            .resource_mut::<UiEventQueue>()
+            .drain_actions::<crate::WidgetUiAction>();
+        assert!(
+            changed.iter().any(|event| {
+                matches!(
+                    &event.action,
+                    crate::WidgetUiAction::SetSearch { search: changed_search, value }
+                        if *changed_search == search && value == "button"
+                )
+            }),
+            "search on_changed should route through route_masonry_view_messages, got: {changed:?}"
+        );
+    }
 }

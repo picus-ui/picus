@@ -46,7 +46,7 @@ mod views;
 use events::drain_gallery_events;
 use helpers::{PAGE_CONTENT, PAGE_VIEWPORT, class};
 use state::{GalleryPage, GalleryRuntime, GalleryState};
-use views::{GalleryRoot, GalleryStatus};
+use views::{GalleryRoot, GalleryStatus, GalleryTopBar};
 
 /// Build the full gallery application tree.
 ///
@@ -218,7 +218,7 @@ fn setup_gallery(mut commands: Commands) {
 /// Create the top bar with branding, search, theme picker, and badge.
 fn spawn_top_bar(commands: &mut Commands, root: Entity) {
     commands.spawn_scene(bsn! {
-        UiFlexRow
+        GalleryTopBar
         template_value(class("gallery.top_bar"))
         ChildOf(root)
         Children [
@@ -244,22 +244,10 @@ fn spawn_top_bar(commands: &mut Commands, root: Entity) {
                 ]
             ),
             (
-                UiFlexRow
-                template_value(class("gallery.search_row"))
-                Children [
-                    (
-                        template_value(UiSearch::new("Find a component\u{2026}"))
-                        template_value(class("gallery.search"))
-                    ),
-                ]
+                template_value(UiSearch::new("Find a component\u{2026}"))
+                template_value(class("gallery.search"))
             ),
-            (
-                UiFlexRow
-                template_value(class("gallery.tools"))
-                Children [
-                    UiThemePicker,
-                ]
-            ),
+            UiThemePicker,
         ]
     });
 }
@@ -336,6 +324,7 @@ fn build_gallery_app() -> App {
         )
         .insert_resource(GalleryState::default())
         .register_ui_component::<GalleryRoot>()
+        .register_ui_component::<GalleryTopBar>()
         .register_ui_component::<GalleryStatus>()
         .add_systems(Startup, setup_gallery)
         .add_systems(
@@ -539,6 +528,60 @@ mod tests {
         );
     }
 
+    #[test]
+    fn gallery_top_bar_keeps_search_and_theme_picker_anchored_after_theme_switch() {
+        let mut app = build_gallery_app();
+
+        let mut window = Window {
+            visible: false,
+            ..Default::default()
+        };
+        window.resolution.set(1360.0, 760.0);
+        app.world_mut().spawn((window, PrimaryWindow));
+
+        app.update();
+
+        let search = {
+            let mut query = app.world_mut().query_filtered::<Entity, With<UiSearch>>();
+            query
+                .iter(app.world())
+                .next()
+                .expect("gallery should spawn a search box")
+        };
+        let theme_picker = {
+            let mut query = app
+                .world_mut()
+                .query_filtered::<Entity, With<UiThemePicker>>();
+            query
+                .iter(app.world())
+                .next()
+                .expect("gallery should spawn a theme picker")
+        };
+
+        let before_search = widget_rect_for_entity(&mut app, search);
+        let before_picker = widget_rect_for_entity(&mut app, theme_picker);
+
+        picus::set_active_style_variant_by_name(app.world_mut(), "light");
+        app.update();
+
+        let after_search = widget_rect_for_entity(&mut app, search);
+        let after_picker = widget_rect_for_entity(&mut app, theme_picker);
+
+        assert!(
+            after_search.width() >= 320.0,
+            "search should keep a usable width after theme switch; before={before_search:?}, after={after_search:?}"
+        );
+        assert!(
+            after_picker.x0 > after_search.x1,
+            "theme picker should stay to the right of search; search={after_search:?}, picker={after_picker:?}"
+        );
+        assert!(
+            (after_search.x0 - before_search.x0).abs() <= 4.0
+                && (after_picker.x0 - before_picker.x0).abs() <= 4.0,
+            "top bar controls should not jump after theme switch; search before={before_search:?} after={after_search:?}, picker before={before_picker:?} after={after_picker:?}"
+        );
+    }
+
     fn resize_primary_window(app: &mut App, window_entity: Entity, width: f32, height: f32) {
         {
             let mut window = app
@@ -574,5 +617,25 @@ mod tests {
             .border_box()
             .size()
             .height
+    }
+
+    fn widget_rect_for_entity(
+        app: &mut App,
+        entity: Entity,
+    ) -> picus::masonry_core::kurbo::Rect {
+        let mut runtime = app.world_mut().non_send_mut::<picus::MasonryRuntime>();
+        let window_runtime = runtime
+            .primary_mut()
+            .expect("primary window runtime should exist");
+        let _ = window_runtime.render_root.redraw();
+        let widget_id = window_runtime
+            .find_widget_id_for_entity_bits(entity.to_bits(), false)
+            .expect("entity should resolve to a Masonry widget");
+        window_runtime
+            .render_root
+            .get_widget(widget_id)
+            .expect("widget id should resolve in render tree")
+            .ctx()
+            .bounding_box()
     }
 }

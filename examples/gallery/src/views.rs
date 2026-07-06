@@ -7,7 +7,8 @@
 use std::sync::Arc;
 
 use picus::{
-    ProjectionCtx, UiComponentTemplate, UiView, apply_label_style, apply_widget_style,
+    ProjectionCtx, StyleClass, UiComponentTemplate, UiSearch, UiThemePicker, UiView,
+    apply_label_style, apply_widget_style,
     bevy_ecs::prelude::*,
     masonry_core::{
         layout::{Dim, Length},
@@ -16,7 +17,7 @@ use picus::{
     resolve_style, resolve_style_for_classes,
     xilem::{
         style::Style as _,
-        view::{FlexExt as _, flex_col, flex_item, label, sized_box},
+        view::{FlexExt as _, FlexSpacer, flex_col, flex_item, flex_row, label, sized_box},
     },
 };
 
@@ -26,9 +27,29 @@ use crate::state::GalleryState;
 #[derive(Component, Debug, Clone, Copy, Default)]
 pub struct GalleryRoot;
 
+/// Fixed top bar shell: brand at start, search near the end, tools at the edge.
+#[derive(Component, Debug, Clone, Copy, Default)]
+pub struct GalleryTopBar;
+
 /// Status bar component: displays the most recent user interaction event.
 #[derive(Component, Debug, Clone, Copy, Default)]
 pub struct GalleryStatus;
+
+fn child_entity_views(ctx: &ProjectionCtx<'_>) -> Vec<(Entity, UiView)> {
+    let child_entities = ctx
+        .world
+        .get::<Children>(ctx.entity)
+        .map(|children| children.iter().collect::<Vec<_>>())
+        .unwrap_or_default();
+
+    child_entities.into_iter().zip(ctx.children.clone()).collect()
+}
+
+fn has_style_class(world: &World, entity: Entity, class: &str) -> bool {
+    world
+        .get::<StyleClass>(entity)
+        .is_some_and(|classes| classes.0.iter().any(|name| name == class))
+}
 
 impl UiComponentTemplate for GalleryRoot {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
@@ -60,6 +81,56 @@ impl UiComponentTemplate for GalleryRoot {
                 Dimensions::AUTO
                     .with_width(Dim::Stretch)
                     .with_height(Dim::Stretch),
+            ),
+        )
+    }
+}
+
+impl UiComponentTemplate for GalleryTopBar {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
+        let style = resolve_style(ctx.world, ctx.entity);
+        let pairs = child_entity_views(&ctx);
+
+        let brand = pairs
+            .iter()
+            .find(|(entity, _)| has_style_class(ctx.world, *entity, "gallery.brand"))
+            .map(|(_, view)| view.clone());
+        let search = pairs
+            .iter()
+            .find(|(entity, _)| ctx.world.get::<UiSearch>(*entity).is_some())
+            .map(|(_, view)| view.clone());
+        let theme = pairs
+            .iter()
+            .find(|(entity, _)| ctx.world.get::<UiThemePicker>(*entity).is_some())
+            .map(|(_, view)| view.clone());
+
+        let mut children = Vec::new();
+        if let Some(brand) = brand {
+            children.push(
+                sized_box(brand)
+                    .width(Dim::Fixed(Length::px(240.0)))
+                    .into_any_flex(),
+            );
+        }
+        children.push(FlexSpacer::Flex(1.0).into_any_flex());
+        if let Some(search) = search {
+            children.push(
+                sized_box(search)
+                    .width(Dim::Fixed(Length::px(360.0)))
+                    .into_any_flex(),
+            );
+        }
+        if let Some(theme) = theme {
+            children.push(theme.into_any_flex());
+        }
+
+        Arc::new(
+            sized_box(apply_widget_style(
+                flex_row(children).gap(Length::px(style.layout.gap)),
+                &style,
+            ))
+            .dims(
+                Dimensions::AUTO.with_width(Dim::Stretch),
             ),
         )
     }

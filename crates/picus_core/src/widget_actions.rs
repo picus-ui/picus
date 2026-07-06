@@ -15,8 +15,9 @@ use crate::{
     UiMultilineTextInputChanged, UiNavigationSelectionChanged, UiNavigationView, UiNumericUpDown,
     UiNumericUpDownChanged, UiOverlayRoot, UiPasswordInput, UiPasswordInputChanged, UiRadioGroup,
     UiRadioGroupChanged, UiRating, UiRatingChanged, UiScrollView, UiScrollViewChanged, UiSlider,
-    UiSliderChanged, UiSwitch, UiSwitchChanged, UiTabBar, UiTabChanged, UiTextInput,
-    UiTextInputChanged, UiTooltip, UiTreeNode, UiTreeNodeToggled, events::UiEventQueue,
+    UiSearch, UiSearchChanged, UiSliderChanged, UiSwitch, UiSwitchChanged, UiTabBar, UiTabChanged,
+    UiTextInput, UiTextInputChanged, UiTooltip, UiTreeNode, UiTreeNodeToggled,
+    events::UiEventQueue,
 };
 
 /// Internal action enum for non-overlay widget interactions.
@@ -45,6 +46,8 @@ pub enum WidgetUiAction {
     ToggleSwitch { switch: Entity },
     /// Update text input contents.
     SetTextInput { input: Entity, value: String },
+    /// Update search input contents.
+    SetSearch { search: Entity, value: String },
     /// Update a password input from the visible masked editor contents.
     SetPasswordInputDisplay {
         input: Entity,
@@ -557,6 +560,29 @@ pub fn handle_widget_actions(world: &mut World) {
                     world
                         .resource::<UiEventQueue>()
                         .push_typed(input, UiTextInputChanged { input, value });
+                }
+            }
+
+            WidgetUiAction::SetSearch { search, value } => {
+                if world.get_entity(search).is_err() {
+                    continue;
+                }
+
+                let changed = if let Some(mut search_state) = world.get_mut::<UiSearch>(search) {
+                    if search_state.value == value {
+                        None
+                    } else {
+                        search_state.value = value.clone();
+                        Some(value)
+                    }
+                } else {
+                    None
+                };
+
+                if let Some(value) = changed {
+                    world
+                        .resource::<UiEventQueue>()
+                        .push_typed(search, UiSearchChanged { search, value });
                 }
             }
 
@@ -1108,6 +1134,35 @@ mod tests {
             .drain_actions::<crate::UiMultilineTextInputChanged>();
         assert_eq!(multiline_changed.len(), 1);
         assert_eq!(multiline_changed[0].action.value, "a\nb");
+    }
+
+    #[test]
+    fn direct_search_action_updates_search_state() {
+        let mut world = World::new();
+        world.insert_resource(UiEventQueue::default());
+
+        let search = world.spawn((crate::UiSearch::new("Find"),)).id();
+
+        world.resource::<UiEventQueue>().push_typed(
+            search,
+            crate::WidgetUiAction::SetSearch {
+                search,
+                value: "button".to_string(),
+            },
+        );
+
+        crate::handle_widget_actions(&mut world);
+
+        let search_state = world
+            .get::<crate::UiSearch>(search)
+            .expect("search should exist");
+        assert_eq!(search_state.value, "button");
+
+        let changed = world
+            .resource_mut::<UiEventQueue>()
+            .drain_actions::<crate::UiSearchChanged>();
+        assert_eq!(changed.len(), 1);
+        assert_eq!(changed[0].action.value, "button");
     }
 
     #[test]

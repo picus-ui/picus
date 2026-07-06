@@ -42,8 +42,8 @@ use action::PicusCodeAction;
 use bridge::{BridgeEvent, BridgeRequest, ChatMessage};
 use state::{
     AboutRootView, ChatBodyView, ChatRootView, ChatTitleBarView, ComposerView, MessageRowView,
-    PicusState, SettingsFormView, SettingsRootView, SidebarColumnView, StatusLineView,
-    TranscriptColumnView,
+    PICUSCODE_SIDEBAR_WIDTH, PicusState, SettingsFormView, SettingsRootView, SidebarColumnView,
+    StatusLineView, TranscriptColumnView,
 };
 
 /// A static welcome markdown blob shown when no thread is selected.
@@ -83,7 +83,10 @@ fn setup_chat_world(mut commands: Commands) {
                 Children [
                     (
                         template_value(
-                            UiScrollView::new(Vec2::new(220.0, 520.0), Vec2::new(220.0, 2400.0))
+                            UiScrollView::new(
+                                Vec2::new(PICUSCODE_SIDEBAR_WIDTH, 520.0),
+                                Vec2::new(PICUSCODE_SIDEBAR_WIDTH, 2400.0),
+                            )
                                 .with_vertical_scrollbar(true)
                                 .with_horizontal_scrollbar(false)
                         )
@@ -852,6 +855,9 @@ fn main() -> Result<(), EventLoopError> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use picus::bevy_window::{PrimaryWindow, Window, WindowClosed};
+
     #[test]
     fn embedded_picuscode_theme_ron_parses() {
         picus::parse_stylesheet_ron(include_str!("../assets/themes/picuscode.ron"))
@@ -890,5 +896,65 @@ mod tests {
             sheet.tokens.contains_key("surface-bg"),
             "picuscode stylesheet references Fluent tokens, so a Fluent variant must be active"
         );
+    }
+
+    #[test]
+    fn sidebar_scroll_view_keeps_fixed_sidebar_width() {
+        let mut app = super::build_picuscode_app();
+        app.add_message::<WindowClosed>();
+
+        let mut window = Window {
+            visible: false,
+            ..Default::default()
+        };
+        window.resolution.set(960.0, 720.0);
+        app.world_mut().spawn((window, PrimaryWindow));
+
+        app.update();
+        app.update();
+
+        let sidebar_scroll = {
+            let mut query = app.world_mut().query::<(Entity, &picus::StyleClass)>();
+            query
+                .iter(app.world())
+                .find_map(|(entity, classes)| {
+                    classes
+                        .0
+                        .iter()
+                        .any(|class| class == "picuscode.sidebar.scroll")
+                        .then_some(entity)
+                })
+                .expect("sidebar scroll entity should exist")
+        };
+
+        let rect = widget_rect_for_entity(&mut app, sidebar_scroll);
+        assert!(
+            (rect.width() - f64::from(PICUSCODE_SIDEBAR_WIDTH)).abs() <= 8.0,
+            "sidebar scroll view should match fixed sidebar width, got {rect:?}"
+        );
+        assert!(
+            rect.x1 < 340.0,
+            "sidebar scrollbar should stay near the left sidebar, got {rect:?}"
+        );
+    }
+
+    fn widget_rect_for_entity(
+        app: &mut App,
+        entity: Entity,
+    ) -> picus::masonry_core::kurbo::Rect {
+        let mut runtime = app.world_mut().non_send_mut::<picus::MasonryRuntime>();
+        let window_runtime = runtime
+            .primary_mut()
+            .expect("primary window runtime should exist");
+        let _ = window_runtime.render_root.redraw();
+        let widget_id = window_runtime
+            .find_widget_id_for_entity_bits(entity.to_bits(), false)
+            .expect("entity should resolve to a Masonry widget");
+        window_runtime
+            .render_root
+            .get_widget(widget_id)
+            .expect("widget id should resolve in render tree")
+            .ctx()
+            .bounding_box()
     }
 }

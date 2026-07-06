@@ -195,7 +195,7 @@ types include `UiRoot`, `UiOverlayRoot`, `UiFlexColumn`, `UiFlexRow`, `UiGrid`
 with `UiGridLength` track intent and `UiGridCell` attached
 placement, `UiLabel`, `UiButton`, `UiCanvas`/`UiCanvasCommand` plus
 `UiCanvasPosition` child positioning (with `right`/`bottom` anchoring against
-`UiCanvas::size`), `UiImage`, `UiTextInput`, `UiPasswordInput`,
+`UiCanvas::size`), `UiImage`, `UiSearch`, `UiTextInput`, `UiPasswordInput`,
 `UiMultilineTextInput`, `UiListView`, `UiTable`, `UiDataTable` with `UiDataCell`
 text/image cell templates, `UiNavigationView` with ECS-backed `UiNavigationItem`
 sidebar template entities, `UiNumericUpDown`, `UiMarkdown`, `UiStreamingMarkdown`,
@@ -283,18 +283,20 @@ Interactive controls use the ECS event route:
 - Raw retained widgets remain private implementation details. Projection
   internals that need low-level widgets import them directly from
   `picus_view::view`.
-- Text input, slider, switch, and checkbox helpers map retained widget actions into
-  `UiEventQueue`. Do not expose the old Xilem app-state callback model in
-  Picus-facing view APIs.
+- Search, text input, slider, switch, and checkbox helpers map retained widget
+  actions into `UiEventQueue`. Do not expose the old Xilem app-state callback
+  model in Picus-facing view APIs.
+- `UiSearch` owns its current `value`; retained edits update the component and
+  emit `UiSearchChanged`.
 - Widget actions not consumed by ancestor `on_action` handlers are emitted as
   `RenderRootSignal::Action` and captured per window in `WindowRuntime`. The
   `route_masonry_view_messages` PreUpdate system (run after input injection,
   before `handle_widget_actions`) dispatches each captured action to its source
   view's `View::message` handler via the `ViewCtx` widget map, so
-  callback-based views (`text_input`, `slider`, `switch`, `checkbox`) fire their
-  `on_changed`/`on_enter` callbacks into `UiEventQueue` in the same frame.
-  Button widgets push to `UiEventQueue` directly from `on_pointer_event` and do
-  not rely on this routing path.
+  callback-based views (`text_input`, `UiSearch`, `slider`, `switch`,
+  `checkbox`) fire their `on_changed`/`on_enter` callbacks into `UiEventQueue`
+  in the same frame. Button widgets push to `UiEventQueue` directly from
+  `on_pointer_event` and do not rely on this routing path.
 - `UiEventQueue` stores type-erased actions and supports typed non-destructive
   drains through `drain_actions::<T>()`.
 - `UiPointerHitEvent` is the hit-tested source event; `UiPointerEvent` bubbles

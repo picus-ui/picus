@@ -55,6 +55,9 @@ pub struct PicusState {
 
 // ── View marker components ──────────────────────────────────────────────
 
+/// Total logical width of the sidebar panel, including its styled padding.
+pub const PICUSCODE_SIDEBAR_WIDTH: f32 = 244.0;
+
 /// Marker for the root of the primary chat window.
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ChatRootView;

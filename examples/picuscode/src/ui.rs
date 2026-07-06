@@ -14,7 +14,7 @@ use picus::{
         layout::{Dim, Length},
         properties::Dimensions,
     },
-    resolve_style, resolve_style_for_classes, text_input,
+    resolve_style, resolve_style_for_classes, text_input, StyleClass,
     xilem::{
         Color, InsertNewline,
         style::Style as _,
@@ -116,7 +116,12 @@ impl UiComponentTemplate for ChatBodyView {
             .zip(ctx.children)
             .map(|(entity, child)| {
                 let grow = resolve_style(ctx.world, entity).layout.flex_grow;
-                if grow > 0.0 {
+                if has_style_class(ctx.world, entity, "picuscode.sidebar.scroll") {
+                    sized_box(child)
+                        .width(Length::px(f64::from(PICUSCODE_SIDEBAR_WIDTH)))
+                        .height(Dim::Stretch)
+                        .into_any_flex()
+                } else if grow > 0.0 {
                     flex_item(child, grow).into_any_flex()
                 } else {
                     child.into_any_flex()
@@ -130,6 +135,16 @@ impl UiComponentTemplate for ChatBodyView {
             &style,
         ))
     }
+}
+
+fn has_style_class(
+    world: &picus::bevy_ecs::world::World,
+    entity: picus::bevy_ecs::entity::Entity,
+    class: &str,
+) -> bool {
+    world
+        .get::<StyleClass>(entity)
+        .is_some_and(|classes| classes.0.iter().any(|name| name == class))
 }
 
 impl UiComponentTemplate for SidebarColumnView {
@@ -151,7 +166,7 @@ impl UiComponentTemplate for SidebarColumnView {
                 "New session",
                 FluentIcon::Edit,
             ))
-            .width(Length::px(220.0))
+            .width(Dim::Stretch)
             .into_any_flex(),
         );
         items.push(sidebar_section_header(&ctx, active_count, thread_count).into_any_flex());
@@ -165,10 +180,15 @@ impl UiComponentTemplate for SidebarColumnView {
         }
         items.push(sidebar_footer(&ctx).into_any_flex());
 
-        Arc::new(apply_widget_style(
-            sized_box(flex_col(items).gap(Length::px(style.layout.gap))).width(Length::px(244.0)),
-            &style,
-        ))
+        let content = flex_col(items)
+            .cross_axis_alignment(CrossAxisAlignment::Stretch)
+            .gap(Length::px(style.layout.gap))
+            .width(Dim::Stretch);
+
+        Arc::new(
+            sized_box(apply_widget_style(content, &style))
+                .width(Length::px(f64::from(PICUSCODE_SIDEBAR_WIDTH))),
+        )
     }
 }
 

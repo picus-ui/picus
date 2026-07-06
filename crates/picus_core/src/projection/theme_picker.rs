@@ -3,8 +3,7 @@ use std::sync::Arc;
 use crate::xilem::style::Style as _;
 use masonry_core::layout::{Dim, Length};
 use picus_view::view::{
-    CrossAxisAlignment, FlexExt as _, MainAxisAlignment, flex_col, flex_row, label, portal,
-    transformed,
+    CrossAxisAlignment, FlexExt as _, flex_col, flex_row, label, portal, transformed,
 };
 
 use crate::{
@@ -39,17 +38,10 @@ pub(crate) fn project_theme_picker(_: &UiThemePicker, ctx: ProjectionCtx<'_>) ->
         None => Arc::new(label("")),
     };
 
-    let button = apply_direct_widget_style(
+    Arc::new(apply_direct_widget_style(
         button_with_child_view(ctx.entity, OverlayUiAction::ToggleThemePicker, icon),
         &style,
-    );
-
-    Arc::new(
-        flex_row(vec![button.into_any_flex()])
-            .main_axis_alignment(MainAxisAlignment::End)
-            .cross_axis_alignment(CrossAxisAlignment::Center)
-            .width(Dim::Stretch),
-    )
+    ))
 }
 
 pub(crate) fn project_theme_picker_menu(

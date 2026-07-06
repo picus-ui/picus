@@ -43,11 +43,12 @@ pub mod components {
         UiOverlayRoot, UiPasswordInput, UiPasswordInputChanged, UiPointerEvent, UiPointerHitEvent,
         UiPointerPhase, UiPopover, UiProgressBar, UiRadioGroup, UiRadioGroupChanged, UiRating,
         UiRatingChanged, UiResponsiveGrid, UiResponsiveRow, UiRoot, UiScrollView,
-        UiScrollViewChanged, UiSearch, UiSlider, UiSliderChanged, UiSortDirection, UiSpinner,
-        UiSplitPane, UiStreamingMarkdown, UiSwitch, UiSwitchChanged, UiTabBar, UiTabChanged,
-        UiTable, UiText, UiTextInput, UiTextInputChanged, UiThemePicker, UiThemePickerChanged,
-        UiThemePickerMenu, UiThemePickerOption, UiTitleBar, UiToast, UiToolbar, UiTooltip,
-        UiTreeNode, UiTreeNodeToggled, UiView, UiVisibleResponsive, UiWindow, button,
+        UiScrollViewChanged, UiSearch, UiSearchChanged, UiSlider, UiSliderChanged,
+        UiSortDirection, UiSpinner, UiSplitPane, UiStreamingMarkdown, UiSwitch, UiSwitchChanged,
+        UiTabBar, UiTabChanged, UiTable, UiText, UiTextInput, UiTextInputChanged, UiThemePicker,
+        UiThemePickerChanged, UiThemePickerMenu, UiThemePickerOption, UiTitleBar, UiToast,
+        UiToolbar, UiTooltip, UiTreeNode, UiTreeNodeToggled, UiView, UiVisibleResponsive,
+        UiWindow, button,
         button_with_child, checkbox, slider, switch, text_input,
     };
     pub use picus_core::icon::{

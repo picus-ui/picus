@@ -14,6 +14,7 @@ use masonry_core::{
     layout::{Dim, Length},
     properties::Dimensions,
 };
+use picus_view::picus_widget::widgets::InsertNewline;
 use picus_view::view::{
     CrossAxisAlignment, FlexExt as _, MainAxisAlignment, canvas, divider_h, divider_v, flex_col,
     flex_item, flex_row, image as xilem_image, label, radio_group as xilem_radio_group, sized_box,
@@ -21,6 +22,7 @@ use picus_view::view::{
 };
 
 use crate::{
+    icon::icon,
     ecs::{
         AnchoredTo, MessageBarKind, OverlayComputedPosition, PartScrollBarHorizontal,
         PartScrollBarVertical, PartScrollThumbHorizontal, PartScrollThumbVertical,
@@ -32,15 +34,16 @@ use crate::{
         UiScrollView, UiSearch, UiSortDirection, UiSpinner, UiSplitPane, UiTabBar, UiTable,
         UiTimePicker, UiTimePickerPanel, UiToast, UiTooltip, UiTreeNode,
     },
+    icons::FluentIcon,
     overlay::OverlayUiAction,
     retained_bridge::{
         button_view, button_with_child_view, drag_thumb_view, opaque_hitbox_for_entity,
-        radio_button_view, scroll_portal,
+        radio_button_view, scroll_portal, text_input_view,
     },
     styling::{
-        ResolvedStyle, apply_direct_widget_style, apply_flex_alignment, apply_label_style,
-        apply_widget_style, font_stack_from_style, resolve_style, resolve_style_for_classes,
-        resolve_style_for_entity_classes,
+        ResolvedStyle, apply_direct_text_input_style, apply_direct_widget_style,
+        apply_flex_alignment, apply_label_style, apply_widget_style, font_stack_from_style,
+        resolve_style, resolve_style_for_classes, resolve_style_for_entity_classes,
     },
     widget_actions::WidgetUiAction,
 };
@@ -1894,23 +1897,42 @@ pub(crate) fn project_message_bar(bar: &UiMessageBar, ctx: ProjectionCtx<'_>) ->
 pub(crate) fn project_search(search: &UiSearch, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
 
-    // Search icon using a Unicode magnifying glass character
-    let mut muted_style = style.clone();
-    if let Some(text) = style.colors.text {
-        muted_style.colors.text = Some(text.with_alpha(0.6));
-    }
-    let icon: UiView = Arc::new(apply_label_style(label(" \u{1F50D} "), &muted_style));
+    let icon_color = style
+        .colors
+        .text
+        .map_or(Color::TRANSPARENT, |color| color.with_alpha(0.72));
+    let icon: UiView = Arc::new(icon(FluentIcon::Search, 16.0, icon_color));
 
-    // Placeholder text shown until the user types
-    let placeholder: UiView = Arc::new(apply_label_style(
-        label(search.placeholder.as_str()),
-        &muted_style,
-    ));
+    let entity = ctx.entity;
+    let mut input_style = style.clone();
+    input_style.layout.padding = 0.0;
+    input_style.layout.border_width = 0.0;
+    input_style.layout.corner_radius = 0.0;
+    input_style.colors.bg = Some(Color::TRANSPARENT);
+    input_style.colors.border = Some(Color::TRANSPARENT);
+    input_style.box_shadow = None;
 
-    let row: UiView = Arc::new(
-        flex_row(vec![icon.into_any_flex(), placeholder.into_any_flex()])
-            .gap(masonry_core::layout::Length::px(style.layout.gap)),
+    let input = text_input_view(entity, search.value.clone(), move |value| {
+        WidgetUiAction::SetSearch {
+            search: entity,
+            value,
+        }
+    })
+    .placeholder(search.placeholder.clone())
+    .clip(true)
+    .insert_newline(InsertNewline::Never);
+
+    let input: UiView = Arc::new(
+        sized_box(apply_direct_text_input_style(input, &input_style)).width(Dim::Stretch),
     );
+
+    let row = flex_row(vec![
+        icon.into_any_flex(),
+        flex_item(input, 1.0).into_any_flex(),
+    ])
+    .cross_axis_alignment(CrossAxisAlignment::Center)
+    .gap(Length::px(style.layout.gap))
+    .width(Dim::Stretch);
 
     Arc::new(apply_widget_style(row, &style))
 }
