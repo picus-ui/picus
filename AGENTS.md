@@ -147,8 +147,10 @@ Runtime invariants:
   `Window` component, dropping retained surfaces before the native window is
   destroyed.
 - Retained UI rendering does not depend on Bevy render-graph integration.
-- The paint pass redraws Masonry Core, renders through `picus_surface`, blits to the
-  swapchain, presents, and requests the next redraw, iterating every attached window.
+- The paint pass redraws Masonry Core only when the retained runtime has pending
+  paint/animation work or has not produced its first frame, renders through
+  `picus_surface`, blits to the swapchain, presents, and forwards Masonry redraw
+  requests through Bevy `RequestRedraw`.
 - Font registration broadcasts to all attached window runtimes.
 
 ## 4. Input, IME, and Hit Testing
@@ -194,7 +196,8 @@ placement, `UiLabel`, `UiButton`, `UiCanvas`/`UiCanvasCommand` plus
 `UiCanvasPosition` child positioning (with `right`/`bottom` anchoring against
 `UiCanvas::size`), `UiImage`, `UiTextInput`, `UiPasswordInput`,
 `UiMultilineTextInput`, `UiListView`, `UiTable`, `UiDataTable` with `UiDataCell`
-text/image cell templates, `UiNumericUpDown`, `UiMarkdown`, `UiStreamingMarkdown`,
+text/image cell templates, `UiNavigationView` with ECS-backed `UiNavigationItem`
+sidebar template entities, `UiNumericUpDown`, `UiMarkdown`, `UiStreamingMarkdown`,
 and `LocalizeText`.
 
 Priority built-ins (`UiButton`, `UiBadge`, `UiProgressBar`, `UiSwitch`, and
@@ -340,6 +343,9 @@ Built-in Fluent theming is a multi-variant bundle at
 select one automatically; applications must explicitly call
 `set_active_style_variant_by_name(...)` or load a stylesheet/theme that declares
 `default_variant`.
+The bundle provides default interactive `:hover`, `:pressed`, and focused-state
+rules for Fluent-like built-ins and shared menu/list/table/navigation item classes,
+plus NavigationView sidebar/content container classes.
 Picus-only helpers that do not correspond to Fluent UI components, such as
 `UiGroupBox`, must not receive default box styling from this built-in Fluent
 bundle; examples or applications that want a visible group box provide their own
@@ -419,9 +425,11 @@ active bundle and falls back to the key or explicit fallback text.
 ## 11. Surface
 
 `picus_surface` owns wgpu instance/device/queue state, surface configuration,
-DPI-aware scene rendering, swapchain presentation, and the Windows AMD premultiplied
-alpha compatibility path. It attaches through raw window handles and tracks physical
-size, logical size, and scale factor.
+DPI-aware scene rendering, and swapchain presentation. It prefers opaque swapchain
+alpha for externally owned Bevy windows, keeps the Windows AMD premultiplied-alpha
+compatibility blit path as a fallback, and never blocks the Bevy thread waiting for
+GPU completion after `present()`. It attaches through raw window handles and tracks
+physical size, logical size, and scale factor.
 
 ## 12. Plugin and App Helpers
 
@@ -430,7 +438,9 @@ systems, Bevy `ScenePlugin`, `DefaultTweenPlugins`, embedded Fluent variants, an
 `PicusBuiltinsPlugin` registers built-in UI components.
 
 `run_app()` and `run_app_with_window_options()` bootstrap desktop apps with Bevy
-window/input/accessibility/winit plugins and then call `App::run()`.
+window/input/accessibility/winit plugins and then call `App::run()`. Unless an app
+has already installed `WinitSettings`, these helpers use bounded reactive updates
+(120 Hz focused, 30 Hz unfocused) instead of Bevy's game-style continuous loop.
 
 Use two UI composition layers:
 

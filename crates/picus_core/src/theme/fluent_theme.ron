@@ -457,6 +457,7 @@
       setter: (
         colors: (
           bg: Var("surface-subtle-hover"),
+          border: Var("border-default-hover"),
         ),
       ),
     ),
@@ -465,6 +466,15 @@
       setter: (
         colors: (
           bg: Var("surface-subtle-pressed"),
+          border: Var("border-default-pressed"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiCheckbox"), PseudoClass(Focused)]),
+      setter: (
+        colors: (
+          border: Var("focus-stroke"),
         ),
       ),
     ),
@@ -491,6 +501,7 @@
       setter: (
         colors: (
           bg: Var("surface-subtle-hover"),
+          border: Var("border-default-hover"),
         ),
       ),
     ),
@@ -499,6 +510,15 @@
       setter: (
         colors: (
           bg: Var("surface-subtle-pressed"),
+          border: Var("border-default-pressed"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiSlider"), PseudoClass(Focused)]),
+      setter: (
+        colors: (
+          border: Var("focus-stroke"),
         ),
       ),
     ),
@@ -525,6 +545,7 @@
       setter: (
         colors: (
           bg: Var("surface-subtle-hover"),
+          border: Var("border-default-hover"),
         ),
       ),
     ),
@@ -533,6 +554,15 @@
       setter: (
         colors: (
           bg: Var("surface-subtle-pressed"),
+          border: Var("border-default-pressed"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiSwitch"), PseudoClass(Focused)]),
+      setter: (
+        colors: (
+          border: Var("focus-stroke"),
         ),
       ),
     ),
@@ -563,6 +593,7 @@
       setter: (
         colors: (
           bg: Var("surface-subtle-hover"),
+          border: Var("border-input-hover"),
         ),
       ),
     ),
@@ -571,6 +602,111 @@
       setter: (
         colors: (
           bg: Var("surface-subtle-pressed"),
+          border: Var("border-input"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiTextInput"), PseudoClass(Focused)]),
+      setter: (
+        colors: (
+          border: Var("focus-stroke"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Type("UiPasswordInput"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+          justify_content: Start,
+          align_items: Center,
+        ),
+        colors: (
+          bg: Var("surface-elevated"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        text: (
+          text_align: Start,
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Type("UiPasswordInput"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-hover"),
+          border: Var("border-input-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiPasswordInput"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-pressed"),
+          border: Var("border-input"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiPasswordInput"), PseudoClass(Focused)]),
+      setter: (
+        colors: (
+          border: Var("focus-stroke"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Type("UiMultilineTextInput"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+          justify_content: Start,
+          align_items: Stretch,
+        ),
+        colors: (
+          bg: Var("surface-elevated"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        text: (
+          text_align: Start,
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Type("UiMultilineTextInput"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-hover"),
+          border: Var("border-input-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiMultilineTextInput"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-pressed"),
+          border: Var("border-input"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiMultilineTextInput"), PseudoClass(Focused)]),
+      setter: (
+        colors: (
+          border: Var("focus-stroke"),
         ),
       ),
     ),
@@ -631,6 +767,7 @@
       setter: (
         colors: (
           bg: Var("surface-subtle-hover"),
+          border: Var("border-default-hover"),
         ),
       ),
     ),
@@ -639,6 +776,15 @@
       setter: (
         colors: (
           bg: Var("surface-subtle-pressed"),
+          border: Var("border-default-pressed"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiComboBox"), PseudoClass(Focused)]),
+      setter: (
+        colors: (
+          border: Var("focus-stroke"),
         ),
       ),
     ),
@@ -689,6 +835,7 @@
       setter: (
         colors: (
           bg: Var("surface-subtle-hover"),
+          border: Var("border-default-hover"),
         ),
       ),
     ),
@@ -697,6 +844,15 @@
       setter: (
         colors: (
           bg: Var("surface-subtle-pressed"),
+          border: Var("border-default-pressed"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiTreeNode"), PseudoClass(Focused)]),
+      setter: (
+        colors: (
+          border: Var("focus-stroke"),
         ),
       ),
     ),
@@ -752,6 +908,7 @@
       setter: (
         colors: (
           bg: Var("surface-subtle-hover"),
+          border: Var("border-default-hover"),
         ),
       ),
     ),
@@ -760,6 +917,15 @@
       setter: (
         colors: (
           bg: Var("surface-subtle-pressed"),
+          border: Var("border-default-pressed"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiMenuBarItem"), PseudoClass(Focused)]),
+      setter: (
+        colors: (
+          border: Var("focus-stroke"),
         ),
       ),
     ),
@@ -834,6 +1000,7 @@
       setter: (
         colors: (
           bg: Var("surface-subtle-hover"),
+          border: Var("border-default-hover"),
         ),
       ),
     ),
@@ -842,6 +1009,15 @@
       setter: (
         colors: (
           bg: Var("surface-subtle-pressed"),
+          border: Var("border-default-pressed"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiColorPicker"), PseudoClass(Focused)]),
+      setter: (
+        colors: (
+          border: Var("focus-stroke"),
         ),
       ),
     ),
@@ -913,6 +1089,7 @@
       setter: (
         colors: (
           bg: Var("surface-subtle-hover"),
+          border: Var("border-default-hover"),
         ),
       ),
     ),
@@ -921,6 +1098,58 @@
       setter: (
         colors: (
           bg: Var("surface-subtle-pressed"),
+          border: Var("border-default-pressed"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiDatePicker"), PseudoClass(Focused)]),
+      setter: (
+        colors: (
+          border: Var("focus-stroke"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Type("UiTimePicker"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Type("UiTimePicker"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-hover"),
+          border: Var("border-default-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiTimePicker"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-pressed"),
+          border: Var("border-default-pressed"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiTimePicker"), PseudoClass(Focused)]),
+      setter: (
+        colors: (
+          border: Var("focus-stroke"),
         ),
       ),
     ),
@@ -949,6 +1178,7 @@
       setter: (
         colors: (
           bg: Var("surface-subtle-hover"),
+          border: Var("border-default-hover"),
         ),
       ),
     ),
@@ -960,6 +1190,15 @@
         ),
         colors: (
           bg: Var("surface-subtle-pressed"),
+          border: Var("border-default-pressed"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiThemePicker"), PseudoClass(Focused)]),
+      setter: (
+        colors: (
+          border: Var("focus-stroke"),
         ),
       ),
     ),
@@ -1229,6 +1468,25 @@
       ),
     ),
     (
+      selector: And([Class("overlay.context_menu.item"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-overlay-item-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("overlay.context_menu.item"), PseudoClass(Pressed)]),
+      setter: (
+        layout: (
+          scale: 0.98,
+        ),
+        colors: (
+          bg: Var("surface-overlay-item-pressed"),
+        ),
+      ),
+    ),
+    (
       selector: Class("overlay.context_menu.separator"),
       setter: (
         layout: (
@@ -1362,6 +1620,25 @@
       ),
     ),
     (
+      selector: And([Class("overlay.color_picker.swatch"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          border: Var("border-default-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("overlay.color_picker.swatch"), PseudoClass(Pressed)]),
+      setter: (
+        layout: (
+          scale: 0.96,
+        ),
+        colors: (
+          border: Var("border-default-pressed"),
+        ),
+      ),
+    ),
+    (
       selector: Class("overlay.color_picker.swatch.selected"),
       setter: (
         layout: (
@@ -1447,6 +1724,26 @@
       ),
     ),
     (
+      selector: And([Class("overlay.date_picker.cell.selected"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-accent-hover"),
+          border: Var("surface-accent-hover"),
+          text: Var("text-on-accent"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("overlay.date_picker.cell.selected"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-accent-pressed"),
+          border: Var("surface-accent-pressed"),
+          text: Var("text-on-accent"),
+        ),
+      ),
+    ),
+    (
       selector: Class("overlay.date_picker.nav"),
       setter: (
         colors: (
@@ -1486,12 +1783,48 @@
       ),
     ),
     (
+      selector: And([Class("overlay.time_picker.cell"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-overlay-item-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("overlay.time_picker.cell"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-overlay-item-pressed"),
+        ),
+      ),
+    ),
+    (
       selector: Class("overlay.time_picker.cell.selected"),
       setter: (
         colors: (
           bg: Var("surface-accent"),
           text: Var("text-on-accent"),
           border: Var("surface-accent"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("overlay.time_picker.cell.selected"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-accent-hover"),
+          border: Var("surface-accent-hover"),
+          text: Var("text-on-accent"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("overlay.time_picker.cell.selected"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-accent-pressed"),
+          border: Var("surface-accent-pressed"),
+          text: Var("text-on-accent"),
         ),
       ),
     ),
@@ -1635,6 +1968,221 @@
       ),
     ),
 
+    (
+      selector: Type("UiListView"),
+      setter: (
+        layout: (
+          padding: Var("space-xs"),
+          gap: Var("space-xs"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+          justify_content: Start,
+          align_items: Stretch,
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("widget.list_view.item"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-sm"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("transparent"),
+          border: Var("transparent"),
+          text: Var("text-primary"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Class("widget.list_view.item"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-overlay-item-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("widget.list_view.item"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-overlay-item-pressed"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("widget.list_view.item.selected"),
+      setter: (
+        colors: (
+          bg: Var("surface-tab-active"),
+          border: Var("surface-accent"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("widget.list_view.item.selected"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-accent-hover"),
+          border: Var("surface-accent-hover"),
+          text: Var("text-on-accent"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("widget.list_view.item.selected"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-accent-pressed"),
+          border: Var("surface-accent-pressed"),
+          text: Var("text-on-accent"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Type("UiDataTable"),
+      setter: (
+        layout: (
+          padding: Var("space-xs"),
+          gap: Var("border-thin"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+          justify_content: Start,
+          align_items: Stretch,
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("widget.data_table.header"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-bg-secondary"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        text: (
+          weight: Var("font-weight-semibold"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Class("widget.data_table.header"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-overlay-item-hover"),
+          border: Var("border-default-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("widget.data_table.header"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-overlay-item-pressed"),
+          border: Var("border-default-pressed"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("widget.data_table.cell"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("transparent"),
+          border: Var("border-muted"),
+          text: Var("text-secondary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("widget.data_table.row"),
+      setter: (
+        layout: (
+          corner_radius: Var("radius-sm"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("transparent"),
+          border: Var("transparent"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Class("widget.data_table.row"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-overlay-item-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("widget.data_table.row"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-overlay-item-pressed"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("widget.data_table.row.striped"),
+      setter: (
+        colors: (
+          bg: Var("surface-bg-secondary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("widget.data_table.row.selected"),
+      setter: (
+        colors: (
+          bg: Var("surface-tab-active"),
+          border: Var("surface-accent"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("widget.data_table.row.selected"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-accent-hover"),
+          border: Var("surface-accent-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("widget.data_table.row.selected"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-accent-pressed"),
+          border: Var("surface-accent-pressed"),
+        ),
+      ),
+    ),
+
     // ── Divider ───────────────────────────────────────────────
     (
       selector: Type("UiDivider"),
@@ -1677,6 +2225,7 @@
       setter: (
         colors: (
           text: Var("brand-foreground-hover"),
+          bg: Var("surface-transparent-hover"),
         ),
       ),
     ),
@@ -1688,6 +2237,15 @@
         ),
         colors: (
           text: Var("brand-foreground-pressed"),
+          bg: Var("surface-transparent-pressed"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiLink"), PseudoClass(Focused)]),
+      setter: (
+        colors: (
+          border: Var("focus-stroke"),
         ),
       ),
     ),
@@ -1765,6 +2323,24 @@
       setter: (
         colors: (
           bg: Var("surface-subtle-hover"),
+          text: Var("brand-foreground-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiBreadcrumbItem"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-pressed"),
+          text: Var("brand-foreground-pressed"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiBreadcrumbItem"), PseudoClass(Focused)]),
+      setter: (
+        colors: (
+          border: Var("focus-stroke"),
         ),
       ),
     ),
@@ -1785,6 +2361,185 @@
           bg: Var("status-info-bg"),
           border: Var("status-info-border"),
           text: Var("text-primary"),
+        ),
+      ),
+    ),
+
+    // ── Numeric Up Down ───────────────────────────────────────
+    (
+      selector: Type("UiNumericUpDown"),
+      setter: (
+        layout: (
+          padding: Var("space-xs"),
+          gap: Var("space-xs"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+          justify_content: Center,
+          align_items: Center,
+        ),
+        colors: (
+          bg: Var("surface-elevated"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Type("UiNumericUpDown"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          border: Var("border-default-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiNumericUpDown"), PseudoClass(Focused)]),
+      setter: (
+        colors: (
+          border: Var("focus-stroke"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("numericUpDown.value"),
+      setter: (
+        layout: (
+          padding: Var("space-xs"),
+          corner_radius: Var("radius-sm"),
+          border_width: 0.0,
+        ),
+        colors: (
+          bg: Var("transparent"),
+          text: Var("text-primary"),
+          border: Var("transparent"),
+        ),
+        text: (
+          text_align: Center,
+          weight: Var("font-weight-medium"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("numericUpDown.decrease"),
+      setter: (
+        layout: (
+          padding: Var("space-xs"),
+          corner_radius: Var("radius-sm"),
+          border_width: Var("border-thin"),
+          min_width: 28.0,
+        ),
+        colors: (
+          bg: Var("transparent"),
+          border: Var("transparent"),
+          text: Var("text-primary"),
+        ),
+        text: (
+          text_align: Center,
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: Class("numericUpDown.increase"),
+      setter: (
+        layout: (
+          padding: Var("space-xs"),
+          corner_radius: Var("radius-sm"),
+          border_width: Var("border-thin"),
+          min_width: 28.0,
+        ),
+        colors: (
+          bg: Var("transparent"),
+          border: Var("transparent"),
+          text: Var("text-primary"),
+        ),
+        text: (
+          text_align: Center,
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Class("numericUpDown.decrease"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-hover"),
+          border: Var("border-default-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("numericUpDown.increase"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-hover"),
+          border: Var("border-default-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("numericUpDown.decrease"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-pressed"),
+          border: Var("border-default-pressed"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("numericUpDown.increase"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-pressed"),
+          border: Var("border-default-pressed"),
+        ),
+      ),
+    ),
+
+    // ── Expander ──────────────────────────────────────────────
+    (
+      selector: Type("UiExpander"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          gap: Var("gap-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+          justify_content: Start,
+          align_items: Stretch,
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Type("UiExpander"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-hover"),
+          border: Var("border-default-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiExpander"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-pressed"),
+          border: Var("border-default-pressed"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiExpander"), PseudoClass(Focused)]),
+      setter: (
+        colors: (
+          border: Var("focus-stroke"),
         ),
       ),
     ),
@@ -1813,7 +2568,138 @@
       selector: And([Type("UiSearch"), PseudoClass(Hovered)]),
       setter: (
         colors: (
+          bg: Var("surface-subtle-hover"),
+          border: Var("border-input-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiSearch"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-pressed"),
           border: Var("border-input"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiSearch"), PseudoClass(Focused)]),
+      setter: (
+        colors: (
+          border: Var("focus-stroke"),
+        ),
+      ),
+    ),
+
+    // ── Navigation View ───────────────────────────────────────
+    (
+      selector: Type("UiNavigationView"),
+      setter: (
+        layout: (
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+          justify_content: Start,
+          align_items: Stretch,
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("nav.sidebar"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          gap: Var("space-xs"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-bg-secondary"),
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("nav.content"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          corner_radius: Var("radius-md"),
+          border_width: 0.0,
+          justify_content: Start,
+          align_items: Stretch,
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("transparent"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("nav.item"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("transparent"),
+          border: Var("transparent"),
+          text: Var("text-secondary"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Class("nav.item"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-hover"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("nav.item"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-pressed"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("nav.item.active"),
+      setter: (
+        colors: (
+          bg: Var("surface-tab-active"),
+          border: Var("surface-accent"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("nav.item.active"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-accent-hover"),
+          border: Var("surface-accent-hover"),
+          text: Var("text-on-accent"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("nav.item.active"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-accent-pressed"),
+          border: Var("surface-accent-pressed"),
+          text: Var("text-on-accent"),
         ),
       ),
     ),
@@ -2027,6 +2913,24 @@
         ),
       ),
     ),
+    (
+      selector: And([Class("template.checkbox.box.checked"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-accent-hover"),
+          border: Var("surface-accent-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("template.checkbox.box.checked"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-accent-pressed"),
+          border: Var("surface-accent-pressed"),
+        ),
+      ),
+    ),
     // Indeterminate checkbox box uses the same accent fill as checked.
     (
       selector: Class("template.checkbox.box.indeterminate"),
@@ -2039,6 +2943,24 @@
         colors: (
           bg: Var("surface-accent"),
           border: Var("surface-accent"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("template.checkbox.box.indeterminate"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-accent-hover"),
+          border: Var("surface-accent-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("template.checkbox.box.indeterminate"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-accent-pressed"),
+          border: Var("surface-accent-pressed"),
         ),
       ),
     ),
@@ -2112,6 +3034,24 @@
         colors: (
           bg: Var("surface-accent"),
           border: Var("surface-accent"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("template.switch.track.on"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-accent-hover"),
+          border: Var("surface-accent-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("template.switch.track.on"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-accent-pressed"),
+          border: Var("surface-accent-pressed"),
         ),
       ),
     ),

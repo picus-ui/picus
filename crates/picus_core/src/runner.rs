@@ -3,6 +3,8 @@ use bevy_a11y::AccessibilityPlugin;
 use bevy_app::App;
 use bevy_input::InputPlugin;
 use bevy_window::{PrimaryWindow, Window, WindowPlugin};
+use bevy_winit::{UpdateMode, WinitPlugin, WinitSettings};
+use std::time::Duration;
 
 /// Compatibility window options applied to Bevy's primary window before `App::run()`.
 #[derive(Clone, Debug, Default)]
@@ -74,6 +76,19 @@ fn primary_window_exists(app: &mut App) -> bool {
     query.iter(app.world_mut()).next().is_some()
 }
 
+fn latency_bounded_winit_settings() -> WinitSettings {
+    WinitSettings {
+        focused_mode: UpdateMode::reactive(Duration::from_secs_f64(1.0 / 120.0)),
+        unfocused_mode: UpdateMode::reactive_low_power(Duration::from_secs_f64(1.0 / 30.0)),
+    }
+}
+
+fn ensure_latency_bounded_winit_settings(app: &mut App) {
+    if !app.world().contains_resource::<WinitSettings>() {
+        app.insert_resource(latency_bounded_winit_settings());
+    }
+}
+
 fn ensure_native_windowing_plugins(app: &mut App, primary_window: &Window) {
     let had_primary_window = primary_window_exists(app);
 
@@ -98,8 +113,10 @@ fn ensure_native_windowing_plugins(app: &mut App, primary_window: &Window) {
         });
     }
 
-    if !app.is_plugin_added::<bevy_winit::WinitPlugin>() {
-        app.add_plugins(bevy_winit::WinitPlugin::default());
+    ensure_latency_bounded_winit_settings(app);
+
+    if !app.is_plugin_added::<WinitPlugin>() {
+        app.add_plugins(WinitPlugin::default());
     }
 }
 
@@ -164,5 +181,37 @@ mod tests {
         assert_eq!(window.resize_constraints.min_width, 320.0);
         assert_eq!(window.resize_constraints.min_height, 200.0);
         assert!(!window.resizable);
+    }
+
+    #[test]
+    fn native_windowing_defaults_to_bounded_reactive_updates() {
+        let mut app = App::new();
+
+        ensure_latency_bounded_winit_settings(&mut app);
+
+        let settings = app.world().resource::<WinitSettings>();
+        assert_eq!(
+            settings.focused_mode,
+            UpdateMode::reactive(Duration::from_secs_f64(1.0 / 120.0))
+        );
+        assert_eq!(
+            settings.unfocused_mode,
+            UpdateMode::reactive_low_power(Duration::from_secs_f64(1.0 / 30.0))
+        );
+    }
+
+    #[test]
+    fn native_windowing_respects_existing_winit_settings() {
+        let mut app = App::new();
+        app.insert_resource(WinitSettings::desktop_app());
+
+        ensure_latency_bounded_winit_settings(&mut app);
+
+        let settings = app.world().resource::<WinitSettings>();
+        assert_eq!(settings.focused_mode, WinitSettings::desktop_app().focused_mode);
+        assert_eq!(
+            settings.unfocused_mode,
+            WinitSettings::desktop_app().unfocused_mode
+        );
     }
 }

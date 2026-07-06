@@ -64,7 +64,10 @@ impl ExternalWindowSurface {
     }
 
     /// Synchronize internal surface size and scale-factor from the attached window.
-    pub fn sync_window_metrics(&mut self, metrics: ExistingWindowMetrics) {
+    ///
+    /// Returns `true` when the backing surface textures were resized and the
+    /// caller should schedule a fresh paint.
+    pub fn sync_window_metrics(&mut self, metrics: ExistingWindowMetrics) -> bool {
         self.scale_factor = metrics.scale_factor;
 
         if self.surface.config.width != metrics.physical_width
@@ -75,7 +78,10 @@ impl ExternalWindowSurface {
                 metrics.physical_width.max(1),
                 metrics.physical_height.max(1),
             );
+            return true;
         }
+
+        false
     }
 
     /// Render a prepared Masonry frame and present it to the attached window surface.
@@ -139,8 +145,8 @@ impl ExternalWindowSurface {
         queue.submit([encoder.finish()]);
         surface_texture.present();
 
-        if let Err(error) = device.poll(wgpu::PollType::wait_indefinitely()) {
-            tracing::error!("error while waiting for GPU completion: {error}");
+        if let Err(error) = device.poll(wgpu::PollType::Poll) {
+            tracing::trace!("non-blocking GPU poll after present returned: {error}");
         }
     }
 }
@@ -227,37 +233,23 @@ impl RenderContext {
             },
         };
 
-        let (alpha_mode, blitter) = if capabilities
-            .alpha_modes
-            .contains(&CompositeAlphaMode::PostMultiplied)
-        {
-            (
-                CompositeAlphaMode::PostMultiplied,
-                TextureBlitter::new(&device_handle.device, format),
-            )
-        } else if capabilities
-            .alpha_modes
-            .contains(&CompositeAlphaMode::PreMultiplied)
-        {
-            (
-                CompositeAlphaMode::PreMultiplied,
-                TextureBlitterBuilder::new(&device_handle.device, format)
-                    .blend_state(PREMUL_BLEND_STATE)
-                    .build(),
-            )
+        let adapter_name = device_handle.adapter.get_info().name;
+        let alpha_mode = choose_alpha_mode(&capabilities.alpha_modes);
+        let needs_premultiplied_blit = matches!(alpha_mode, CompositeAlphaMode::PreMultiplied)
+            || (matches!(
+                alpha_mode,
+                CompositeAlphaMode::Auto | CompositeAlphaMode::Opaque
+            ) && cfg!(windows)
+                && adapter_name.contains("AMD"));
+        let blitter = if needs_premultiplied_blit {
+            if cfg!(windows) && adapter_name.contains("AMD") {
+                tracing::info!("using premultiplied blitting for Windows AMD compatibility");
+            }
+            TextureBlitterBuilder::new(&device_handle.device, format)
+                .blend_state(PREMUL_BLEND_STATE)
+                .build()
         } else {
-            let texture_blitter =
-                if cfg!(windows) && device_handle.adapter.get_info().name.contains("AMD") {
-                    tracing::info!(
-                        "on Windows with AMD GPUs use premultiplied blitting even on opaque surface"
-                    );
-                    TextureBlitterBuilder::new(&device_handle.device, format)
-                        .blend_state(PREMUL_BLEND_STATE)
-                        .build()
-                } else {
-                    TextureBlitter::new(&device_handle.device, format)
-                };
-            (CompositeAlphaMode::Auto, texture_blitter)
+            TextureBlitter::new(&device_handle.device, format)
         };
 
         let config = SurfaceConfiguration {
@@ -266,7 +258,7 @@ impl RenderContext {
             width,
             height,
             present_mode,
-            desired_maximum_frame_latency: 2,
+            desired_maximum_frame_latency: 1,
             alpha_mode,
             view_formats: vec![],
         };
@@ -366,6 +358,18 @@ fn create_targets(width: u32, height: u32, device: &Device) -> (Texture, Texture
     (target_texture, target_view)
 }
 
+fn choose_alpha_mode(modes: &[CompositeAlphaMode]) -> CompositeAlphaMode {
+    if modes.contains(&CompositeAlphaMode::Opaque) {
+        CompositeAlphaMode::Opaque
+    } else if modes.contains(&CompositeAlphaMode::PreMultiplied) {
+        CompositeAlphaMode::PreMultiplied
+    } else if modes.contains(&CompositeAlphaMode::PostMultiplied) {
+        CompositeAlphaMode::PostMultiplied
+    } else {
+        CompositeAlphaMode::Auto
+    }
+}
+
 #[derive(Debug)]
 pub enum RenderSurfaceError {
     CreateSurface(wgpu::CreateSurfaceError),
@@ -412,5 +416,31 @@ impl std::fmt::Debug for RenderSurface<'_> {
             .field("target_view", &self.target_view)
             .field("blitter", &"(Not Debug)")
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn alpha_mode_prefers_opaque_surfaces() {
+        let modes = [
+            CompositeAlphaMode::PostMultiplied,
+            CompositeAlphaMode::Opaque,
+            CompositeAlphaMode::PreMultiplied,
+        ];
+
+        assert_eq!(choose_alpha_mode(&modes), CompositeAlphaMode::Opaque);
+    }
+
+    #[test]
+    fn alpha_mode_falls_back_to_premultiplied_before_postmultiplied() {
+        let modes = [
+            CompositeAlphaMode::PostMultiplied,
+            CompositeAlphaMode::PreMultiplied,
+        ];
+
+        assert_eq!(choose_alpha_mode(&modes), CompositeAlphaMode::PreMultiplied);
     }
 }

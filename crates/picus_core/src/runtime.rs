@@ -8,7 +8,7 @@ use crate::xilem::style::Style as _;
 use crate::xilem::winit::window::Window as XilemWinitWindow;
 use bevy_ecs::{
     entity::Entity,
-    message::MessageReader,
+    message::{MessageReader, MessageWriter},
     prelude::{Added, FromWorld, NonSendMut, Query, Res, ResMut, With, Without, World},
 };
 use bevy_input::{
@@ -20,7 +20,7 @@ use bevy_math::Vec2;
 use bevy_time::Time;
 use bevy_window::{
     ClosingWindow, CursorLeft, CursorMoved, Ime as BevyIme, PrimaryWindow, RawHandleWrapper,
-    Window, WindowFocused, WindowResized, WindowScaleFactorChanged, WindowWrapper,
+    RequestRedraw, Window, WindowFocused, WindowResized, WindowScaleFactorChanged, WindowWrapper,
 };
 use masonry_core::{
     app::{RenderRoot, RenderRootOptions, RenderRootSignal, VisualLayerKind, WindowSizePolicy},
@@ -83,6 +83,18 @@ pub(crate) enum ImeWindowSignal {
     Move(Vec2),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RedrawSignal {
+    Redraw,
+    AnimFrame,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PaintFrameResult {
+    painted: bool,
+    wants_redraw: bool,
+}
+
 #[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PointerTraceEvent {
@@ -112,6 +124,10 @@ pub struct WindowRuntime {
     keyboard_modifiers: Modifiers,
     ime_signal_receiver: mpsc::Receiver<ImeWindowSignal>,
     action_signal_receiver: mpsc::Receiver<(ErasedAction, WidgetId)>,
+    redraw_signal_receiver: mpsc::Receiver<RedrawSignal>,
+    needs_redraw: bool,
+    needs_anim_frame: bool,
+    has_painted_once: bool,
     viewport_width: f64,
     viewport_height: f64,
     window_surface: Option<ExternalWindowSurface>,
@@ -129,6 +145,7 @@ impl WindowRuntime {
         let (ime_signal_sender, ime_signal_receiver) = mpsc::channel::<ImeWindowSignal>();
         let (action_signal_sender, action_signal_receiver) =
             mpsc::channel::<(ErasedAction, WidgetId)>();
+        let (redraw_signal_sender, redraw_signal_receiver) = mpsc::channel::<RedrawSignal>();
 
         let (initial_root_widget, view_state) = <UiAnyView as View<(), (), ViewCtx>>::build(
             initial_view.as_ref(),
@@ -164,6 +181,12 @@ impl WindowRuntime {
                 RenderRootSignal::Action(action, source) => {
                     let _ = action_signal_sender.send((action, source));
                 }
+                RenderRootSignal::RequestRedraw => {
+                    let _ = redraw_signal_sender.send(RedrawSignal::Redraw);
+                }
+                RenderRootSignal::RequestAnimFrame => {
+                    let _ = redraw_signal_sender.send(RedrawSignal::AnimFrame);
+                }
                 _ => {}
             },
             options,
@@ -193,6 +216,10 @@ impl WindowRuntime {
             keyboard_modifiers: Modifiers::empty(),
             ime_signal_receiver,
             action_signal_receiver,
+            redraw_signal_receiver,
+            needs_redraw: true,
+            needs_anim_frame: true,
+            has_painted_once: false,
             viewport_width: initial_viewport.0,
             viewport_height: initial_viewport.1,
             window_surface: None,
@@ -579,6 +606,7 @@ impl WindowRuntime {
     pub fn handle_window_resized(&mut self, width: f32, height: f32) -> Handled {
         self.viewport_width = width.max(1.0) as f64;
         self.viewport_height = height.max(1.0) as f64;
+        self.needs_redraw = true;
 
         let scale = self.window_scale_factor.max(f64::EPSILON);
         let physical_width = (self.viewport_width * scale).round().max(1.0) as u32;
@@ -593,6 +621,7 @@ impl WindowRuntime {
 
     pub fn handle_window_scale_factor_changed(&mut self, scale_factor: f64) -> Handled {
         self.window_scale_factor = scale_factor.max(f64::EPSILON);
+        self.needs_redraw = true;
         let _ = self
             .render_root
             .handle_window_event(WindowEvent::Rescale(self.window_scale_factor));
@@ -617,7 +646,9 @@ impl WindowRuntime {
         metrics: ExistingWindowMetrics,
     ) -> bool {
         if let Some(surface) = self.window_surface.as_mut() {
-            surface.sync_window_metrics(metrics);
+            if surface.sync_window_metrics(metrics) {
+                self.needs_redraw = true;
+            }
             return true;
         }
 
@@ -636,6 +667,8 @@ impl WindowRuntime {
         ) {
             Ok(surface) => {
                 self.window_surface = Some(surface);
+                self.needs_redraw = true;
+                self.has_painted_once = false;
                 true
             }
             Err(error) => {
@@ -645,15 +678,49 @@ impl WindowRuntime {
         }
     }
 
-    pub fn paint_frame(&mut self, delta: std::time::Duration) {
-        let _ = self
-            .render_root
-            .handle_window_event(WindowEvent::AnimFrame(delta));
+    fn drain_redraw_signals(&mut self) {
+        for signal in self.redraw_signal_receiver.try_iter() {
+            match signal {
+                RedrawSignal::Redraw => self.needs_redraw = true,
+                RedrawSignal::AnimFrame => self.needs_anim_frame = true,
+            }
+        }
+    }
+
+    fn paint_frame(&mut self, delta: std::time::Duration) -> PaintFrameResult {
+        self.drain_redraw_signals();
+
+        let should_paint = !self.has_painted_once
+            || self.needs_redraw
+            || self.needs_anim_frame
+            || self.render_root.needs_anim()
+            || self.render_root.needs_rewrite_passes();
+        if !should_paint {
+            return PaintFrameResult {
+                painted: false,
+                wants_redraw: false,
+            };
+        }
+
+        let should_tick_animation = self.needs_anim_frame || self.render_root.needs_anim();
+        self.needs_redraw = false;
+        self.needs_anim_frame = false;
+
+        if should_tick_animation {
+            let _ = self
+                .render_root
+                .handle_window_event(WindowEvent::AnimFrame(delta));
+        }
+
         let logical_size = self.render_root.size();
         let (visual_layers, _tree_update) = self.render_root.redraw();
 
         let Some(surface) = self.window_surface.as_mut() else {
-            return;
+            self.needs_redraw = true;
+            return PaintFrameResult {
+                painted: false,
+                wants_redraw: true,
+            };
         };
 
         let overlays = visual_layers
@@ -669,7 +736,11 @@ impl WindowRuntime {
             })
             .collect::<Vec<_>>();
         let Some(root_layer) = visual_layers.root_layer() else {
-            return;
+            return PaintFrameResult {
+                painted: false,
+                wants_redraw: self.render_root.needs_anim()
+                    || self.render_root.needs_rewrite_passes(),
+            };
         };
         let VisualLayerKind::Scene(root_scene) = &root_layer.kind else {
             unreachable!("root_layer always returns a scene layer");
@@ -684,6 +755,16 @@ impl WindowRuntime {
         );
 
         surface.render_frame(&mut self.renderer, frame);
+        self.has_painted_once = true;
+        self.drain_redraw_signals();
+
+        PaintFrameResult {
+            painted: true,
+            wants_redraw: self.needs_redraw
+                || self.needs_anim_frame
+                || self.render_root.needs_anim()
+                || self.render_root.needs_rewrite_passes(),
+        }
     }
 
     pub(crate) fn take_pending_ime_signals(&mut self) -> Vec<ImeWindowSignal> {
@@ -715,6 +796,7 @@ impl WindowRuntime {
                     metrics.physical_width.max(1),
                     metrics.physical_height.max(1),
                 )));
+            self.needs_redraw = true;
         }
     }
 
@@ -1448,12 +1530,14 @@ pub fn paint_masonry_ui(
     runtime: Option<NonSendMut<MasonryRuntime>>,
     active_window_query: Query<(), (With<Window>, Without<ClosingWindow>)>,
     time: Res<Time>,
+    mut redraw_requests: MessageWriter<RequestRedraw>,
 ) {
     let Some(mut runtime) = runtime else {
         return;
     };
 
     let window_entities: Vec<Entity> = runtime.window_entities().collect();
+    let mut wants_redraw = false;
 
     for window_entity in window_entities {
         if !active_window_query.contains(window_entity) {
@@ -1491,14 +1575,15 @@ pub fn paint_masonry_ui(
         let Some(window_runtime) = runtime.window_mut(window_entity) else {
             continue;
         };
-        window_runtime.paint_frame(time.delta());
+        let result = window_runtime.paint_frame(time.delta());
+        wants_redraw |= result.wants_redraw;
+        if result.painted {
+            tracing::trace!("painted Masonry frame for window {:?}", window_entity);
+        }
+    }
 
-        bevy_winit::WINIT_WINDOWS.with(|winit_windows| {
-            let winit_windows = winit_windows.borrow();
-            if let Some(window) = winit_windows.get_window(window_entity) {
-                window.request_redraw();
-            }
-        });
+    if wants_redraw {
+        redraw_requests.write(RequestRedraw);
     }
 }
 

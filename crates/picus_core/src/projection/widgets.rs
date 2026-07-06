@@ -28,8 +28,9 @@ use crate::{
         UiCanvasCommand, UiCanvasPathCommand, UiCanvasPosition, UiColorPicker, UiColorPickerPanel,
         UiContextMenu, UiDataTable, UiDatePicker, UiDatePickerPanel, UiDivider, UiExpander,
         UiGradientStop, UiGroupBox, UiListSelectionMode, UiListView, UiMenuBar, UiMenuBarItem,
-        UiMenuItemPanel, UiMessageBar, UiNavigationView, UiRadioGroup, UiScrollView, UiSearch,
-        UiSortDirection, UiSpinner, UiSplitPane, UiTabBar, UiTable, UiTimePicker,
+        UiMenuItemPanel, UiMessageBar, UiNavigationItem, UiNavigationView, UiRadioGroup,
+        UiScrollView, UiSearch, UiSortDirection, UiSpinner, UiSplitPane, UiTabBar, UiTable,
+        UiTimePicker,
         UiTimePickerPanel, UiToast, UiTooltip, UiTreeNode,
     },
     icons::LUCIDE_FONT_FAMILY,
@@ -41,6 +42,7 @@ use crate::{
     styling::{
         ResolvedStyle, apply_direct_widget_style, apply_flex_alignment, apply_label_style,
         apply_widget_style, font_stack_from_style, resolve_style, resolve_style_for_classes,
+        resolve_style_for_entity_classes,
     },
     widget_actions::WidgetUiAction,
 };
@@ -1923,84 +1925,38 @@ pub(crate) fn project_search(search: &UiSearch, ctx: ProjectionCtx<'_>) -> UiVie
 pub(crate) fn project_navigation_view(nav: &UiNavigationView, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let sidebar_style = resolve_style_for_classes(ctx.world, ["nav.sidebar"]);
-    let base_item_style = resolve_style_for_classes(ctx.world, ["nav.item"]);
-    let mut active_item_style =
-        resolve_style_for_classes(ctx.world, ["nav.item", "nav.item.active"]);
+    let content_style = resolve_style_for_classes(ctx.world, ["nav.content"]);
+    let pairs = child_entity_views(&ctx);
 
-    // Smooth background transition for active item switching.
-    if active_item_style.transition.is_none() {
-        active_item_style.transition = Some(crate::styling::StyleTransition {
-            duration: 0.15,
-            easing: None,
-        });
-    }
-
-    // --- Build sidebar items ---
-    let item_views: Vec<_> = nav
-        .items
+    let mut item_views = pairs
         .iter()
-        .enumerate()
-        .map(|(i, item)| {
-            let is_active = i == nav.selected;
-            let item_style = if is_active {
-                &active_item_style
-            } else {
-                &base_item_style
-            };
-
-            // Optional icon glyph (Lucide font)
-            let icon_view: Option<UiView> = item.icon.map(|glyph| -> UiView {
-                let mut icon_style = ResolvedStyle::default();
-                icon_style.colors.text = item_style.colors.text;
-                icon_style.text.size = item_style.text.size;
-                icon_style.font_family = Some(vec![LUCIDE_FONT_FAMILY.to_string()]);
-                Arc::new(
-                    sized_box(apply_label_style(label(glyph.to_string()), &icon_style))
-                        .width(Dim::Fixed(Length::px(20.0)))
-                        .height(Dim::Fixed(Length::px(20.0))),
-                ) as UiView
-            });
-
-            // Label text
-            let label_view: UiView =
-                Arc::new(apply_label_style(label(item.label.clone()), item_style));
-
-            // Combine icon + label into a row
-            let content: UiView = if let Some(icon) = icon_view {
-                Arc::new(
-                    flex_row(vec![icon.into_any_flex(), label_view.into_any_flex()])
-                        .cross_axis_alignment(CrossAxisAlignment::Center)
-                        .gap(Length::px(8.0)),
-                )
-            } else {
-                label_view
-            };
-
-            // Wrap in a clickable button that emits SelectNavigationItem
-            let button = apply_direct_widget_style(
-                button_with_child_view(
-                    ctx.entity,
-                    WidgetUiAction::SelectNavigationItem {
-                        nav: ctx.entity,
-                        index: i,
-                    },
-                    content,
-                ),
-                item_style,
-            );
-            button.into_any_flex()
+        .filter_map(|(entity, view)| {
+            ctx.world
+                .get::<UiNavigationItem>(*entity)
+                .filter(|item| item.nav == ctx.entity && item.index < nav.items.len())
+                .map(|item| (item.index, view.clone()))
         })
-        .collect();
+        .collect::<Vec<_>>();
+    item_views.sort_by_key(|(index, _)| *index);
+    let item_views = item_views
+        .into_iter()
+        .map(|(_, view)| view.into_any_flex())
+        .collect::<Vec<_>>();
+
+    let content_views = pairs
+        .iter()
+        .filter(|(entity, _)| ctx.world.get::<UiNavigationItem>(*entity).is_none())
+        .map(|(_, view)| view.clone())
+        .collect::<Vec<_>>();
 
     // --- Sidebar column ---
     let sidebar: UiView = Arc::new(apply_widget_style(
-        flex_col(item_views).gap(Length::px(0.0)),
+        flex_col(item_views).gap(Length::px(sidebar_style.layout.gap.max(0.0))),
         &sidebar_style,
     ));
 
     // --- Content area: show only the selected child, flex-grow to fill space ---
-    let content: UiView = ctx
-        .children
+    let content: UiView = content_views
         .get(nav.selected)
         .cloned()
         .unwrap_or_else(|| Arc::new(label("")));
@@ -2014,10 +1970,13 @@ pub(crate) fn project_navigation_view(nav: &UiNavigationView, ctx: ProjectionCtx
             .with_height(Dim::Stretch),
     );
     let content_area = sized_box(
-        scroll_portal(content_body, Point::ORIGIN)
-            .constrain_horizontal(true)
-            .constrain_vertical(true)
-            .content_must_fill(true),
+        apply_widget_style(
+            scroll_portal(content_body, Point::ORIGIN)
+                .constrain_horizontal(true)
+                .constrain_vertical(true)
+                .content_must_fill(true),
+            &content_style,
+        ),
     )
     .dims(
         Dimensions::AUTO
@@ -2048,6 +2007,67 @@ pub(crate) fn project_navigation_view(nav: &UiNavigationView, ctx: ProjectionCtx
                 .with_height(Dim::Stretch),
         ),
     )
+}
+
+/// Project a single ECS-backed sidebar item for [`UiNavigationView`].
+pub(crate) fn project_navigation_item(item: &UiNavigationItem, ctx: ProjectionCtx<'_>) -> UiView {
+    let Some(nav) = ctx.world.get::<UiNavigationView>(item.nav) else {
+        return Arc::new(label(""));
+    };
+    let Some(nav_item) = nav.items.get(item.index) else {
+        return Arc::new(label(""));
+    };
+
+    let is_active = item.index == nav.selected;
+    let mut style = if is_active {
+        resolve_style_for_entity_classes(ctx.world, ctx.entity, ["nav.item", "nav.item.active"])
+    } else {
+        resolve_style_for_entity_classes(ctx.world, ctx.entity, ["nav.item"])
+    };
+
+    // Smooth background transition for active item switching.
+    if is_active && style.transition.is_none() {
+        style.transition = Some(crate::styling::StyleTransition {
+            duration: 0.15,
+            easing: None,
+        });
+    }
+
+    let icon_view: Option<UiView> = nav_item.icon.map(|glyph| -> UiView {
+        let mut icon_style = ResolvedStyle::default();
+        icon_style.colors.text = style.colors.text;
+        icon_style.text.size = style.text.size;
+        icon_style.font_family = Some(vec![LUCIDE_FONT_FAMILY.to_string()]);
+        Arc::new(
+            sized_box(apply_label_style(label(glyph.to_string()), &icon_style))
+                .width(Dim::Fixed(Length::px(20.0)))
+                .height(Dim::Fixed(Length::px(20.0))),
+        ) as UiView
+    });
+
+    let label_view: UiView = Arc::new(apply_label_style(label(nav_item.label.clone()), &style));
+
+    let content: UiView = if let Some(icon) = icon_view {
+        Arc::new(
+            flex_row(vec![icon.into_any_flex(), label_view.into_any_flex()])
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .gap(Length::px(8.0)),
+        )
+    } else {
+        label_view
+    };
+
+    Arc::new(apply_direct_widget_style(
+        button_with_child_view(
+            ctx.entity,
+            WidgetUiAction::SelectNavigationItem {
+                nav: item.nav,
+                index: item.index,
+            },
+            content,
+        ),
+        &style,
+    ))
 }
 
 // ---------------------------------------------------------------------------

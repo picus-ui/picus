@@ -222,7 +222,13 @@ pub fn register_builtin_ui_components(app: &mut App) {
         .register_ui_component::<theme_picker::UiThemePicker>()
         .register_ui_component::<theme_picker::UiThemePickerMenu>()
         .register_ui_component::<navigation_view::UiNavigationView>()
+        .register_ui_component::<navigation_view::UiNavigationItem>()
         .register_ui_component::<titlebar::UiTitleBar>()
         .register_ui_component::<numeric_up_down::UiNumericUpDown>()
         .register_ui_component::<toolbar::UiToolbar>();
+
+    app.add_systems(
+        bevy_app::Update,
+        navigation_view::sync_navigation_view_item_templates,
+    );
 }

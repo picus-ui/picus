@@ -1192,6 +1192,42 @@ pub struct ResolvedStyle {
     pub transition: Option<StyleTransition>,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct StylePseudoState {
+    pub hovered: bool,
+    pub pressed: bool,
+    pub focused: bool,
+}
+
+impl StylePseudoState {
+    #[must_use]
+    pub const fn hovered() -> Self {
+        Self {
+            hovered: true,
+            pressed: false,
+            focused: false,
+        }
+    }
+
+    #[must_use]
+    pub const fn pressed() -> Self {
+        Self {
+            hovered: true,
+            pressed: true,
+            focused: false,
+        }
+    }
+
+    #[must_use]
+    pub const fn focused() -> Self {
+        Self {
+            hovered: false,
+            pressed: false,
+            focused: true,
+        }
+    }
+}
+
 /// Structural interaction events emitted by ECS-backed widgets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UiInteractionEvent {
@@ -1423,6 +1459,7 @@ fn selector_matches_entity(world: &World, entity: Entity, selector: &Selector) -
 fn selector_matches_class_context(
     world: &World,
     entity: Option<Entity>,
+    pseudo_state: Option<StylePseudoState>,
     selector: &Selector,
     has_class: &impl Fn(&str) -> bool,
 ) -> bool {
@@ -1441,18 +1478,35 @@ fn selector_matches_class_context(
                 .is_some_and(|component_id| component_matches_type(world, entity, component_id))
         }),
         Selector::Class(name) => has_class(name),
-        Selector::PseudoClass(PseudoClass::Hovered) => entity
-            .and_then(|entity| world.get::<InteractionState>(entity))
-            .is_some_and(|state| state.hovered),
-        Selector::PseudoClass(PseudoClass::Pressed) => entity
-            .and_then(|entity| world.get::<InteractionState>(entity))
-            .is_some_and(|state| state.pressed),
-        Selector::PseudoClass(PseudoClass::Focused) => entity
-            .and_then(|entity| world.get::<InteractionState>(entity))
-            .is_some_and(|state| state.focused),
+        Selector::PseudoClass(PseudoClass::Hovered) => pseudo_state
+            .map(|state| state.hovered)
+            .or_else(|| {
+                entity
+                    .and_then(|entity| world.get::<InteractionState>(entity))
+                    .map(|state| state.hovered)
+            })
+            .unwrap_or(false),
+        Selector::PseudoClass(PseudoClass::Pressed) => pseudo_state
+            .map(|state| state.pressed)
+            .or_else(|| {
+                entity
+                    .and_then(|entity| world.get::<InteractionState>(entity))
+                    .map(|state| state.pressed)
+            })
+            .unwrap_or(false),
+        Selector::PseudoClass(PseudoClass::Focused) => pseudo_state
+            .map(|state| state.focused)
+            .or_else(|| {
+                entity
+                    .and_then(|entity| world.get::<InteractionState>(entity))
+                    .map(|state| state.focused)
+            })
+            .unwrap_or(false),
         Selector::And(selectors) => selectors
             .iter()
-            .all(|selector| selector_matches_class_context(world, entity, selector, has_class)),
+            .all(|selector| {
+                selector_matches_class_context(world, entity, pseudo_state, selector, has_class)
+            }),
         Selector::Descendant {
             ancestor,
             descendant,
@@ -1461,7 +1515,13 @@ fn selector_matches_class_context(
                 return false;
             };
 
-            selector_matches_class_context(world, Some(entity), descendant, has_class)
+            selector_matches_class_context(
+                world,
+                Some(entity),
+                pseudo_state,
+                descendant,
+                has_class,
+            )
                 && entity_has_matching_ancestor(world, entity, ancestor)
         }
     }
@@ -1470,6 +1530,15 @@ fn selector_matches_class_context(
 fn merged_from_class_names<'a>(
     world: &World,
     entity: Option<Entity>,
+    class_names: impl IntoIterator<Item = &'a str>,
+) -> StyleSetterValue {
+    merged_from_class_names_with_state(world, entity, None, class_names)
+}
+
+fn merged_from_class_names_with_state<'a>(
+    world: &World,
+    entity: Option<Entity>,
+    pseudo_state: Option<StylePseudoState>,
     class_names: impl IntoIterator<Item = &'a str>,
 ) -> StyleSetterValue {
     let mut merged = StyleSetterValue::default();
@@ -1481,7 +1550,7 @@ fn merged_from_class_names<'a>(
     let has_class = |class_name: &str| class_set.contains(class_name);
 
     for rule in &sheet.rules {
-        if selector_matches_class_context(world, entity, &rule.selector, &has_class) {
+        if selector_matches_class_context(world, entity, pseudo_state, &rule.selector, &has_class) {
             merge_value_setter(&mut merged, &rule.setter);
         }
     }
@@ -1528,12 +1597,11 @@ fn merged_for_entity(world: &World, entity: Entity) -> (StyleSetterValue, bool) 
     (merged, matched_rule)
 }
 
-fn target_colors(world: &World, entity: Entity, colors: &ColorStyle) -> ResolvedColorStyle {
-    let (hovered, pressed) = world
-        .get::<InteractionState>(entity)
-        .map(|state| (state.hovered, state.pressed))
-        .unwrap_or((false, false));
-
+fn target_colors_for_state(
+    colors: &ColorStyle,
+    hovered: bool,
+    pressed: bool,
+) -> ResolvedColorStyle {
     let mut resolved = ResolvedColorStyle {
         bg: colors.bg,
         text: colors.text,
@@ -1565,6 +1633,15 @@ fn target_colors(world: &World, entity: Entity, colors: &ColorStyle) -> Resolved
     }
 
     resolved
+}
+
+fn target_colors(world: &World, entity: Entity, colors: &ColorStyle) -> ResolvedColorStyle {
+    let (hovered, pressed) = world
+        .get::<InteractionState>(entity)
+        .map(|state| (state.hovered, state.pressed))
+        .unwrap_or((false, false));
+
+    target_colors_for_state(colors, hovered, pressed)
 }
 
 fn to_resolved_layout(layout: &LayoutStyle) -> ResolvedLayoutStyle {
@@ -1970,6 +2047,35 @@ pub fn resolve_style_for_classes<'a>(
             text: merged.colors.text,
             border: merged.colors.border,
         },
+        text: to_resolved_text(&merged.text),
+        font_family: merged.font_family,
+        box_shadow: merged.box_shadow,
+        transition: merged.transition,
+    }
+}
+
+/// Resolve style from class names with an explicit pseudo-state, without inline entity overrides.
+#[must_use]
+pub fn resolve_style_for_classes_with_state<'a>(
+    world: &World,
+    class_names: impl IntoIterator<Item = &'a str>,
+    pseudo_state: StylePseudoState,
+) -> ResolvedStyle {
+    let merged = merged_from_class_names_with_state(world, None, Some(pseudo_state), class_names);
+    let empty_tokens = HashMap::new();
+    let tokens = world
+        .get_resource::<StyleSheet>()
+        .map(|sheet| &sheet.tokens)
+        .unwrap_or(&empty_tokens);
+    let merged = resolve_setter_values(&merged, tokens);
+
+    ResolvedStyle {
+        layout: to_resolved_layout(&merged.layout),
+        colors: target_colors_for_state(
+            &merged.colors,
+            pseudo_state.hovered,
+            pseudo_state.pressed,
+        ),
         text: to_resolved_text(&merged.text),
         font_family: merged.font_family,
         box_shadow: merged.box_shadow,

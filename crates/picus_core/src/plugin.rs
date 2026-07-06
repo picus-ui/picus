@@ -20,7 +20,8 @@ use bevy_scene::ScenePlugin;
 use bevy_text::Font;
 use bevy_time::TimePlugin;
 use bevy_window::{
-    CursorLeft, CursorMoved, Ime, WindowFocused, WindowResized, WindowScaleFactorChanged,
+    CursorLeft, CursorMoved, Ime, RequestRedraw, WindowFocused, WindowResized,
+    WindowScaleFactorChanged,
 };
 
 use crate::{
@@ -138,6 +139,7 @@ impl Plugin for PicusPlugin {
             .add_message::<MouseButtonInput>()
             .add_message::<MouseWheel>()
             .add_message::<Ime>()
+            .add_message::<RequestRedraw>()
             .add_message::<WindowFocused>()
             .add_message::<WindowResized>()
             .add_message::<WindowScaleFactorChanged>()

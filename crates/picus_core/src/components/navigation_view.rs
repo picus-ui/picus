@@ -1,4 +1,8 @@
-use bevy_ecs::prelude::*;
+use bevy_ecs::{
+    entity::Entity,
+    hierarchy::{ChildOf, Children},
+    prelude::*,
+};
 
 use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 
@@ -30,12 +34,31 @@ impl NavigationViewItem {
     }
 }
 
+/// ECS template entity for one [`UiNavigationView`] sidebar item.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UiNavigationItem {
+    /// Parent navigation view entity.
+    pub nav: Entity,
+    /// Index into [`UiNavigationView::items`].
+    pub index: usize,
+}
+
+impl Default for UiNavigationItem {
+    fn default() -> Self {
+        Self {
+            nav: Entity::PLACEHOLDER,
+            index: 0,
+        }
+    }
+}
+
 /// Sidebar navigation container with items and a content area.
 ///
-/// The sidebar is rendered as a vertical list of navigation items (with optional
-/// Lucide icon glyphs). The content area displays the ECS child at [`selected`]
-/// index — analogous to a [`UiTabBar`](crate::UiTabBar) with hidden headers but
-/// with a separate navigation panel.
+/// The sidebar is rendered as a vertical list of ECS-backed [`UiNavigationItem`]
+/// template entities (with optional Lucide icon glyphs). The content area
+/// displays the non-template ECS child at [`selected`] index — analogous to a
+/// [`UiTabBar`](crate::UiTabBar) with hidden headers but with a separate
+/// navigation panel.
 ///
 /// # Styling classes
 ///
@@ -84,7 +107,71 @@ pub struct UiNavigationSelectionChanged {
 }
 
 impl UiComponentTemplate for UiNavigationView {
+    fn expand(world: &mut World, entity: Entity) {
+        sync_navigation_view_item_entities(world, entity);
+    }
+
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::widgets::project_navigation_view(component, ctx)
+    }
+}
+
+impl UiComponentTemplate for UiNavigationItem {
+    fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
+        crate::projection::widgets::project_navigation_item(component, ctx)
+    }
+}
+
+pub(crate) fn sync_navigation_view_item_templates(world: &mut World) {
+    let nav_entities = {
+        let mut query = world
+            .query_filtered::<Entity, (With<UiNavigationView>, Changed<UiNavigationView>)>();
+        query.iter(world).collect::<Vec<_>>()
+    };
+
+    for nav in nav_entities {
+        sync_navigation_view_item_entities(world, nav);
+    }
+}
+
+fn sync_navigation_view_item_entities(world: &mut World, nav: Entity) {
+    let Some(item_count) = world.get::<UiNavigationView>(nav).map(|view| view.items.len()) else {
+        return;
+    };
+
+    let existing = world
+        .get::<Children>(nav)
+        .map(|children| {
+            children
+                .iter()
+                .filter_map(|child| {
+                    world
+                        .get::<UiNavigationItem>(child)
+                        .filter(|item| item.nav == nav)
+                        .map(|item| (child, item.index))
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    let mut by_index: Vec<Option<Entity>> = vec![None; item_count];
+    let mut stale = Vec::new();
+
+    for (entity, index) in existing {
+        if index < item_count && by_index[index].is_none() {
+            by_index[index] = Some(entity);
+        } else {
+            stale.push(entity);
+        }
+    }
+
+    for entity in stale {
+        let _ = world.despawn(entity);
+    }
+
+    for index in 0..item_count {
+        if by_index[index].is_none() {
+            world.spawn((UiNavigationItem { nav, index }, ChildOf(nav)));
+        }
     }
 }

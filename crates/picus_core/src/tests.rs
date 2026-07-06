@@ -17,7 +17,8 @@ use crate::{
     StyleRule, StyleSetter, StyleSheet, SyncTextSource, UiEventQueue, UiProjectorRegistry, UiRoot,
     UiView, bubble_ui_pointer_events, ensure_overlay_defaults, ensure_overlay_root,
     ensure_overlay_root_entity, handle_overlay_actions, register_builtin_projectors,
-    reparent_overlay_entities, resolve_style, resolve_style_for_entity_classes,
+    reparent_overlay_entities, resolve_style, resolve_style_for_classes,
+    resolve_style_for_entity_classes,
     spawn_in_overlay_root, synthesize_roots_with_stats,
 };
 use bevy_app::App;
@@ -212,6 +213,7 @@ fn public_ui_authoring_types_are_bsn_template_ready() {
     assert_component::<crate::UiMenuItemPanel>();
     assert_component::<crate::UiMessageBar>();
     assert_component::<crate::UiMultilineTextInput>();
+    assert_component::<crate::UiNavigationItem>();
     assert_component::<crate::UiNavigationView>();
     assert_component::<crate::UiPasswordInput>();
     assert_component::<crate::UiPopover>();
@@ -534,6 +536,109 @@ fn embedded_fluent_theme_defines_priority_control_visual_styles() {
 
     let progress_fill = crate::resolve_style_for_classes(app.world(), ["template.progress.fill"]);
     assert!(progress_fill.colors.bg.is_some());
+}
+
+#[test]
+fn embedded_fluent_theme_defines_interactive_state_defaults() {
+    fn token_color(world: &World, name: &str) -> crate::xilem::Color {
+        match world
+            .resource::<crate::StyleSheet>()
+            .tokens
+            .get(name)
+            .unwrap_or_else(|| panic!("missing color token `{name}`"))
+        {
+            crate::TokenValue::Color(color) => *color,
+            other => panic!("token `{name}` should be a color, got {other:?}"),
+        }
+    }
+
+    let mut app = App::new();
+    app.add_plugins(PicusPlugin);
+    crate::set_active_style_variant_by_name(app.world_mut(), "dark");
+    app.update();
+
+    let hovered = app
+        .world_mut()
+        .spawn((
+            crate::UiPasswordInput::default(),
+            InteractionState {
+                hovered: true,
+                pressed: false,
+                focused: false,
+            },
+        ))
+        .id();
+    let pressed = app
+        .world_mut()
+        .spawn((
+            crate::UiTimePicker::default(),
+            InteractionState {
+                hovered: false,
+                pressed: true,
+                focused: false,
+            },
+        ))
+        .id();
+
+    let password_hover = resolve_style(app.world(), hovered);
+    assert_eq!(
+        password_hover.colors.border,
+        Some(token_color(app.world(), "border-input-hover"))
+    );
+
+    let time_pressed = resolve_style(app.world(), pressed);
+    assert_eq!(
+        time_pressed.colors.bg,
+        Some(token_color(app.world(), "surface-subtle-pressed"))
+    );
+
+    let numeric_decrease =
+        resolve_style_for_entity_classes(app.world(), hovered, ["numericUpDown.decrease"]);
+    assert_eq!(
+        numeric_decrease.colors.bg,
+        Some(token_color(app.world(), "surface-subtle-hover"))
+    );
+
+    let context_item =
+        resolve_style_for_entity_classes(app.world(), pressed, ["overlay.context_menu.item"]);
+    assert_eq!(
+        context_item.colors.bg,
+        Some(token_color(app.world(), "surface-overlay-item-pressed"))
+    );
+
+    let list_item = resolve_style_for_entity_classes(app.world(), hovered, ["widget.list_view.item"]);
+    assert_eq!(
+        list_item.colors.bg,
+        Some(token_color(app.world(), "surface-overlay-item-hover"))
+    );
+
+    let nav_item = resolve_style_for_entity_classes(app.world(), hovered, ["nav.item"]);
+    assert_eq!(
+        nav_item.colors.bg,
+        Some(token_color(app.world(), "surface-subtle-hover"))
+    );
+
+    let nav_sidebar = resolve_style_for_classes(app.world(), ["nav.sidebar"]);
+    assert_eq!(
+        nav_sidebar.colors.bg,
+        Some(token_color(app.world(), "surface-bg-secondary"))
+    );
+
+    let nav_content = resolve_style_for_classes(app.world(), ["nav.content"]);
+    assert_eq!(
+        nav_content.colors.bg,
+        Some(token_color(app.world(), "surface-panel"))
+    );
+
+    let switch_on = resolve_style_for_entity_classes(
+        app.world(),
+        hovered,
+        ["template.switch.track", "template.switch.track.on"],
+    );
+    assert_eq!(
+        switch_on.colors.bg,
+        Some(token_color(app.world(), "surface-accent-hover"))
+    );
 }
 
 #[test]
@@ -1144,6 +1249,92 @@ fn navigation_view_tracks_invisible_primary_window_resizes() {
         (tall_height - 640.0).abs() <= 1.0,
         "nav height should match invisible window's tall size, got {tall_height}"
     );
+}
+
+#[test]
+fn navigation_view_sidebar_items_are_ecs_interactive_entities() {
+    fn token_color(world: &World, name: &str) -> crate::xilem::Color {
+        match world
+            .resource::<crate::StyleSheet>()
+            .tokens
+            .get(name)
+            .unwrap_or_else(|| panic!("missing color token `{name}`"))
+        {
+            crate::TokenValue::Color(color) => *color,
+            other => panic!("token `{name}` should be a color, got {other:?}"),
+        }
+    }
+
+    let mut app = App::new();
+    app.add_plugins(PicusPlugin);
+    crate::set_active_style_variant_by_name(app.world_mut(), "dark");
+
+    let mut window = Window {
+        visible: false,
+        ..Default::default()
+    };
+    window.resolution.set(480.0, 320.0);
+    app.world_mut().spawn((window, PrimaryWindow));
+
+    let nav = spawn_navigation_height_probe(&mut app);
+    app.update();
+
+    let items = {
+        let mut query = app.world_mut().query::<(Entity, &crate::UiNavigationItem)>();
+        let mut items = query
+            .iter(app.world())
+            .filter(|(_, item)| item.nav == nav)
+            .map(|(entity, item)| (entity, item.index))
+            .collect::<Vec<_>>();
+        items.sort_by_key(|(_, index)| *index);
+        items
+    };
+    assert_eq!(items.len(), 2);
+
+    let active_item = items[0].0;
+    let inactive_item = items[1].0;
+
+    app.world_mut().entity_mut(active_item).insert(InteractionState {
+        hovered: true,
+        pressed: false,
+        focused: false,
+    });
+    app.world_mut().entity_mut(inactive_item).insert(InteractionState {
+        hovered: true,
+        pressed: false,
+        focused: false,
+    });
+
+    let active_hover = crate::resolve_style_for_entity_classes(
+        app.world(),
+        active_item,
+        ["nav.item", "nav.item.active"],
+    );
+    let inactive_hover =
+        crate::resolve_style_for_entity_classes(app.world(), inactive_item, ["nav.item"]);
+
+    assert_eq!(
+        active_hover.colors.bg,
+        Some(token_color(app.world(), "surface-accent-hover"))
+    );
+    assert_eq!(
+        inactive_hover.colors.bg,
+        Some(token_color(app.world(), "surface-subtle-hover"))
+    );
+
+    {
+        let runtime = app.world().non_send::<crate::MasonryRuntime>();
+        let window_runtime = runtime
+            .primary()
+            .expect("primary window runtime should exist");
+        let debug_text = format!("entity={}", active_item.to_bits());
+        first_widget_by_short_name_and_debug_text(
+            window_runtime.render_root.get_layer_root(0),
+            "ActionButtonWithChildWidget",
+            &debug_text,
+        )
+        .expect("navigation view should project sidebar items as action buttons");
+    }
 }
 
 #[test]

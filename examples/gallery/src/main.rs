@@ -375,8 +375,18 @@ mod tests {
 
         let sidebar = picus::resolve_style_for_classes(app.world(), ["nav.sidebar"]);
         let item = picus::resolve_style_for_classes(app.world(), ["nav.item"]);
+        let item_hover = picus::resolve_style_for_classes_with_state(
+            app.world(),
+            ["nav.item"],
+            picus::StylePseudoState::hovered(),
+        );
         let active_item =
             picus::resolve_style_for_classes(app.world(), ["nav.item", "nav.item.active"]);
+        let active_item_hover = picus::resolve_style_for_classes_with_state(
+            app.world(),
+            ["nav.item", "nav.item.active"],
+            picus::StylePseudoState::hovered(),
+        );
 
         assert!(
             sidebar.colors.bg.is_some() && sidebar.colors.border.is_some(),
@@ -389,6 +399,15 @@ mod tests {
         assert!(
             active_item.colors.bg.is_some() && active_item.colors.text.is_some(),
             "gallery active navigation item should resolve visible selected colors, got {active_item:?}"
+        );
+        assert!(
+            item_hover.colors.bg.is_some() && item_hover.colors.bg != item.colors.bg,
+            "gallery navigation item hover should resolve a distinct hover background, got base={item:?} hover={item_hover:?}"
+        );
+        assert!(
+            active_item_hover.colors.bg.is_some()
+                && active_item_hover.colors.bg != active_item.colors.bg,
+            "gallery active navigation item hover should resolve a distinct hover background, got base={active_item:?} hover={active_item_hover:?}"
         );
     }
 
