@@ -93,6 +93,55 @@ impl<State, Action, F> Checkbox<State, Action, F> {
 }
 
 impl<State, Action, F> ViewMarker for Checkbox<State, Action, F> {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn checkbox_default_checked() {
+        let cb = checkbox("Test", true, |_: &mut i32, _: bool| {});
+        assert!(cb.checked);
+    }
+
+    #[test]
+    fn checkbox_unchecked() {
+        let cb = checkbox("Test", false, |_: &mut i32, _: bool| {});
+        assert!(!cb.checked);
+    }
+
+    #[test]
+    fn checkbox_label_text() {
+        let cb = checkbox("Hello", true, |_: &mut i32, _: bool| {});
+        assert_eq!(cb.label.as_ref(), "Hello");
+    }
+
+    #[test]
+    fn checkbox_disabled_state() {
+        let cb = checkbox("Disabled", true, |_: &mut i32, _: bool| {}).disabled(true);
+        assert!(cb.disabled);
+    }
+
+    #[test]
+    fn checkbox_enabled_default() {
+        let cb = checkbox("Default", true, |_: &mut i32, _: bool| {});
+        assert!(!cb.disabled);
+    }
+
+    #[test]
+    fn checkbox_text_size() {
+        let cb = checkbox("Large", true, |_: &mut i32, _: bool| {}).text_size(24.0);
+        assert!((cb.text_size - 24.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn checkbox_font_weight() {
+        use picus_widget::parley::style::FontWeight;
+        let cb = checkbox("Bold", true, |_: &mut i32, _: bool| {}).weight(FontWeight::BOLD);
+        assert_eq!(cb.weight, FontWeight::BOLD);
+    }
+}
+
 impl<F, State, Action> View<State, Action, ViewCtx> for Checkbox<State, Action, F>
 where
     State: 'static,

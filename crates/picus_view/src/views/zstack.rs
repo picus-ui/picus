@@ -73,6 +73,54 @@ mod hidden {
 use hidden::ZStackState;
 
 impl<Seq> ViewMarker for ZStack<Seq> {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::view::label;
+    use crate::views::Label;
+    use picus_widget::layout::UnitPoint;
+    use picus_widget::widgets::ChildAlignment;
+
+    #[test]
+    fn zstack_default_alignment_center() {
+        let z: ZStack<()> = zstack::<(), (), _>(());
+        assert_eq!(z.alignment, UnitPoint::CENTER);
+    }
+
+    #[test]
+    fn zstack_alignment_override() {
+        let z: ZStack<()> = zstack::<(), (), _>(()).alignment(UnitPoint::TOP_LEFT);
+        assert_eq!(z.alignment, UnitPoint::TOP_LEFT);
+    }
+
+    #[test]
+    fn zstack_item_uses_self_aligned() {
+        type TestItem = ZStackItem<Label, (), ()>;
+        let view = label("child");
+        let item: TestItem = zstack_item(view, ChildAlignment::SelfAligned(UnitPoint::TOP_LEFT));
+        assert_eq!(
+            item.alignment,
+            ChildAlignment::SelfAligned(UnitPoint::TOP_LEFT)
+        );
+    }
+
+    #[test]
+    fn zstack_ext_chaining_via_self_aligned() {
+        type TestItem = ZStackItem<Label, (), ()>;
+        let item: TestItem = label("child").alignment(ChildAlignment::SelfAligned(UnitPoint::TOP));
+        assert_eq!(item.alignment, ChildAlignment::SelfAligned(UnitPoint::TOP));
+    }
+
+    #[test]
+    fn zstack_parent_aligned_default() {
+        type TestItem = ZStackItem<Label, (), ()>;
+        let view = label("child");
+        let item: TestItem = zstack_item(view, ChildAlignment::ParentAligned);
+        assert_eq!(item.alignment, ChildAlignment::ParentAligned);
+    }
+}
+
 impl<State, Action, Seq> View<State, Action, ViewCtx> for ZStack<Seq>
 where
     State: 'static,

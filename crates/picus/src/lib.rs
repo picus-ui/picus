@@ -41,14 +41,13 @@ pub mod components {
         UiNavigationSelectionChanged, UiNavigationView, UiNumericUpDown, UiNumericUpDownChanged,
         UiOverlayRoot, UiPasswordInput, UiPasswordInputChanged, UiPointerEvent, UiPointerHitEvent,
         UiPointerPhase, UiPopover, UiProgressBar, UiRadioGroup, UiRadioGroupChanged, UiRating,
-        UiRatingChanged,
-        UiResponsiveGrid, UiResponsiveRow, UiRoot, UiScrollView, UiScrollViewChanged, UiSearch,
-        UiSlider, UiSliderChanged, UiSortDirection, UiSpinner, UiSplitPane, UiStreamingMarkdown,
-        UiSwitch, UiSwitchChanged, UiTabBar, UiTabChanged, UiTable, UiText, UiTextInput,
-        UiTextInputChanged, UiThemePicker, UiThemePickerChanged, UiThemePickerMenu,
-        UiThemePickerOption, UiTitleBar, UiToast, UiToolbar, UiTooltip, UiTreeNode,
-        UiTreeNodeToggled, UiView, UiVisibleResponsive, UiWindow, button, button_with_child,
-        checkbox, icon, slider, switch, text_input,
+        UiRatingChanged, UiResponsiveGrid, UiResponsiveRow, UiRoot, UiScrollView,
+        UiScrollViewChanged, UiSearch, UiSlider, UiSliderChanged, UiSortDirection, UiSpinner,
+        UiSplitPane, UiStreamingMarkdown, UiSwitch, UiSwitchChanged, UiTabBar, UiTabChanged,
+        UiTable, UiText, UiTextInput, UiTextInputChanged, UiThemePicker, UiThemePickerChanged,
+        UiThemePickerMenu, UiThemePickerOption, UiTitleBar, UiToast, UiToolbar, UiTooltip,
+        UiTreeNode, UiTreeNodeToggled, UiView, UiVisibleResponsive, UiWindow, button,
+        button_with_child, checkbox, icon, slider, switch, text_input,
     };
 }
 
@@ -69,8 +68,7 @@ pub mod styling {
         SyncTextSource, TargetColorStyle, TextStyle, apply_active_stylesheet_ron, mark_style_dirty,
         parse_stylesheet_ron, register_builtin_style_type_aliases, resolve_style,
         resolve_style_for_classes, resolve_style_for_classes_with_state,
-        resolve_style_for_entity_classes,
-        set_active_style_variant_by_name,
+        resolve_style_for_entity_classes, set_active_style_variant_by_name,
     };
 }
 

@@ -189,6 +189,51 @@ mod hidden {
 use hidden::{AnyFlexChildState, FlexState};
 
 impl<Seq, State, Action> ViewMarker for Flex<Seq, State, Action> {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use picus_widget::kurbo::Axis;
+    use picus_widget::properties::types::{CrossAxisAlignment, MainAxisAlignment};
+
+    #[test]
+    fn flex_row_creates_horizontal() {
+        let f: Flex<(), (), ()> = flex_row(());
+        assert_eq!(f.axis, Axis::Horizontal);
+    }
+
+    #[test]
+    fn flex_col_creates_vertical() {
+        let f: Flex<(), (), ()> = flex_col(());
+        assert_eq!(f.axis, Axis::Vertical);
+    }
+
+    #[test]
+    fn flex_default_alignments() {
+        let f: Flex<(), (), ()> = flex_row(());
+        assert_eq!(f.cross_axis_alignment, CrossAxisAlignment::Center);
+        assert_eq!(f.main_axis_alignment, MainAxisAlignment::Start);
+    }
+
+    #[test]
+    fn flex_cross_axis_alignment() {
+        let f: Flex<(), (), ()> = flex_row(()).cross_axis_alignment(CrossAxisAlignment::End);
+        assert_eq!(f.cross_axis_alignment, CrossAxisAlignment::End);
+    }
+
+    #[test]
+    fn flex_main_axis_alignment() {
+        let f: Flex<(), (), ()> = flex_row(()).main_axis_alignment(MainAxisAlignment::Center);
+        assert_eq!(f.main_axis_alignment, MainAxisAlignment::Center);
+    }
+
+    #[test]
+    fn flex_direction_override() {
+        let f: Flex<(), (), ()> = flex_row(()).direction(Axis::Vertical);
+        assert_eq!(f.axis, Axis::Vertical);
+    }
+}
+
 impl<State, Action, Seq> View<State, Action, ViewCtx> for Flex<Seq, State, Action>
 where
     State: 'static,

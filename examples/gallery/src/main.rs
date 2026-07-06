@@ -27,8 +27,8 @@
 
 use picus::{
     AppI18n, AppPicusExt, InlineStyle, LayoutStyle, NavigationViewItem, PicusPlugin,
-    SyncAssetSource, SyncTextSource, UiAvatar, UiFlexColumn, UiFlexRow, UiLabel,
-    UiNavigationView, UiRoot, UiScrollView, UiSearch, UiThemePicker, avatar_sizes,
+    SyncAssetSource, SyncTextSource, UiAvatar, UiFlexColumn, UiFlexRow, UiLabel, UiNavigationView,
+    UiRoot, UiScrollView, UiSearch, UiThemePicker, avatar_sizes,
     bevy_app::{App, Startup, Update},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     run_app_with_window_options,

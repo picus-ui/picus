@@ -360,3 +360,298 @@ impl Default for UiResponsiveGrid {
 }
 
 pub use crate::components::*;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -----------------------------------------------------------------------
+    // UiLabel
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn ui_label_new_sets_text() {
+        let label = UiLabel::new("Hello");
+        assert_eq!(label.text, "Hello");
+    }
+
+    #[test]
+    fn ui_label_default_is_empty() {
+        let label = UiLabel::default();
+        assert_eq!(label.text, "");
+    }
+
+    // -----------------------------------------------------------------------
+    // LocalizeText
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn localize_text_new_sets_key() {
+        let lt = LocalizeText::new("app.title");
+        assert_eq!(lt.key, "app.title");
+    }
+
+    #[test]
+    fn localize_text_default_is_empty() {
+        let lt = LocalizeText::default();
+        assert_eq!(lt.key, "");
+    }
+
+    // -----------------------------------------------------------------------
+    // TypographyPreset
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn typography_preset_class_names() {
+        assert_eq!(TypographyPreset::Body1.class_name(), "type.body1");
+        assert_eq!(TypographyPreset::Body2.class_name(), "type.body2");
+        assert_eq!(TypographyPreset::Caption1.class_name(), "type.caption1");
+        assert_eq!(
+            TypographyPreset::Caption1Strong.class_name(),
+            "type.caption1-strong"
+        );
+        assert_eq!(TypographyPreset::Caption2.class_name(), "type.caption2");
+        assert_eq!(TypographyPreset::Subtitle1.class_name(), "type.subtitle1");
+        assert_eq!(TypographyPreset::Subtitle2.class_name(), "type.subtitle2");
+        assert_eq!(TypographyPreset::Title1.class_name(), "type.title1");
+        assert_eq!(TypographyPreset::Title2.class_name(), "type.title2");
+        assert_eq!(TypographyPreset::Title3.class_name(), "type.title3");
+        assert_eq!(
+            TypographyPreset::LargeTitle.class_name(),
+            "type.large-title"
+        );
+        assert_eq!(TypographyPreset::Display.class_name(), "type.display");
+    }
+
+    #[test]
+    fn typography_preset_default_is_body1() {
+        assert_eq!(TypographyPreset::default(), TypographyPreset::Body1);
+    }
+
+    // -----------------------------------------------------------------------
+    // OverlayPlacement
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn overlay_placement_default_is_center() {
+        assert_eq!(OverlayPlacement::default(), OverlayPlacement::Center);
+    }
+
+    // -----------------------------------------------------------------------
+    // OverlayConfig
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn overlay_config_default_placement_center() {
+        let config = OverlayConfig::default();
+        assert_eq!(config.placement, OverlayPlacement::Center);
+        assert!(config.anchor.is_none());
+        assert!(!config.auto_flip);
+    }
+
+    #[test]
+    fn overlay_config_custom_placement() {
+        let config = OverlayConfig {
+            placement: OverlayPlacement::Bottom,
+            anchor: None,
+            auto_flip: true,
+        };
+        assert_eq!(config.placement, OverlayPlacement::Bottom);
+        assert!(config.auto_flip);
+    }
+
+    // -----------------------------------------------------------------------
+    // OverlayComputedPosition
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn overlay_computed_position_default_not_positioned() {
+        let pos = OverlayComputedPosition::default();
+        assert!(!pos.is_positioned);
+        assert_eq!(pos.x, 0.0);
+        assert_eq!(pos.y, 0.0);
+    }
+
+    // -----------------------------------------------------------------------
+    // OverlayStack
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn overlay_stack_default_empty() {
+        let stack = OverlayStack::default();
+        assert!(stack.active_overlays.is_empty());
+    }
+
+    // -----------------------------------------------------------------------
+    // OverlayState
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn overlay_state_default_not_modal() {
+        let state = OverlayState::default();
+        assert!(!state.is_modal);
+        assert!(state.anchor.is_none());
+    }
+
+    // -----------------------------------------------------------------------
+    // AutoDismiss
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn auto_dismiss_from_seconds_positive() {
+        let ad = AutoDismiss::from_seconds(5.0);
+        assert!(!ad.timer.is_finished());
+        assert!((ad.timer.duration().as_secs_f32() - 5.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn auto_dismiss_from_seconds_zero() {
+        let ad = AutoDismiss::from_seconds(0.0);
+        assert!((ad.timer.duration().as_secs_f32()).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn auto_dismiss_from_seconds_clamps_negative() {
+        let ad = AutoDismiss::from_seconds(-10.0);
+        assert!((ad.timer.duration().as_secs_f32()).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn auto_dismiss_default_finishes_immediately() {
+        let ad = AutoDismiss::default();
+        assert!((ad.timer.duration().as_secs_f32()).abs() < f32::EPSILON);
+    }
+
+    // -----------------------------------------------------------------------
+    // AnchoredTo
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn anchored_to_default_placeholder() {
+        let anchor = AnchoredTo::default();
+        assert_eq!(anchor.0, Entity::PLACEHOLDER);
+    }
+
+    // -----------------------------------------------------------------------
+    // UiResponsiveRow
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn ui_responsive_row_new() {
+        let row = UiResponsiveRow::new("sm");
+        assert_eq!(row.collapse_at, "sm");
+    }
+
+    #[test]
+    fn ui_responsive_row_default_collapse_md() {
+        let row = UiResponsiveRow::default();
+        assert_eq!(row.collapse_at, "md");
+    }
+
+    // -----------------------------------------------------------------------
+    // UiVisibleResponsive
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn ui_visible_responsive_show_from() {
+        let vr = UiVisibleResponsive::show_from("lg");
+        assert_eq!(vr.show_from, Some("lg".to_string()));
+        assert_eq!(vr.show_until, None);
+    }
+
+    #[test]
+    fn ui_visible_responsive_show_until() {
+        let vr = UiVisibleResponsive::show_until("sm");
+        assert_eq!(vr.show_from, None);
+        assert_eq!(vr.show_until, Some("sm".to_string()));
+    }
+
+    #[test]
+    fn ui_visible_responsive_range() {
+        let vr = UiVisibleResponsive::range("sm", "lg");
+        assert_eq!(vr.show_from, Some("sm".to_string()));
+        assert_eq!(vr.show_until, Some("lg".to_string()));
+    }
+
+    #[test]
+    fn ui_visible_responsive_default() {
+        let vr = UiVisibleResponsive::default();
+        assert_eq!(vr.show_from, None);
+        assert_eq!(vr.show_until, None);
+    }
+
+    // -----------------------------------------------------------------------
+    // UiResponsiveGrid
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn ui_responsive_grid_new_with_rules() {
+        let grid = UiResponsiveGrid::new(vec![("sm", 1), ("md", 2)], 1);
+        assert_eq!(grid.default_columns, 1);
+        assert_eq!(grid.column_rules.len(), 2);
+    }
+
+    #[test]
+    fn ui_responsive_grid_default_columns_one() {
+        let grid = UiResponsiveGrid::default();
+        assert_eq!(grid.default_columns, 1);
+        assert_eq!(grid.column_rules.len(), 3);
+        assert_eq!(grid.column_rules[0], ("sm".to_string(), 1));
+        assert_eq!(grid.column_rules[1], ("md".to_string(), 2));
+        assert_eq!(grid.column_rules[2], ("lg".to_string(), 4));
+    }
+
+    #[test]
+    fn ui_responsive_grid_new_zero_defaults_to_one() {
+        let grid: UiResponsiveGrid = UiResponsiveGrid::new(Vec::<(String, u32)>::new(), 0);
+        assert_eq!(grid.default_columns, 1);
+        assert!(!grid.show_grid_lines);
+    }
+
+    #[test]
+    fn ui_responsive_grid_with_rows() {
+        let grid = UiResponsiveGrid::default().with_rows(3);
+        assert_eq!(grid.rows, 3);
+    }
+
+    #[test]
+    fn ui_responsive_grid_with_grid_lines() {
+        let grid = UiResponsiveGrid::default().with_grid_lines(true);
+        assert!(grid.show_grid_lines);
+    }
+
+    // -----------------------------------------------------------------------
+    // OverlayAnchorRect
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn overlay_anchor_rect_default() {
+        let rect = OverlayAnchorRect::default();
+        assert_eq!(rect.left, 0.0);
+        assert_eq!(rect.top, 0.0);
+        assert_eq!(rect.width, 0.0);
+        assert_eq!(rect.height, 0.0);
+    }
+
+    // -----------------------------------------------------------------------
+    // UiWindow
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn ui_window_default_placeholder() {
+        let w = UiWindow::default();
+        assert_eq!(w.0, Entity::PLACEHOLDER);
+    }
+
+    // -----------------------------------------------------------------------
+    // UiRoot / UiOverlayRoot / UiFlexColumn / UiFlexRow
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn marker_components_are_default() {
+        assert_eq!(UiRoot, UiRoot);
+        assert_eq!(UiOverlayRoot, UiOverlayRoot);
+        assert_eq!(UiFlexColumn, UiFlexColumn);
+        assert_eq!(UiFlexRow, UiFlexRow);
+    }
+}

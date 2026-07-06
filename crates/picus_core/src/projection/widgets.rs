@@ -2393,3 +2393,73 @@ pub(crate) fn project_context_menu(menu: &UiContextMenu, ctx: ProjectionCtx<'_>)
         .translate(pos),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -----------------------------------------------------------------------
+    // days_in_month
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn days_in_january() {
+        assert_eq!(days_in_month(2024, 1), 31);
+    }
+
+    #[test]
+    fn days_in_february_leap() {
+        assert_eq!(days_in_month(2024, 2), 29);
+    }
+
+    #[test]
+    fn days_in_february_non_leap() {
+        assert_eq!(days_in_month(2023, 2), 28);
+    }
+
+    #[test]
+    fn days_in_february_century_non_leap() {
+        assert_eq!(days_in_month(1900, 2), 28);
+    }
+
+    #[test]
+    fn days_in_february_century_leap() {
+        assert_eq!(days_in_month(2000, 2), 29);
+    }
+
+    #[test]
+    fn days_in_april() {
+        assert_eq!(days_in_month(2024, 4), 30);
+    }
+
+    #[test]
+    fn days_in_december() {
+        assert_eq!(days_in_month(2024, 12), 31);
+    }
+
+    // -----------------------------------------------------------------------
+    // day_of_week_for_first
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn dow_jan_1_2020_was_wednesday() {
+        // 2020-01-01 was a Wednesday (0=Sun)
+        assert_eq!(day_of_week_for_first(2020, 1), 3);
+    }
+
+    #[test]
+    fn dow_jan_1_2024_was_monday() {
+        assert_eq!(day_of_week_for_first(2024, 1), 1);
+    }
+
+    // -----------------------------------------------------------------------
+    // month_name
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn month_name_values() {
+        assert_eq!(month_name(1), "January");
+        assert_eq!(month_name(12), "December");
+        assert_eq!(month_name(13), "——");
+    }
+}

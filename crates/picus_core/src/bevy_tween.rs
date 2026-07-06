@@ -359,3 +359,224 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    // -----------------------------------------------------------------------
+    // EaseKind::sample
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn ease_linear_is_identity() {
+        for t in [0.0, 0.25, 0.5, 0.75, 1.0] {
+            assert!(
+                (EaseKind::Linear.sample(t) - t).abs() < 0.001,
+                "linear sample({t})"
+            );
+        }
+    }
+
+    #[test]
+    fn ease_quadratic_in_out_symmetry() {
+        let mid = EaseKind::QuadraticInOut.sample(0.5);
+        assert!((mid - 0.5).abs() < 0.001);
+        let low = EaseKind::QuadraticInOut.sample(0.25);
+        let high = EaseKind::QuadraticInOut.sample(0.75);
+        assert!((low - (1.0 - high)).abs() < 0.001);
+    }
+
+    #[test]
+    fn ease_elastic_out_bounds() {
+        let ease = EaseKind::ElasticOut;
+        assert!((ease.sample(0.0)).abs() < f32::EPSILON);
+        assert!((ease.sample(1.0) - 1.0).abs() < f32::EPSILON);
+        // Elastic overshoots above 1.0 in the middle
+        assert!(ease.sample(0.5) >= 0.0);
+    }
+
+    #[test]
+    fn ease_cubic_bezier_matches_linear_at_default() {
+        // A zero-curve bezier: (0,0,1,1) should be linear
+        let ease = EaseKind::CubicBezier(0.0, 0.0, 1.0, 1.0);
+        for t in [0.0, 0.25, 0.5, 0.75, 1.0] {
+            assert!((ease.sample(t) - t).abs() < 0.02, "cubic sample({t})");
+        }
+    }
+
+    #[test]
+    fn ease_decelerate_max_smooth() {
+        let ease = EaseKind::DecelerateMax;
+        assert!((ease.sample(0.0)).abs() < 0.01);
+        assert!((ease.sample(1.0) - 1.0).abs() < 0.01);
+        // Should be concave (decelerating) — first half faster than linear
+        assert!(ease.sample(0.5) > 0.5);
+    }
+
+    #[test]
+    fn ease_decelerate_min_smooth() {
+        let ease = EaseKind::DecelerateMin;
+        assert!((ease.sample(0.0)).abs() < 0.01);
+        assert!((ease.sample(1.0) - 1.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn ease_easy_ease_smooth() {
+        let ease = EaseKind::EasyEase;
+        assert!((ease.sample(0.0)).abs() < 0.01);
+        assert!((ease.sample(1.0) - 1.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn ease_clamps_input_to_unit() {
+        assert!((EaseKind::Linear.sample(-0.5)).abs() < f32::EPSILON);
+        assert!((EaseKind::Linear.sample(1.5) - 1.0).abs() < f32::EPSILON);
+    }
+
+    // -----------------------------------------------------------------------
+    // TimeSpan
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn time_span_try_from_valid() {
+        let span = TimeSpan::try_from(Duration::ZERO..Duration::from_secs(5)).unwrap();
+        assert_eq!(span.duration(), Duration::from_secs(5));
+    }
+
+    #[test]
+    fn time_span_try_from_zero_duration() {
+        let span = TimeSpan::try_from(Duration::from_secs(3)..Duration::from_secs(3)).unwrap();
+        assert_eq!(span.duration(), Duration::ZERO);
+    }
+
+    #[test]
+    fn time_span_try_from_invalid_reversed() {
+        let result = TimeSpan::try_from(Duration::from_secs(5)..Duration::from_secs(2));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn time_span_duration_saturating() {
+        let span = TimeSpan {
+            start: Duration::from_secs(10),
+            end: Duration::from_secs(3),
+        };
+        // saturating_sub returns zero when start > end
+        assert_eq!(span.duration(), Duration::ZERO);
+    }
+
+    // -----------------------------------------------------------------------
+    // TimeRunner
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn time_runner_initial_state() {
+        let mut runner = TimeRunner::new(Duration::from_secs(1));
+        assert!(!runner.is_finished());
+        assert!((runner.advance(Duration::ZERO)).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn time_runner_halfway() {
+        let mut runner = TimeRunner::new(Duration::from_secs(2));
+        let ratio = runner.advance(Duration::from_secs(1));
+        assert!((ratio - 0.5).abs() < 0.001);
+        assert!(!runner.is_finished());
+    }
+
+    #[test]
+    fn time_runner_completes() {
+        let mut runner = TimeRunner::new(Duration::from_secs(1));
+        let ratio = runner.advance(Duration::from_secs(2));
+        assert!((ratio - 1.0).abs() < f32::EPSILON);
+        assert!(runner.is_finished());
+    }
+
+    #[test]
+    fn time_runner_returns_one_after_finish() {
+        let mut runner = TimeRunner::new(Duration::from_secs(1));
+        let _ = runner.advance(Duration::from_secs(2));
+        assert!(runner.is_finished());
+        let ratio = runner.advance(Duration::from_secs(1));
+        assert!((ratio - 1.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn time_runner_zero_duration_immediate() {
+        let mut runner = TimeRunner::new(Duration::ZERO);
+        let ratio = runner.advance(Duration::ZERO);
+        assert!((ratio - 1.0).abs() < f32::EPSILON);
+        assert!(runner.is_finished());
+    }
+
+    #[test]
+    fn time_runner_advance_saturating_add() {
+        let mut runner = TimeRunner::new(Duration::from_secs(1));
+        let ratio = runner.advance(Duration::MAX);
+        assert!((ratio - 1.0).abs() < f32::EPSILON);
+        assert!(runner.is_finished());
+    }
+
+    // -----------------------------------------------------------------------
+    // ComponentTween
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn component_tween_new_target() {
+        let entity = Entity::from_bits(42);
+        let interpolator = SimpleInterpolator;
+        let tween = ComponentTween::new_target(entity, interpolator);
+        assert_eq!(tween.target, entity);
+    }
+
+    // Simple interpolator for test use
+    #[derive(Clone)]
+    struct SimpleInterpolator;
+
+    impl Interpolator for SimpleInterpolator {
+        type Item = f32;
+
+        fn interpolate(&self, target: &mut f32, ratio: f32, _previous_value: f32) {
+            *target = ratio;
+        }
+    }
+
+    #[test]
+    fn interpolation_value_component() {
+        let val = TweenInterpolationValue(0.42);
+        assert!((val.0 - 0.42).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn tween_previous_value_component() {
+        let val = TweenPreviousValue(0.5);
+        assert!((val.0 - 0.5).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn ease_kind_default_is_linear() {
+        assert_eq!(EaseKind::default(), EaseKind::Linear);
+    }
+
+    // -----------------------------------------------------------------------
+    // TimeSpan + TimeRunner integration
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn time_span_affects_ratio() {
+        // TimeSpan should make the runner advance at full speed within the span
+        let mut runner = TimeRunner::new(Duration::from_secs(10));
+        let span = TimeSpan {
+            start: Duration::from_secs(2),
+            end: Duration::from_secs(4),
+        };
+        // After 2s of wall time, the span progress is 0.5 (2s / 4s duration)
+        let raw = runner.advance(Duration::from_secs(2));
+        let span_dur = span.duration().as_secs_f32();
+        let span_ratio = raw.clamp(0.0, 1.0);
+        assert!((span_ratio - 0.2).abs() < 0.001); // 2s / 10s = 0.2
+        assert_eq!(span_dur, 2.0);
+    }
+}

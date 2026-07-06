@@ -159,6 +159,52 @@ impl<State, Action, F, V> Button<State, Action, F, V> {
 const BUTTON_CONTENT_VIEW_ID: ViewId = ViewId::new(0xd0c1c4be);
 
 impl<State, Action, F, V> ViewMarker for Button<State, Action, F, V> {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn text_button_creates_button_with_label() {
+        let btn = text_button("Click", |state: &mut i32| *state);
+        assert!(!btn.disabled);
+    }
+
+    #[test]
+    fn button_disabled_state() {
+        let btn: Button<i32, (), _, _> = button(label("Nope"), |_: &mut i32| {}).disabled(true);
+        assert!(btn.disabled);
+    }
+
+    #[test]
+    fn button_enabled_default() {
+        let btn: Button<i32, (), _, _> = button(label("Click"), |_: &mut i32| {});
+        assert!(!btn.disabled);
+    }
+
+    #[test]
+    fn text_button_forwards_text() {
+        // text_button creates internally: button(label(text), callback)
+        // We just verify the type and default state
+        let btn: Button<i32, (), _, _> = text_button("Save", |state: &mut i32| {
+            *state = 42;
+        });
+        assert!(!btn.disabled);
+    }
+
+    #[test]
+    fn button_any_pointer_accepts_all_buttons() {
+        let btn = button_any_pointer(label("All"), |_: &mut i32, _: Option<PointerButton>| {});
+        assert!(!btn.disabled);
+    }
+
+    #[test]
+    fn button_disabled_chaining() {
+        let btn = text_button("Disabled", |_: &mut String| ()).disabled(true);
+        assert!(btn.disabled);
+    }
+}
+
 impl<F, V, State, Action> View<State, Action, ViewCtx> for Button<State, Action, F, V>
 where
     State: 'static,

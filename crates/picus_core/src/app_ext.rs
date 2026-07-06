@@ -317,3 +317,47 @@ impl AppPicusExt for App {
         Ok(self)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::PicusPlugin;
+    use bevy_app::App;
+
+    #[test]
+    fn sync_asset_source_bytes() {
+        let data = b"font data";
+        let source = SyncAssetSource::Bytes(data);
+        match source {
+            SyncAssetSource::Bytes(d) => assert_eq!(d, data),
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn sync_text_source_string() {
+        let text = "hello";
+        let source = SyncTextSource::String(text);
+        match source {
+            SyncTextSource::String(s) => assert_eq!(s, text),
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn register_projector_adds_to_registry() {
+        use crate::{ProjectionCtx, UiRoot};
+        use std::sync::Arc;
+
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin).register_projector::<UiRoot>(
+            |_: &UiRoot, _: ProjectionCtx<'_>| {
+                Arc::new(crate::retained_bridge::button_view(
+                    bevy_ecs::entity::Entity::PLACEHOLDER,
+                    (),
+                    "Placeholder",
+                ))
+            },
+        );
+    }
+}

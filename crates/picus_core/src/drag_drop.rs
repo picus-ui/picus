@@ -380,3 +380,179 @@ pub fn dispatch_drag_events(
         drag_state.current_target = None;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -----------------------------------------------------------------------
+    // parse_entity_bits_from_debug
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn parse_opaque_hitbox_entity() {
+        let bits = parse_entity_bits_from_debug("opaque_hitbox_entity=42");
+        assert_eq!(bits, Some(42));
+    }
+
+    #[test]
+    fn parse_entity_scope_prefix() {
+        let bits = parse_entity_bits_from_debug("entity_scope=999");
+        assert_eq!(bits, Some(999));
+    }
+
+    #[test]
+    fn parse_entity_prefix() {
+        let bits = parse_entity_bits_from_debug("entity=123456789");
+        assert_eq!(bits, Some(123456789));
+    }
+
+    #[test]
+    fn parse_unrecognized_debug_returns_none() {
+        let bits = parse_entity_bits_from_debug("Button");
+        assert_eq!(bits, None);
+    }
+
+    #[test]
+    fn parse_malformed_bits_returns_none() {
+        let bits = parse_entity_bits_from_debug("entity=not-a-number");
+        assert_eq!(bits, None);
+    }
+
+    #[test]
+    fn parse_empty_string_returns_none() {
+        let bits = parse_entity_bits_from_debug("");
+        assert_eq!(bits, None);
+    }
+
+    // -----------------------------------------------------------------------
+    // Default impls
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn drag_data_default_is_text_empty() {
+        let data = DragData::default();
+        match data {
+            DragData::Text(s) => assert_eq!(s, ""),
+            _ => panic!("expected DragData::Text"),
+        }
+    }
+
+    #[test]
+    fn drag_preview_default_values() {
+        let preview = DragPreview::default();
+        assert!((preview.opacity - 0.8).abs() < f32::EPSILON);
+        assert!(preview.follow_cursor);
+        assert_eq!(preview.offset, (0.0, 0.0));
+    }
+
+    #[test]
+    fn drag_source_default_can_drag() {
+        let source = DragSource::default();
+        assert!(source.can_drag);
+        assert!(source.drag_data.is_none());
+        assert!(source.drag_preview.is_none());
+    }
+
+    #[test]
+    fn drop_target_default_accepts_all() {
+        let target = DropTarget::default();
+        assert!(target.allow_drop);
+        assert!(target.accepted_types.is_empty());
+    }
+
+    #[test]
+    fn drag_state_default_is_not_dragging() {
+        let state = DragState::default();
+        assert!(!state.is_dragging);
+        assert!(state.source_entity.is_none());
+        assert!(state.drag_data.is_none());
+        assert!(state.current_target.is_none());
+    }
+
+    #[test]
+    fn drag_data_type_default_is_text() {
+        assert_eq!(DragDataType::default(), DragDataType::Text);
+    }
+
+    #[test]
+    fn drag_event_debug_format() {
+        let event = DragEvent::DragStarting {
+            data: DragData::Text("hello".into()),
+        };
+        let debug = format!("{event:?}");
+        assert!(debug.contains("DragStarting"));
+        assert!(debug.contains("hello"));
+    }
+
+    #[test]
+    fn drag_event_drop_includes_src_data_position() {
+        let src = Entity::from_bits(1);
+        let event = DragEvent::Drop {
+            source: src,
+            data: DragData::File(vec!["a.txt".into()]),
+            position: (100.0, 200.0),
+        };
+        let debug = format!("{event:?}");
+        assert!(debug.contains("100.0"));
+    }
+
+    // -----------------------------------------------------------------------
+    // DragState lifecycle simulation
+    // -----------------------------------------------------------------------
+
+    /// Simulate the logic of `track_drag_state` for a complete drag cycle.
+    #[test]
+    fn drag_cycle_start_over_drop() {
+        let mut state = DragState::default();
+        let source = Entity::from_bits(10);
+        let target = Entity::from_bits(20);
+
+        // Start: press on drag source
+        assert!(!state.is_dragging);
+        state.is_dragging = true;
+        state.source_entity = Some(source);
+        state.drag_data = Some(DragData::Text("payload".into()));
+        state.drag_position = (0.0, 0.0);
+
+        // Move over target
+        state.current_target = Some(target);
+        assert_eq!(state.current_target, Some(target));
+
+        // Release over target -> drop
+        let dropped = state.current_target.is_some();
+        assert!(dropped);
+
+        // Reset
+        state = DragState::default();
+        assert!(!state.is_dragging);
+        assert!(state.source_entity.is_none());
+    }
+
+    #[test]
+    fn drag_cycle_cancel_by_outside_release() {
+        let state = DragState {
+            is_dragging: true,
+            source_entity: Some(Entity::from_bits(10)),
+            drag_data: Some(DragData::Text("payload".into())),
+            current_target: None,
+            drag_position: (0.0, 0.0),
+        };
+
+        // Release outside any target
+        let dropped = state.current_target.is_some();
+        assert!(!dropped, "no target -> not dropped");
+
+        let state = DragState::default();
+        assert!(!state.is_dragging);
+    }
+
+    #[test]
+    fn drag_source_accepts_custom_data_type() {
+        let t = DragDataType::Custom("my-app/type");
+        match t {
+            DragDataType::Custom(name) => assert_eq!(name, "my-app/type"),
+            _ => panic!("expected Custom"),
+        }
+    }
+}

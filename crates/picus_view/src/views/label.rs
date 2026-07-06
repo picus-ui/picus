@@ -154,6 +154,84 @@ where
 }
 
 impl ViewMarker for Label {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn label_default_text() {
+        let l = label("Hello");
+        assert_eq!(l.label.as_ref(), "Hello");
+    }
+
+    #[test]
+    fn label_builder_text_size() {
+        let l = label("Test").text_size(32.0);
+        assert!((l.text_size - 32.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn label_builder_text_alignment() {
+        let l = label("Test").text_alignment(TextAlign::Center);
+        assert_eq!(l.text_alignment, TextAlign::Center);
+    }
+
+    #[test]
+    fn label_builder_weight() {
+        let l = label("Bold").weight(FontWeight::BOLD);
+        assert_eq!(l.weight, FontWeight::BOLD);
+    }
+
+    #[test]
+    fn label_builder_color() {
+        let color = picus_widget::peniko::Color::from_rgba8(255, 0, 0, 255);
+        let l = label("Red").text_color(color);
+        assert_eq!(l.text_color, Some(color));
+    }
+
+    #[test]
+    fn label_builder_letter_spacing() {
+        let l = label("Spread").letter_spacing(2.0);
+        assert!((l.letter_spacing - 2.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn label_builder_underline() {
+        let l = label("Under").underline(true);
+        assert!(l.underline);
+    }
+
+    #[test]
+    fn label_builder_enable_hinting() {
+        let l = label("Hinted").enable_hinting(false);
+        assert!(!l.enable_hinting);
+    }
+
+    #[test]
+    fn label_text_color_default_none() {
+        let l = label("Default");
+        assert_eq!(l.text_color, None);
+    }
+
+    #[test]
+    fn label_from_string_via_trait() {
+        let l: Label = "Converted".into();
+        assert_eq!(l.label.as_ref(), "Converted");
+    }
+
+    #[test]
+    fn label_default_values() {
+        let l = label("Defaults");
+        assert_eq!(l.text_alignment, TextAlign::default());
+        assert!((l.text_size - picus_widget::theme::TEXT_SIZE_NORMAL).abs() < f32::EPSILON);
+        assert_eq!(l.weight, FontWeight::NORMAL);
+        assert!(l.enable_hinting);
+        assert!(!l.underline);
+        assert!(!l.strikethrough);
+    }
+}
+
 impl<State: 'static, Action> View<State, Action, ViewCtx> for Label {
     type Element = Pod<widgets::Label>;
     type ViewState = ();
