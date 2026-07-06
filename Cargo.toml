@@ -92,6 +92,8 @@ serde_json = "1"
 sha2 = "0.11"
 uuid = { version = "1.11", features = ["v4"] }
 webbrowser = "1"
+pulldown-cmark = { version = "0.13", default-features = false }
+syntect = { version = "5.2", default-features = false, features = ["default-fancy"] }
 
 # Shared dep versions for the embedded CodeWhale fork crates. Kept aligned
 # with `thirdparty/CodeWhale/Cargo.toml` so the fork can still build
@@ -106,6 +108,7 @@ toml = "1.0.6"
 toml_edit = "0.25.12"
 libc = "0.2"
 tracing-appender = "0.2"
+keyring = "3"
 # chrono: unify picus (clock) and codewhale (serde) features.
 chrono = { version = "0.4.43", default-features = false, features = ["clock", "serde"] }
 # tokio: codewhale needs `full`; picus only needed rt-multi-thread (subset).
