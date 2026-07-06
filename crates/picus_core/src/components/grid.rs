@@ -5,8 +5,8 @@ use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 
 /// Track sizing intent for [`UiGrid`] rows and columns.
 ///
-/// Picus stores MewUI/WPF-like `Auto`, pixel, and star tracks so applications can
-/// describe their intended layout. The current Masonry-backed projector uses the
+/// Stores `Auto`, pixel, and star tracks so applications can describe their
+/// intended layout. The current Masonry-backed projector uses the
 /// number of tracks and falls back to uniform cell sizing; full Auto/Star measure
 /// distribution belongs in a custom grid widget.
 #[derive(Debug, Clone, Copy, PartialEq)]

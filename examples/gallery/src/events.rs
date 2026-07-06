@@ -78,7 +78,7 @@ pub fn drain_gallery_events(world: &mut World) {
             spawn_dialog(
                 world,
                 "Button Dialog",
-                "This replaces MewUI's basic MessageBox with Picus UiDialog.",
+                "Demonstrates Picus UiDialog for message boxes.",
             );
         } else if event.entity == rt.persistent_toast_btn {
             spawn_toast(

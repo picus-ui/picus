@@ -189,7 +189,7 @@ remain constrained by the trait contract.
 
 Projection uses `entity.to_bits()` for stable node identities. Core root/container
 types include `UiRoot`, `UiOverlayRoot`, `UiFlexColumn`, `UiFlexRow`, `UiGrid`
-with MewUI-style `UiGridLength` track intent and `UiGridCell` attached
+with `UiGridLength` track intent and `UiGridCell` attached
 placement, `UiLabel`, `UiButton`, `UiCanvas`/`UiCanvasCommand` plus
 `UiCanvasPosition` child positioning (with `right`/`bottom` anchoring against
 `UiCanvas::size`), `UiImage`, `UiTextInput`, `UiPasswordInput`,

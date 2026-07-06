@@ -69,7 +69,7 @@ pub fn spawn_typography_page(commands: &mut Commands, parent: Entity) -> Entity 
     commands.spawn_scene(bsn! {
         template_value(
             UiMultilineTextInput::new(
-                "MewUI TypographyPage covers families, weight, wrapping, alignment, and editable text. Picus exposes most text through labels and text inputs today.",
+                "Covers font families, weight, wrapping, alignment, and editable text. Picus exposes most text through labels and text inputs today.",
             ).read_only(true)
         )
         ChildOf(wrapping)

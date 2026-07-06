@@ -27,7 +27,7 @@
 
 use picus::{
     AppI18n, AppPicusExt, InlineStyle, LayoutStyle, NavigationViewItem, PicusPlugin,
-    SyncAssetSource, SyncTextSource, UiAvatar, UiBadge, UiFlexColumn, UiFlexRow, UiLabel,
+    SyncAssetSource, SyncTextSource, UiAvatar, UiFlexColumn, UiFlexRow, UiLabel,
     UiNavigationView, UiRoot, UiScrollView, UiSearch, UiThemePicker, avatar_sizes,
     bevy_app::{App, Startup, Update},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
@@ -258,7 +258,6 @@ fn spawn_top_bar(commands: &mut Commands, root: Entity) {
                 template_value(class("gallery.tools"))
                 Children [
                     UiThemePicker,
-                    template_value(UiBadge::new("FBA parity")),
                 ]
             ),
         ]

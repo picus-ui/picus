@@ -38,7 +38,7 @@ pub fn spawn_media_page(commands: &mut Commands, parent: Entity) -> Entity {
         commands,
         empty,
         "Remote image loading",
-        "MewUI downloads sample resources at runtime; this example avoids cargo run/network dependency for gallery startup.",
+        "This example avoids cargo run/network dependency for gallery startup.",
     );
 
     let canvas = card(commands, g, "Canvas media");

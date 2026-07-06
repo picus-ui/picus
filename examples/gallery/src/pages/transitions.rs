@@ -62,7 +62,7 @@ pub fn spawn_transitions_page(commands: &mut Commands, parent: Entity) -> Entity
         commands,
         g,
         "ConfettiOverlay",
-        "MewUI draws timer-driven custom particles; Picus has static UiCanvas commands but no retained animated canvas component API yet.",
+        "Picus has static UiCanvas commands but no retained animated canvas component API yet.",
     );
 
     placeholder(

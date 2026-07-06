@@ -53,7 +53,7 @@ pub fn spawn_buttons_page(commands: &mut Commands, parent: Entity) -> Entity {
     note(
         commands,
         buttons,
-        "Double-click and disabled button states from MewUI are placeholders below.",
+        "Double-click and disabled button states are placeholders below.",
     );
 
     let toggles = card(commands, g, "Toggle / Switch");

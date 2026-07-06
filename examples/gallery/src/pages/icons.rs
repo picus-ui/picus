@@ -43,7 +43,7 @@ pub fn spawn_icons_page(commands: &mut Commands, parent: Entity) -> Entity {
         commands,
         parent,
         "Full Icons.xaml browser",
-        "Picus exposes a curated PicusIcon enum backed by Lucide font bytes; it does not parse MewUI Icons.xaml path resources.",
+        "Picus exposes a curated PicusIcon enum backed by Lucide font bytes.",
     );
 
     parent
