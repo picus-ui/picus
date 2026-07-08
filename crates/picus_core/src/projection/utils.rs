@@ -8,7 +8,7 @@ use crate::{
     styling::{ResolvedStyle, apply_label_style, theme_default_font_family},
 };
 use bevy_ecs::prelude::*;
-use masonry_core::layout::{Dim, Length};
+use masonry_core::layout::Length;
 use picus_view::style::Style as _;
 use picus_view::view::{label, sized_box};
 
@@ -53,8 +53,7 @@ pub(crate) fn vector_icon(icon: VectorIcon, size_px: f64, color: crate::xilem::C
             label(icon.glyph().to_string()),
             &icon_style,
         ))
-        .width(Dim::Fixed(Length::px(size_px)))
-        .height(Dim::Fixed(Length::px(size_px))),
+        .dims((Length::px(size_px), Length::px(size_px))),
     )
 }
 

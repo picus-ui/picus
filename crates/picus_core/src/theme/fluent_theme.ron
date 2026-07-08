@@ -1665,7 +1665,7 @@
       selector: Class("overlay.date_picker.panel"),
       setter: (
         layout: (
-          padding: Var("space-md"),
+          padding: 0.0,
           corner_radius: Var("radius-md"),
           border_width: Var("border-thin"),
           gap: Var("space-xs"),
@@ -1858,6 +1858,27 @@
       setter: (
         colors: (
           bg: Var("surface-overlay-item-pressed"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("widget.radio.indicator"),
+      setter: (
+        layout: (
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          border: Var("stroke-accessible"),
+          text: Var("stroke-accessible-selected"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("widget.radio.indicator.selected"),
+      setter: (
+        colors: (
+          border: Var("compound-brand-stroke"),
+          text: Var("compound-brand-fg"),
         ),
       ),
     ),

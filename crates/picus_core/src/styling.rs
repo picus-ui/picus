@@ -4015,6 +4015,22 @@ mod tests {
         assert!(switch_on.colors.bg.is_some());
         assert!(switch_on.colors.border.is_some());
 
+        let radio_indicator =
+            crate::resolve_style_for_classes(app.world(), ["widget.radio.indicator"]);
+        assert_eq!(radio_indicator.layout.border_width, 1.0);
+        assert!(radio_indicator.colors.border.is_some());
+
+        let radio_selected = crate::resolve_style_for_classes(
+            app.world(),
+            ["widget.radio.indicator", "widget.radio.indicator.selected"],
+        );
+        assert!(radio_selected.colors.border.is_some());
+        assert!(radio_selected.colors.text.is_some());
+
+        let date_panel =
+            crate::resolve_style_for_classes(app.world(), ["overlay.date_picker.panel"]);
+        assert_eq!(date_panel.layout.padding, 0.0);
+
         let progress_fill =
             crate::resolve_style_for_classes(app.world(), ["template.progress.fill"]);
         assert!(progress_fill.colors.bg.is_some());

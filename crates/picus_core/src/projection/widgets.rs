@@ -97,6 +97,12 @@ fn month_name(month: u32) -> &'static str {
     }
 }
 
+const DATE_PICKER_CELL_SIZE: f64 = 32.0;
+const DATE_PICKER_DOW_HEIGHT: f64 = 24.0;
+const DATE_PICKER_NAV_HEIGHT: f64 = 32.0;
+const DATE_PICKER_GRID_GAP: f64 = 2.0;
+const DATE_PICKER_ROW_GAP: f64 = 4.0;
+
 fn tree_node_depth(world: &bevy_ecs::world::World, entity: bevy_ecs::entity::Entity) -> u32 {
     let mut depth = 0u32;
     let mut current = entity;
@@ -665,14 +671,25 @@ pub(crate) fn project_canvas(canvas_component: &UiCanvas, ctx: ProjectionCtx<'_>
 
 pub(crate) fn project_radio_group(radio_group: &UiRadioGroup, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
-    let item_style = resolve_style_for_classes(ctx.world, ["widget.radio.item"]);
 
     let items = radio_group
         .options
         .iter()
         .enumerate()
         .map(|(i, opt)| {
-            let radio_color = item_style.colors.text.or(style.colors.text);
+            let selected = i == radio_group.selected;
+            let mut item_style = resolve_style_for_classes(ctx.world, ["widget.radio.item"]);
+            let indicator_style = if selected {
+                resolve_style_for_classes(
+                    ctx.world,
+                    ["widget.radio.indicator", "widget.radio.indicator.selected"],
+                )
+            } else {
+                resolve_style_for_classes(ctx.world, ["widget.radio.indicator"])
+            };
+            item_style.layout.border_width = indicator_style.layout.border_width.max(1.0);
+            item_style.colors.border = indicator_style.colors.border;
+
             let mut btn = radio_button_view(
                 ctx.entity,
                 WidgetUiAction::SelectRadioItem {
@@ -680,7 +697,7 @@ pub(crate) fn project_radio_group(radio_group: &UiRadioGroup, ctx: ProjectionCtx
                     index: i,
                 },
                 opt.clone(),
-                i == radio_group.selected,
+                selected,
             )
             .text_size(item_style.text.size);
 
@@ -691,7 +708,7 @@ pub(crate) fn project_radio_group(radio_group: &UiRadioGroup, ctx: ProjectionCtx
             if let Some(text_color) = item_style.colors.text.or(style.colors.text) {
                 btn = btn.text_color(text_color);
             }
-            if let Some(checkmark_color) = radio_color {
+            if let Some(checkmark_color) = indicator_style.colors.text {
                 btn = btn.checkmark_color(checkmark_color);
             }
 
@@ -1702,19 +1719,40 @@ pub(crate) fn project_date_picker_panel(
         &nav_style,
     );
     let nav_row = flex_row(vec![
-        apply_direct_widget_style(prev_btn, &cell_style).into_any_flex(),
-        month_lbl.flex(1.0).into_any_flex(),
-        apply_direct_widget_style(next_btn, &cell_style).into_any_flex(),
+        sized_box(apply_direct_widget_style(prev_btn, &cell_style))
+            .dims((
+                Length::px(DATE_PICKER_NAV_HEIGHT),
+                Length::px(DATE_PICKER_NAV_HEIGHT),
+            ))
+            .into_any_flex(),
+        sized_box(month_lbl)
+            .dims((
+                Length::px(
+                    DATE_PICKER_CELL_SIZE * 5.0 + DATE_PICKER_GRID_GAP * 4.0,
+                ),
+                Length::px(DATE_PICKER_NAV_HEIGHT),
+            ))
+            .into_any_flex(),
+        sized_box(apply_direct_widget_style(next_btn, &cell_style))
+            .dims((
+                Length::px(DATE_PICKER_NAV_HEIGHT),
+                Length::px(DATE_PICKER_NAV_HEIGHT),
+            ))
+            .into_any_flex(),
     ])
-    .gap(Length::px(4.0));
+    .gap(Length::px(DATE_PICKER_GRID_GAP));
 
     // Day-of-week headers
     let dow_labels = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map(|d| {
-        apply_label_style(label(d), &cell_style)
-            .flex(1.0)
+        sized_box(apply_label_style(label(d), &cell_style))
+            .dims((
+                Length::px(DATE_PICKER_CELL_SIZE),
+                Length::px(DATE_PICKER_DOW_HEIGHT),
+            ))
             .into_any_flex()
     });
-    let dow_row = flex_row(dow_labels.into_iter().collect::<Vec<_>>());
+    let dow_row = flex_row(dow_labels.into_iter().collect::<Vec<_>>())
+        .gap(Length::px(DATE_PICKER_GRID_GAP));
 
     // Calendar grid
     let first_dow = day_of_week_for_first(view_year, view_month) as usize;
@@ -1746,35 +1784,34 @@ pub(crate) fn project_date_picker_panel(
                     OverlayUiAction::SelectDateDay { day },
                     day_label,
                 );
-                Arc::new(apply_direct_widget_style(btn, s))
+                Arc::new(sized_box(apply_direct_widget_style(btn, s)).dims((
+                    Length::px(DATE_PICKER_CELL_SIZE),
+                    Length::px(DATE_PICKER_CELL_SIZE),
+                )))
             } else {
-                Arc::new(apply_label_style(label(""), &cell_style))
+                Arc::new(sized_box(apply_label_style(label(""), &cell_style)).dims((
+                    Length::px(DATE_PICKER_CELL_SIZE),
+                    Length::px(DATE_PICKER_CELL_SIZE),
+                )))
             };
-            week_cells.push(cell.flex(1.0).into_any_flex());
+            week_cells.push(cell.into_any_flex());
         }
-        week_rows.push(flex_row(week_cells).gap(Length::px(2.0)).into_any_flex());
+        week_rows.push(
+            flex_row(week_cells)
+                .gap(Length::px(DATE_PICKER_GRID_GAP))
+                .into_any_flex(),
+        );
     }
 
     let mut all_rows = vec![nav_row.into_any_flex(), dow_row.into_any_flex()];
     all_rows.extend(week_rows);
 
-    let content = flex_col(all_rows).gap(Length::px(4.0));
-
-    let computed_pos = ctx
-        .world
-        .get::<OverlayComputedPosition>(ctx.entity)
-        .copied()
-        .unwrap_or_default();
-    let panel_width = if computed_pos.width > 1.0 {
-        computed_pos.width
-    } else {
-        280.0
-    };
-    let panel_height = if computed_pos.height > 1.0 {
-        computed_pos.height
-    } else {
-        300.0
-    };
+    let content = flex_col(all_rows).gap(Length::px(DATE_PICKER_ROW_GAP));
+    let panel_width = DATE_PICKER_CELL_SIZE * 7.0 + DATE_PICKER_GRID_GAP * 6.0;
+    let panel_height = DATE_PICKER_NAV_HEIGHT
+        + DATE_PICKER_DOW_HEIGHT
+        + (num_rows as f64 * DATE_PICKER_CELL_SIZE)
+        + ((num_rows + 1) as f64 * DATE_PICKER_ROW_GAP);
 
     let panel_view = apply_widget_style(
         crate::xilem::view::portal(content)

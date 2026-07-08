@@ -32,11 +32,12 @@ use picus_view::view::{
 use std::sync::Arc;
 use tracing::trace;
 
-const CHECKBOX_BOX_SIZE: f64 = 18.0;
-const CHECKBOX_MARK_SIZE: f64 = 14.0;
-const SWITCH_TRACK_WIDTH: f64 = 42.0;
-const SWITCH_TRACK_HEIGHT: f64 = 22.0;
+const CHECKBOX_BOX_SIZE: f64 = 16.0;
+const CHECKBOX_MARK_SIZE: f64 = 12.0;
+const SWITCH_TRACK_WIDTH: f64 = 40.0;
+const SWITCH_TRACK_HEIGHT: f64 = 20.0;
 const SWITCH_THUMB_SIZE: f64 = 18.0;
+const SWITCH_THUMB_MARGIN: f64 = (SWITCH_TRACK_HEIGHT - SWITCH_THUMB_SIZE) * 0.5;
 const PROGRESS_BAR_WIDTH: f64 = 240.0;
 const PROGRESS_BAR_HEIGHT: f64 = 8.0;
 const PROGRESS_INDETERMINATE_WIDTH: f64 = 80.0;
@@ -241,8 +242,7 @@ pub(crate) fn project_checkbox(checkbox: &UiCheckbox, ctx: ProjectionCtx<'_>) ->
 
     let box_layer: UiView = Arc::new(apply_widget_style(
         sized_box(label(""))
-            .width(Dim::Fixed(Length::px(CHECKBOX_BOX_SIZE)))
-            .height(Dim::Fixed(Length::px(CHECKBOX_BOX_SIZE))),
+            .dims((Length::px(CHECKBOX_BOX_SIZE), Length::px(CHECKBOX_BOX_SIZE))),
         &box_style,
     ));
     let mut indicator_layers = vec![box_layer];
@@ -360,27 +360,25 @@ pub(crate) fn project_switch(switch_component: &UiSwitch, ctx: ProjectionCtx<'_>
     let thumb_style =
         resolve_style_for_entity_classes(ctx.world, ctx.entity, ["template.switch.thumb"]);
     let thumb_x = if switch_component.on {
-        SWITCH_TRACK_WIDTH - SWITCH_THUMB_SIZE - 2.0
+        SWITCH_TRACK_WIDTH - SWITCH_THUMB_SIZE - SWITCH_THUMB_MARGIN
     } else {
-        2.0
+        SWITCH_THUMB_MARGIN
     };
 
     let track: UiView = Arc::new(apply_widget_style(
         sized_box(label(""))
-            .width(Dim::Fixed(Length::px(SWITCH_TRACK_WIDTH)))
-            .height(Dim::Fixed(Length::px(SWITCH_TRACK_HEIGHT))),
+            .dims((Length::px(SWITCH_TRACK_WIDTH), Length::px(SWITCH_TRACK_HEIGHT))),
         &track_style,
     ));
     let thumb: UiView = Arc::new(apply_widget_style(
         sized_box(label(""))
-            .width(Dim::Fixed(Length::px(SWITCH_THUMB_SIZE)))
-            .height(Dim::Fixed(Length::px(SWITCH_THUMB_SIZE))),
+            .dims((Length::px(SWITCH_THUMB_SIZE), Length::px(SWITCH_THUMB_SIZE))),
         &thumb_style,
     ));
     let switch_visual: UiView = Arc::new(
         zstack(vec![
             track,
-            Arc::new(transformed(thumb).translate((thumb_x, 2.0))),
+            Arc::new(transformed(thumb).translate((thumb_x, SWITCH_THUMB_MARGIN))),
         ])
         .alignment(UnitPoint::TOP_LEFT),
     );
