@@ -123,7 +123,7 @@ impl ProjectionResourceDependency {
             type_id: TypeId::of::<R>(),
             type_name: std::any::type_name::<R>(),
             resource_id: None,
-            ensure_resource_id: |world| world.register_resource::<R>(),
+            ensure_resource_id: |world| world.register_component::<R>(),
         }
     }
 

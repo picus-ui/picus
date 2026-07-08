@@ -1715,7 +1715,7 @@ mod tests {
     use bevy_ecs::prelude::{Component, Resource};
     use bevy_input::touch::TouchPhase;
     use picus_view::picus_widget::widgets::TextAction;
-    use picus_view::view::{fork, task};
+    use picus_view::{core::fork, view::task};
 
     #[derive(Resource, Default)]
     struct ProjectionTestResource {

@@ -1,6 +1,7 @@
 use super::core::{ProjectionCtx, UiView};
 use crate::{
     ecs::{OverlayStack, OverlayState, UiOverlayRoot},
+    resize::WindowSize,
     styling::{apply_widget_style, resolve_style_for_classes},
 };
 use masonry_core::{
@@ -27,14 +28,23 @@ pub(crate) fn project_overlay_root(_: &UiOverlayRoot, ctx: ProjectionCtx<'_>) ->
 
     if has_modal_overlay {
         let dimmer_style = resolve_style_for_classes(ctx.world, ["overlay.modal.dimmer"]);
+        let dimmer_dims = if let Some(window_size) = ctx.world.get_resource::<WindowSize>()
+            && window_size.width > 0.0
+            && window_size.height > 0.0
+        {
+            Dimensions::AUTO
+                .with_width(Dim::Fixed(masonry_core::layout::Length::px(window_size.width)))
+                .with_height(Dim::Fixed(masonry_core::layout::Length::px(window_size.height)))
+        } else {
+            Dimensions::AUTO
+                .with_width(Dim::Stretch)
+                .with_height(Dim::Stretch)
+        };
 
-        let dimmer: UiView = Arc::new(
-            sized_box(apply_widget_style(sized_box(label("")), &dimmer_style)).dims(
-                Dimensions::AUTO
-                    .with_width(Dim::Stretch)
-                    .with_height(Dim::Stretch),
-            ),
-        );
+        let dimmer: UiView = Arc::new(apply_widget_style(
+            sized_box(label("")).dims(dimmer_dims),
+            &dimmer_style,
+        ));
         layers.push(dimmer);
     }
 

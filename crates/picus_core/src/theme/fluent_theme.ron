@@ -1521,15 +1521,20 @@
       selector: Class("overlay.toast"),
       setter: (
         layout: (
-          padding: Var("space-md"),
+          padding: Var("space-m"),
           corner_radius: Var("radius-md"),
           border_width: Var("border-thin"),
-          gap: Var("gap-sm"),
+          gap: Var("space-md"),
         ),
         colors: (
           bg: Var("surface-elevated"),
-          border: Var("border-default"),
+          border: Var("stroke-transparent-interactive"),
           text: Var("text-primary"),
+        ),
+        text: (
+          size: Var("font-size-body1"),
+          weight: Var("font-weight-semibold"),
+          line_height: Var("line-height-body1"),
         ),
         box_shadow: Var("shadow-flyout"),
       ),
@@ -1538,9 +1543,8 @@
       selector: Class("overlay.toast.info"),
       setter: (
         colors: (
-          bg: Var("status-info-bg"),
           border: Var("status-info-border"),
-          text: Var("text-primary"),
+          text: Var("status-info-fg"),
         ),
       ),
     ),
@@ -1548,9 +1552,8 @@
       selector: Class("overlay.toast.success"),
       setter: (
         colors: (
-          bg: Var("status-success-bg"),
           border: Var("status-success-border"),
-          text: Var("text-primary"),
+          text: Var("status-success-fg"),
         ),
       ),
     ),
@@ -1558,9 +1561,8 @@
       selector: Class("overlay.toast.warning"),
       setter: (
         colors: (
-          bg: Var("status-warning-bg"),
           border: Var("status-warning-border"),
-          text: Var("text-primary"),
+          text: Var("status-warning-fg"),
         ),
       ),
     ),
@@ -1568,9 +1570,8 @@
       selector: Class("overlay.toast.error"),
       setter: (
         colors: (
-          bg: Var("status-error-bg"),
           border: Var("status-error-border"),
-          text: Var("text-primary"),
+          text: Var("status-error-fg"),
         ),
       ),
     ),
@@ -2970,7 +2971,7 @@
       selector: Class("template.checkbox.mark"),
       setter: (
         colors: (
-          text: Var("text-on-accent"),
+          text: Var("checkbox-check-glyph"),
         ),
         text: (
           size: 14.0,
@@ -3283,6 +3284,7 @@
         "text-primary-static": Color(Hex("#242424")),
         "text-inverted-secondary": Color(Hex("#ADADAD")),
         "text-on-brand": Color(Hex("#FFFFFF")),
+        "checkbox-check-glyph": Color(Hex("#000000")),
         // Status foreground (Fluent v9 colorStatus* has foreground variants)
         "status-info-fg": Color(Hex("#2899F5")),
         "status-success-fg": Color(Hex("#6CCB5F")),
@@ -3430,6 +3432,7 @@
         "text-primary-static": Color(Hex("#242424")),
         "text-inverted-secondary": Color(Hex("#ADADAD")),
         "text-on-brand": Color(Hex("#FFFFFF")),
+        "checkbox-check-glyph": Color(Hex("#000000")),
         // Status foreground (Fluent v9 colorStatus* foreground variants)
         "status-info-fg": Color(Hex("#0F6CBD")),
         "status-success-fg": Color(Hex("#0B6A2B")),
@@ -3577,6 +3580,7 @@
         "text-primary-static": Color(Hex("#FFFFFF")),
         "text-inverted-secondary": Color(Hex("#C0C0C0")),
         "text-on-brand": Color(Hex("#000000")),
+        "checkbox-check-glyph": Color(Hex("#000000")),
         // Status foreground (HC uses high-contrast status colors)
         "status-info-fg": Color(Hex("#1AEBFF")),
         "status-success-fg": Color(Hex("#00FF00")),

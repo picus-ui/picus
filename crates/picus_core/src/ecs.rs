@@ -162,6 +162,10 @@ pub struct OverlayComputedPosition {
     pub is_positioned: bool,
 }
 
+/// Marker for overlays whose origin was explicitly supplied by the caller.
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct ManualOverlayPosition;
+
 /// Centralized z-ordered overlay stack.
 ///
 /// The last entry is the top-most overlay (highest z-index).

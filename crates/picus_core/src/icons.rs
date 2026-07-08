@@ -147,7 +147,7 @@ impl PicusIcon {
     #[must_use]
     pub const fn as_fluent(self) -> FluentIcon {
         match self {
-            Self::Check => FluentIcon::Accept,
+            Self::Check => FluentIcon::Checkmark,
             Self::ChevronDown => FluentIcon::ChevronDown,
             Self::ChevronUp => FluentIcon::ChevronUp,
             Self::ChevronRight => FluentIcon::ChevronRight,
@@ -338,5 +338,13 @@ mod tests {
 
         assert_eq!(glyph.glyph(), FluentIcon::Send.glyph());
         assert_eq!(glyph.font_families(), FLUENT_SYMBOL_FONT_FALLBACKS);
+    }
+
+    #[test]
+    fn picus_check_icon_uses_checkbox_checkmark_glyph() {
+        let glyph = IconGlyph::from(PicusIcon::Check);
+
+        assert_eq!(glyph.glyph(), FluentIcon::Checkmark.glyph());
+        assert_ne!(glyph.glyph(), FluentIcon::Accept.glyph());
     }
 }

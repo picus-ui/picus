@@ -390,6 +390,11 @@ select one automatically; applications must explicitly call
 The bundle provides default interactive `:hover`, `:pressed`, and focused-state
 rules for Fluent-like built-ins and shared menu/list/table/navigation item classes,
 plus NavigationView sidebar/content container classes.
+`UiToast` follows Fluent Toast structure: the card stays on a neutral elevated
+surface, while `overlay.toast.info/success/warning/error` provide intent colors
+for the media/icon and accent stripe rather than recoloring the whole card.
+Checkbox check glyph color resolves through the `checkbox-check-glyph` token; do
+not reuse button-oriented `text-on-accent` for `template.checkbox.mark`.
 Picus-only helpers that do not correspond to Fluent UI components, such as
 `UiGroupBox`, must not receive default box styling from this built-in Fluent
 bundle; examples or applications that want a visible group box provide their own
@@ -424,6 +429,9 @@ Overlay invariants:
 
 - Overlay projectors render transparent content until
   `OverlayComputedPosition.is_positioned`.
+- Manually positioned overlays retain the caller-supplied origin; overlay
+  placement sync may update their measured size and clamp them into the viewport
+  but must not reinterpret them through anchor/window placement.
 - Outside-click dismissal checks the top overlay's hit path and bound widget IDs,
   with rectangle fallback.
 - Dismissed dialogs emit their typed close hook through `UiEventQueue` before
@@ -462,6 +470,8 @@ Fluent Design / WinUI `FluentIcon` glyphs. Lucide glyphs use the bundled
 `Segoe Fluent Icons`, `Segoe MDL2 Assets`, `FabricMDL2Icons`, then
 `Segoe UI Symbol`; examples that want Fluent Design icons should pass
 `FluentIcon`/`IconGlyph` instead of styling a raw label character.
+`PicusIcon::Check` maps to WinUI's checkmark glyph (`FluentIcon::Checkmark`,
+U+E73E), matching checkbox visuals; do not substitute the broader Accept glyph.
 
 `XilemFontBridge` is the legacy-named font bridge that registers Bevy font assets
 with Masonry Core. Fonts can come from the asset server, direct bytes, or direct

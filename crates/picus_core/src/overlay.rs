@@ -21,19 +21,21 @@ use crate::projection::dialog::{
     estimate_dialog_surface_width_px,
 };
 use crate::{
-    AnchoredTo, AppI18n, AutoDismiss, OverlayAnchorRect, OverlayComputedPosition, OverlayConfig,
-    OverlayPlacement, OverlayStack, OverlayState, StopUiPointerPropagation, UiColorPicker,
-    UiColorPickerChanged, UiColorPickerPanel, UiComboBox, UiComboBoxChanged, UiContextMenu,
-    UiContextMenuItem, UiContextMenuItemSelected, UiContextMenuTrigger, UiDatePicker,
-    UiDatePickerChanged, UiDatePickerPanel, UiDialog, UiDropdownItem, UiDropdownMenu, UiEventQueue,
-    UiExpander, UiExpanderChanged, UiInteractionEvent, UiMenuBarItem, UiMenuItemPanel,
-    UiMenuItemSelected, UiOverlayRoot, UiPointerEvent, UiPointerHitEvent, UiPopover, UiRoot,
-    UiThemePicker, UiThemePickerChanged, UiThemePickerMenu, UiTimePicker, UiTimePickerChanged,
-    UiTimePickerPanel, UiToast, UiTooltip,
+    AnchoredTo, AppI18n, AutoDismiss,
+    ecs::ManualOverlayPosition,
+    OverlayAnchorRect, OverlayComputedPosition, OverlayConfig, OverlayPlacement, OverlayStack,
+    OverlayState, StopUiPointerPropagation, UiColorPicker, UiColorPickerChanged,
+    UiColorPickerPanel, UiComboBox, UiComboBoxChanged, UiContextMenu, UiContextMenuItem,
+    UiContextMenuItemSelected, UiContextMenuTrigger, UiDatePicker, UiDatePickerChanged,
+    UiDatePickerPanel, UiDialog, UiDropdownItem, UiDropdownMenu, UiEventQueue, UiExpander,
+    UiExpanderChanged, UiInteractionEvent, UiMenuBarItem, UiMenuItemPanel, UiMenuItemSelected,
+    UiOverlayRoot, UiPointerEvent, UiPointerHitEvent, UiPopover, UiRoot, UiThemePicker,
+    UiThemePickerChanged, UiThemePickerMenu, UiTimePicker, UiTimePickerChanged, UiTimePickerPanel,
+    UiToast, UiTooltip,
     events::UiEvent,
     runtime::MasonryRuntime,
     set_active_style_variant_by_name,
-    styling::{resolve_style, resolve_style_for_classes},
+    styling::resolve_style_for_classes,
 };
 
 const OVERLAY_ANCHOR_GAP: f64 = 4.0;
@@ -296,6 +298,7 @@ pub fn spawn_manual_overlay_at<B: Bundle>(world: &mut World, bundle: B, x: f64, 
                 placement: OverlayPlacement::TopStart,
                 is_positioned: true,
             },
+            ManualOverlayPosition,
         ))
         .id();
     push_overlay_to_stack(world, entity);
@@ -1470,6 +1473,19 @@ fn estimate_text_width_px(text: &str, font_size: f32) -> f64 {
     (units * font_size as f64).max(font_size as f64 * 2.0)
 }
 
+fn estimate_wrapped_line_count(text: &str, font_size: f32, max_line_width: f64) -> usize {
+    let max_line_width = max_line_width.max(font_size as f64 * 2.0);
+    let mut total = 0_usize;
+
+    for raw_line in text.lines() {
+        let logical_line = if raw_line.is_empty() { " " } else { raw_line };
+        let width = estimate_text_width_px(logical_line, font_size);
+        total += (width / max_line_width).ceil().max(1.0) as usize;
+    }
+
+    total.max(1)
+}
+
 fn estimate_dropdown_surface_width_px<'a>(
     anchor_width: f64,
     labels: impl IntoIterator<Item = &'a str>,
@@ -1669,14 +1685,27 @@ fn overlay_size_for_entity(
     }
 
     if let Some(toast) = world.get::<UiToast>(entity) {
-        let style = resolve_style(world, entity);
-
+        let style = resolve_style_for_classes(world, ["overlay.toast"]);
         let text_width = estimate_text_width_px(&toast.message, style.text.size);
         let min_width = toast.min_width.max(120.0);
         let max_width = toast.max_width.max(min_width);
-        let width = (text_width + style.layout.padding * 2.0 + 52.0).clamp(min_width, max_width);
-        let line_height = (style.text.size as f64 * 1.35).max(20.0);
-        let height = (line_height + style.layout.padding * 2.0).max(44.0);
+        let close_width = if toast.show_close_button { 28.0 } else { 0.0 };
+        let gap_count = if toast.show_close_button { 3.0 } else { 2.0 };
+        let horizontal_chrome = style.layout.padding * 2.0
+            + style.layout.border_width * 2.0
+            + 4.0
+            + 16.0
+            + close_width
+            + style.layout.gap.max(8.0) * gap_count;
+        let width = (text_width + horizontal_chrome).clamp(min_width, max_width);
+        let text_line_width = (width - horizontal_chrome).max(style.text.size as f64 * 8.0);
+        let line_count = estimate_wrapped_line_count(&toast.message, style.text.size, text_line_width);
+        let line_height =
+            (style.text.size as f64 * style.text.line_height as f64).max(20.0);
+        let height = (line_count as f64 * line_height
+            + style.layout.padding * 2.0
+            + style.layout.border_width * 2.0)
+            .max(52.0);
         return (width, height);
     }
 
@@ -1859,6 +1888,50 @@ pub fn sync_overlay_positions(world: &mut World) {
 
         let (width, height) = overlay_size_for_entity(world, entity, &anchor_rects);
 
+        if world.get::<ManualOverlayPosition>(entity).is_some() {
+            let previous = world
+                .get::<OverlayComputedPosition>(entity)
+                .copied()
+                .unwrap_or(OverlayComputedPosition {
+                    placement: preferred_placement,
+                    ..Default::default()
+                });
+            let (x, y) = clamp_overlay_origin(
+                previous.x,
+                previous.y,
+                width,
+                height,
+                viewport_width.max(1.0),
+                viewport_height.max(1.0),
+            );
+            let next_computed = OverlayComputedPosition {
+                x,
+                y,
+                width,
+                height,
+                placement: previous.placement,
+                is_positioned: true,
+            };
+
+            if let Some(mut computed) = world.get_mut::<OverlayComputedPosition>(entity) {
+                if *computed != next_computed {
+                    *computed = next_computed;
+                }
+            } else {
+                world.entity_mut(entity).insert(next_computed);
+            }
+
+            tracing::trace!(
+                "Applied manual overlay position to projection state for {:?}: x={}, y={}, w={}, h={}",
+                entity,
+                x,
+                y,
+                width,
+                height
+            );
+            continue;
+        }
+
         let (anchor_rect, anchor_gap) = if let Some(anchor) = anchor_entity {
             let Some(anchor_rect) = anchor_rects.get(&anchor).copied() else {
                 tracing::warn!(
@@ -2038,6 +2111,7 @@ fn spawn_context_menu_at_cursor(
                 placement: OverlayPlacement::BottomStart,
                 is_positioned: true,
             },
+            ManualOverlayPosition,
         ))
         .id();
 
@@ -2461,7 +2535,7 @@ pub fn clear_stale_pressed_interactions(world: &mut World) {
 mod tests {
     use super::{
         OVERLAY_ANCHOR_GAP, OverlayAnchorRect, OverlayPlacement, overlay_origin_for_placement,
-        overlay_size_for_entity,
+        overlay_size_for_entity, spawn_context_menu_at_cursor,
     };
     use crate::test_helpers::*;
     use crate::{
@@ -3226,6 +3300,55 @@ mod tests {
         assert!(computed.x > 0.0);
         assert!(computed.y > 0.0);
         assert!(computed.is_positioned);
+    }
+
+    #[test]
+    fn context_menu_cursor_position_survives_overlay_sync() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+        crate::set_active_style_variant_by_name(app.world_mut(), "dark");
+
+        let mut window = Window::default();
+        window.resolution.set(800.0, 600.0);
+        window.set_cursor_position(Some(Vec2::new(260.0, 180.0)));
+        app.world_mut().spawn((window, PrimaryWindow));
+
+        let trigger = app
+            .world_mut()
+            .spawn((crate::UiContextMenuTrigger::new([
+                crate::UiContextMenuItem::new("Copy"),
+                crate::UiContextMenuItem::new("Paste"),
+            ]),))
+            .id();
+
+        let menu = spawn_context_menu_at_cursor(
+            app.world_mut(),
+            trigger,
+            vec![
+                crate::UiContextMenuItem::new("Copy"),
+                crate::UiContextMenuItem::new("Paste"),
+            ],
+        )
+        .expect("cursor-backed context menu should spawn");
+
+        assert!(
+            app.world()
+                .get::<crate::ecs::ManualOverlayPosition>(menu)
+                .is_some()
+        );
+
+        app.update();
+
+        let computed = *app
+            .world()
+            .get::<crate::OverlayComputedPosition>(menu)
+            .expect("context menu should keep a computed position");
+
+        assert!(computed.is_positioned);
+        assert!(computed.width > 1.0);
+        assert!(computed.height > 1.0);
+        assert!((computed.x - 260.0).abs() < 0.01);
+        assert!((computed.y - 180.0).abs() < 0.01);
     }
 
     #[test]

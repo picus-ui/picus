@@ -1535,13 +1535,19 @@ pub(crate) fn project_split_pane(pane: &UiSplitPane, ctx: ProjectionCtx<'_>) -> 
 
 pub(crate) fn project_toast(toast: &UiToast, ctx: ProjectionCtx<'_>) -> UiView {
     let mut style = default_panel_style(ctx.world, "overlay.toast");
-    let kind_style = match toast.kind {
+    let intent_style = match toast.kind {
         ToastKind::Info => resolve_style_for_classes(ctx.world, ["overlay.toast.info"]),
         ToastKind::Success => resolve_style_for_classes(ctx.world, ["overlay.toast.success"]),
         ToastKind::Warning => resolve_style_for_classes(ctx.world, ["overlay.toast.warning"]),
         ToastKind::Error => resolve_style_for_classes(ctx.world, ["overlay.toast.error"]),
     };
-    apply_color_overrides(&mut style, &kind_style);
+    let mut intent_color = intent_style
+        .colors
+        .text
+        .or(intent_style.colors.border)
+        .or(style.colors.border)
+        .or(style.colors.text)
+        .unwrap_or(Color::TRANSPARENT);
 
     let mut dismiss_style = resolve_style_for_classes(ctx.world, ["overlay.toast.dismiss"]);
     if dismiss_style.colors.text.is_none() {
@@ -1558,6 +1564,7 @@ pub(crate) fn project_toast(toast: &UiToast, ctx: ProjectionCtx<'_>) -> UiView {
     if !computed_pos.is_positioned {
         hide_style_without_collapsing_layout(&mut style);
         hide_style_without_collapsing_layout(&mut dismiss_style);
+        intent_color = Color::TRANSPARENT;
     }
 
     let toast_width = if computed_pos.width > 1.0 {
@@ -1565,20 +1572,58 @@ pub(crate) fn project_toast(toast: &UiToast, ctx: ProjectionCtx<'_>) -> UiView {
     } else {
         toast.min_width.max(180.0)
     };
+    let outer_inset = style.layout.padding * 2.0 + style.layout.border_width * 2.0;
+    let content_width = (toast_width - outer_inset).max(120.0);
+
+    let intent_icon = match toast.kind {
+        ToastKind::Info | ToastKind::Warning => VectorIcon::Info,
+        ToastKind::Success => VectorIcon::Check,
+        ToastKind::Error => VectorIcon::X,
+    };
+    let icon = vector_icon(intent_icon, 16.0, intent_color);
+
+    let mut stripe_style = ResolvedStyle::default();
+    stripe_style.colors.bg = Some(intent_color);
+    stripe_style.layout.corner_radius = style.layout.corner_radius.min(3.0);
+    let stripe: UiView = Arc::new(apply_widget_style(
+        sized_box(label("")).dims(
+            Dimensions::AUTO
+                .with_width(Dim::Fixed(Length::px(4.0)))
+                .with_height(Dim::Stretch),
+        ),
+        &stripe_style,
+    ));
 
     let msg = apply_label_style(label(toast.message.clone()), &style);
-    let mut items = vec![msg.flex(1.0).into_any_flex()];
+    let mut items = vec![
+        stripe.into_any_flex(),
+        icon.into_any_flex(),
+        msg.flex(1.0).into_any_flex(),
+    ];
     if toast.show_close_button {
-        let dismiss = apply_direct_widget_style(
-            button_view(ctx.entity, OverlayUiAction::DismissToast, "✕".to_string()),
+        let dismiss_icon = match dismiss_style.colors.text {
+            Some(text_color) => vector_icon(VectorIcon::X, 14.0, text_color),
+            None => Arc::new(label("")),
+        };
+        let dismiss = sized_box(apply_direct_widget_style(
+            button_with_child_view(ctx.entity, OverlayUiAction::DismissToast, dismiss_icon),
             &dismiss_style,
+        ))
+        .dims(
+            Dimensions::AUTO
+                .with_width(Dim::Fixed(Length::px(28.0)))
+                .with_height(Dim::Fixed(Length::px(28.0))),
         );
         items.push(dismiss.into_any_flex());
     }
 
     let panel = apply_widget_style(
-        sized_box(apply_flex_alignment(flex_row(items), &style).gap(Length::px(8.0)))
-            .width(Dim::Fixed(Length::px(toast_width))),
+        sized_box(
+            flex_row(items)
+                .cross_axis_alignment(CrossAxisAlignment::Stretch)
+                .gap(Length::px(style.layout.gap.max(8.0))),
+        )
+        .width(Dim::Fixed(Length::px(content_width))),
         &style,
     );
 
@@ -1642,15 +1687,15 @@ pub(crate) fn project_date_picker_panel(
 
     // Navigation row
     let nav_style = resolve_style_for_classes(ctx.world, ["overlay.date_picker.nav"]);
-    let prev_btn = button_view(
+    let prev_btn = button_with_child_view(
         ctx.entity,
         OverlayUiAction::NavigateDateMonth { forward: false },
-        "<".to_string(),
+        Arc::new(apply_label_style(label("<"), &cell_style)),
     );
-    let next_btn = button_view(
+    let next_btn = button_with_child_view(
         ctx.entity,
         OverlayUiAction::NavigateDateMonth { forward: true },
-        ">".to_string(),
+        Arc::new(apply_label_style(label(">"), &cell_style)),
     );
     let month_lbl = apply_label_style(
         label(format!("{} {view_year}", month_name(view_month))),
@@ -1695,10 +1740,11 @@ pub(crate) fn project_date_picker_panel(
                 } else {
                     &cell_style
                 };
-                let btn = button_view(
+                let day_label: UiView = Arc::new(apply_label_style(label(day.to_string()), s));
+                let btn = button_with_child_view(
                     ctx.entity,
                     OverlayUiAction::SelectDateDay { day },
-                    day.to_string(),
+                    day_label,
                 );
                 Arc::new(apply_direct_widget_style(btn, s))
             } else {
