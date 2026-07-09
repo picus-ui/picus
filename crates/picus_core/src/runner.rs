@@ -1,3 +1,4 @@
+use crate::backdrop::WindowBackdropMaterial;
 use crate::xilem::winit::{dpi::Size, error::EventLoopError};
 use bevy_a11y::AccessibilityPlugin;
 use bevy_app::App;
@@ -12,6 +13,7 @@ pub struct BevyWindowOptions {
     resizable: Option<bool>,
     initial_inner_size: Option<Size>,
     min_inner_size: Option<Size>,
+    backdrop_material: Option<WindowBackdropMaterial>,
 }
 
 impl BevyWindowOptions {
@@ -34,6 +36,30 @@ impl BevyWindowOptions {
     pub fn with_min_inner_size<S: Into<Size>>(mut self, size: S) -> Self {
         self.min_inner_size = Some(size.into());
         self
+    }
+
+    /// Requests a native top-level window backdrop material.
+    ///
+    /// Backdrop materials are applied to the primary window by
+    /// [`run_app_with_window_options`]. On Windows they map to DWM system
+    /// backdrops such as Mica and Desktop Acrylic; unsupported platforms ignore
+    /// the native request while keeping normal Picus rendering.
+    #[must_use]
+    pub fn with_backdrop_material(mut self, material: WindowBackdropMaterial) -> Self {
+        self.backdrop_material = Some(material);
+        self
+    }
+
+    /// Requests the Windows Mica system backdrop for the primary window.
+    #[must_use]
+    pub fn with_mica_backdrop(self) -> Self {
+        self.with_backdrop_material(WindowBackdropMaterial::Mica)
+    }
+
+    /// Requests the Windows Desktop Acrylic system backdrop for the primary window.
+    #[must_use]
+    pub fn with_acrylic_backdrop(self) -> Self {
+        self.with_backdrop_material(WindowBackdropMaterial::Acrylic)
     }
 }
 
@@ -60,6 +86,10 @@ fn apply_window_options(window: &mut Window, title: &str, options: &BevyWindowOp
         let (min_width, min_height) = size_to_logical(min_inner_size);
         window.resize_constraints.min_width = min_width.max(1.0);
         window.resize_constraints.min_height = min_height.max(1.0);
+    }
+
+    if let Some(material) = options.backdrop_material {
+        material.configure_window(window);
     }
 }
 
@@ -121,17 +151,30 @@ fn ensure_native_windowing_plugins(app: &mut App, primary_window: &Window) {
 }
 
 fn configure_primary_window(app: &mut App, title: &str, options: &BevyWindowOptions) {
-    let mut query = app
-        .world_mut()
-        .query_filtered::<&mut Window, bevy_ecs::query::With<PrimaryWindow>>();
+    let primary_entity = {
+        let world = app.world_mut();
+        let mut query =
+            world.query_filtered::<(bevy_ecs::entity::Entity, &mut Window), bevy_ecs::query::With<PrimaryWindow>>();
+        if let Some((entity, mut window)) = query.iter_mut(world).next() {
+            apply_window_options(&mut window, title, options);
+            Some(entity)
+        } else {
+            None
+        }
+    };
 
-    if let Some(mut window) = query.iter_mut(app.world_mut()).next() {
-        apply_window_options(&mut window, title, options);
+    if let Some(entity) = primary_entity {
+        if let Some(material) = options.backdrop_material {
+            app.world_mut().entity_mut(entity).insert(material);
+        }
         return;
     }
 
     let window = build_primary_window(title, options);
-    app.world_mut().spawn((window, PrimaryWindow));
+    let mut entity_commands = app.world_mut().spawn((window, PrimaryWindow));
+    if let Some(material) = options.backdrop_material {
+        entity_commands.insert(material);
+    }
 }
 
 /// Run a Bevy app using Bevy's native runner and default `bevy_winit` event loop.
@@ -181,6 +224,55 @@ mod tests {
         assert_eq!(window.resize_constraints.min_width, 320.0);
         assert_eq!(window.resize_constraints.min_height, 200.0);
         assert!(!window.resizable);
+    }
+
+    #[test]
+    fn options_apply_backdrop_window_flags() {
+        let mut window = Window::default();
+        let options = BevyWindowOptions::default().with_backdrop_material(WindowBackdropMaterial::Mica);
+
+        apply_window_options(&mut window, "Test", &options);
+
+        assert_eq!(window.title, "Test");
+        assert_eq!(window.transparent, cfg!(windows));
+        assert_eq!(
+            window.composite_alpha_mode,
+            if cfg!(windows) {
+                bevy_window::CompositeAlphaMode::PostMultiplied
+            } else {
+                bevy_window::CompositeAlphaMode::Auto
+            }
+        );
+    }
+
+    #[test]
+    fn configure_primary_window_inserts_backdrop_component() {
+        let mut app = App::new();
+        let options =
+            BevyWindowOptions::default().with_backdrop_material(WindowBackdropMaterial::Acrylic);
+
+        configure_primary_window(&mut app, "Test", &options);
+
+        let world = app.world_mut();
+        let mut query = world.query_filtered::<(
+            &Window,
+            &WindowBackdropMaterial,
+        ), bevy_ecs::query::With<PrimaryWindow>>();
+        let (window, material) = query
+            .iter(world)
+            .next()
+            .expect("primary window should be configured");
+
+        assert_eq!(*material, WindowBackdropMaterial::Acrylic);
+        assert_eq!(window.transparent, cfg!(windows));
+        assert_eq!(
+            window.composite_alpha_mode,
+            if cfg!(windows) {
+                bevy_window::CompositeAlphaMode::PostMultiplied
+            } else {
+                bevy_window::CompositeAlphaMode::Auto
+            }
+        );
     }
 
     #[test]

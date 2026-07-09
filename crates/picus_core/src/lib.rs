@@ -52,6 +52,7 @@
 pub mod accelerator;
 pub mod accessibility;
 pub mod app_ext;
+pub mod backdrop;
 pub mod bevy_tween;
 pub mod clipboard;
 pub mod components;
@@ -97,6 +98,7 @@ pub use rfd;
 pub use accelerator::*;
 pub use accessibility::*;
 pub use app_ext::*;
+pub use backdrop::*;
 
 pub use clipboard::*;
 pub use components::*;
@@ -168,9 +170,10 @@ pub mod prelude {
         UiThemePicker,
         UiThemePickerChanged, UiThemePickerMenu, UiThemePickerOption, UiTitleBar, UiToast,
         UiToolbar, UiTooltip, UiTreeNode, UiTreeNodeToggled, UiView, UiVisibleResponsive, UiWindow,
-        WidgetUiAction, WindowRuntime, WindowSize, XilemFontBridge, bubble_ui_pointer_events,
-        button, button_with_child, checkbox, collect_bevy_font_assets, dismiss_overlays_on_click,
-        emit_ui_action, ensure_overlay_root, ensure_overlay_root_entity, ensure_template_part,
+        WidgetUiAction, WindowBackdropMaterial, WindowRuntime, WindowSize, XilemFontBridge,
+        bubble_ui_pointer_events, button, button_with_child, checkbox, collect_bevy_font_assets,
+        configure_window_for_backdrop, dismiss_overlays_on_click, emit_ui_action,
+        ensure_overlay_root, ensure_overlay_root_entity, ensure_template_part,
         expand_builtin_ui_component_templates, find_template_part, gather_ui_roots,
         handle_global_overlay_clicks, handle_overlay_actions, handle_tooltip_hovers,
         handle_widget_actions, inject_bevy_input_into_masonry, mark_style_dirty,

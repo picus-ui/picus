@@ -19,8 +19,9 @@ use bevy_input::{
 use bevy_math::Vec2;
 use bevy_time::Time;
 use bevy_window::{
-    ClosingWindow, CursorLeft, CursorMoved, Ime as BevyIme, PrimaryWindow, RawHandleWrapper,
-    RequestRedraw, Window, WindowFocused, WindowResized, WindowScaleFactorChanged, WindowWrapper,
+    ClosingWindow, CompositeAlphaMode, CursorLeft, CursorMoved, Ime as BevyIme, PrimaryWindow,
+    RawHandleWrapper, RequestRedraw, Window, WindowFocused, WindowResized,
+    WindowScaleFactorChanged, WindowWrapper,
 };
 use bevy_winit::{EventLoopProxy, EventLoopProxyWrapper, WinitUserEvent};
 use masonry_core::{
@@ -147,6 +148,7 @@ pub struct WindowRuntime {
     current_view: UiView,
     window_entity: Entity,
     window_scale_factor: f64,
+    window_transparent: bool,
     pointer_info: PointerInfo,
     pointer_state: PointerState,
     keyboard_modifiers: Modifiers,
@@ -247,6 +249,7 @@ impl WindowRuntime {
             current_view: initial_view,
             window_entity,
             window_scale_factor: 1.0,
+            window_transparent: false,
             pointer_info: PointerInfo {
                 pointer_id: Some(PointerId::new(1).expect("pointer id 1 should be valid")),
                 persistent_device_id: None,
@@ -814,11 +817,16 @@ impl WindowRuntime {
         let VisualLayerKind::Scene(root_scene) = &root_layer.kind else {
             unreachable!("root_layer always returns a scene layer");
         };
+        let background = if self.window_transparent {
+            Color::TRANSPARENT
+        } else {
+            Color::BLACK
+        };
         let frame = PreparedFrame::new(
             logical_size.width.max(1),
             logical_size.height.max(1),
             self.window_scale_factor,
-            Color::BLACK,
+            background,
             root_scene,
             &overlays,
         );
@@ -844,11 +852,13 @@ impl WindowRuntime {
         let next_scale = metrics.scale_factor.max(f64::EPSILON);
         let next_viewport_width = metrics.logical_width.max(1.0);
         let next_viewport_height = metrics.logical_height.max(1.0);
+        let transparency_changed = self.window_transparent != metrics.transparent;
         let needs_rescale = (self.window_scale_factor - next_scale).abs() > f64::EPSILON;
         let needs_resize = (self.viewport_width - next_viewport_width).abs() > f64::EPSILON
             || (self.viewport_height - next_viewport_height).abs() > f64::EPSILON;
 
         self.window_scale_factor = next_scale;
+        self.window_transparent = metrics.transparent;
         self.viewport_width = next_viewport_width;
         self.viewport_height = next_viewport_height;
 
@@ -865,6 +875,10 @@ impl WindowRuntime {
                     metrics.physical_width.max(1),
                     metrics.physical_height.max(1),
                 )));
+            self.needs_redraw = true;
+        }
+
+        if transparency_changed {
             self.needs_redraw = true;
         }
     }
@@ -893,7 +907,11 @@ fn focus_fallback_widget(render_root: &RenderRoot) -> Option<WidgetId> {
         .map(|root| root.inner().inner_id())
 }
 
-fn existing_window_metrics(window: &XilemWinitWindow) -> ExistingWindowMetrics {
+fn existing_window_metrics(
+    window: &XilemWinitWindow,
+    transparent: bool,
+    composite_alpha_mode: CompositeAlphaMode,
+) -> ExistingWindowMetrics {
     let physical_size = window.inner_size();
     let scale_factor = window.scale_factor();
     let logical_size = physical_size.to_logical(scale_factor);
@@ -904,6 +922,8 @@ fn existing_window_metrics(window: &XilemWinitWindow) -> ExistingWindowMetrics {
         logical_width: logical_size.width,
         logical_height: logical_size.height,
         scale_factor,
+        transparent,
+        composite_alpha_mode,
     }
 }
 
@@ -1484,8 +1504,8 @@ pub fn initialize_masonry_runtime_from_windows(
     runtime: Option<NonSendMut<MasonryRuntime>>,
     bridge: Option<Res<XilemFontBridge>>,
     event_loop_proxy: Option<Res<EventLoopProxyWrapper>>,
-    added_window_query: Query<(Entity, Option<&PrimaryWindow>), Added<Window>>,
-    window_query: Query<(Entity, Option<&PrimaryWindow>), With<Window>>,
+    added_window_query: Query<(Entity, &Window, Option<&PrimaryWindow>), Added<Window>>,
+    window_query: Query<(Entity, &Window, Option<&PrimaryWindow>), With<Window>>,
 ) {
     let Some(mut runtime) = runtime else {
         return;
@@ -1495,19 +1515,33 @@ pub fn initialize_masonry_runtime_from_windows(
 
     // Gather candidate windows: newly-added windows, or any existing window if
     // the runtime currently has none attached.
-    let candidates: Vec<(Entity, bool)> = if runtime.windows.is_empty() {
+    let candidates: Vec<(Entity, bool, bool, CompositeAlphaMode)> = if runtime.windows.is_empty() {
         window_query
             .iter()
-            .map(|(entity, primary)| (entity, primary.is_some()))
+            .map(|(entity, window, primary)| {
+                (
+                    entity,
+                    primary.is_some(),
+                    window.transparent,
+                    window.composite_alpha_mode,
+                )
+            })
             .collect()
     } else {
         added_window_query
             .iter()
-            .map(|(entity, primary)| (entity, primary.is_some()))
+            .map(|(entity, window, primary)| {
+                (
+                    entity,
+                    primary.is_some(),
+                    window.transparent,
+                    window.composite_alpha_mode,
+                )
+            })
             .collect()
     };
 
-    for (window_entity, is_primary) in candidates {
+    for (window_entity, is_primary, transparent, composite_alpha_mode) in candidates {
         if runtime.has_window(window_entity) {
             if is_primary {
                 runtime.set_primary_if_unset(window_entity);
@@ -1519,7 +1553,7 @@ pub fn initialize_masonry_runtime_from_windows(
             let winit_windows = winit_windows.borrow();
             winit_windows
                 .get_window(window_entity)
-                .map(|window| existing_window_metrics(window))
+                .map(|window| existing_window_metrics(window, transparent, composite_alpha_mode))
         });
 
         let window_runtime = runtime.ensure_window(window_entity, is_primary);
@@ -1554,6 +1588,8 @@ pub fn initialize_masonry_runtime_from_windows(
                 logical_width: 1024.0,
                 logical_height: 768.0,
                 scale_factor: 1.0,
+                transparent,
+                composite_alpha_mode,
             };
             window_runtime.attach_to_window(fallback);
             window_runtime.handle_window_resized(1024.0, 768.0);
@@ -1642,7 +1678,7 @@ pub fn route_masonry_view_messages(runtime: Option<NonSendMut<MasonryRuntime>>) 
 /// present to the corresponding Bevy window.
 pub fn paint_masonry_ui(
     runtime: Option<NonSendMut<MasonryRuntime>>,
-    active_window_query: Query<(), (With<Window>, Without<ClosingWindow>)>,
+    active_window_query: Query<&Window, Without<ClosingWindow>>,
     time: Res<Time>,
     mut redraw_requests: MessageWriter<RequestRedraw>,
 ) {
@@ -1654,16 +1690,18 @@ pub fn paint_masonry_ui(
     let mut wants_redraw = false;
 
     for window_entity in window_entities {
-        if !active_window_query.contains(window_entity) {
+        let Ok(bevy_window) = active_window_query.get(window_entity) else {
             runtime.remove_window(window_entity);
             continue;
-        }
+        };
+        let transparent = bevy_window.transparent;
+        let composite_alpha_mode = bevy_window.composite_alpha_mode;
 
         let Some(metrics) = bevy_winit::WINIT_WINDOWS.with(|winit_windows| {
             let winit_windows = winit_windows.borrow();
             winit_windows
                 .get_window(window_entity)
-                .map(|window| existing_window_metrics(window))
+                .map(|window| existing_window_metrics(window, transparent, composite_alpha_mode))
         }) else {
             continue;
         };

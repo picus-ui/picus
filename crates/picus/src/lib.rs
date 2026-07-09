@@ -11,9 +11,9 @@ pub use picus_core::*;
 pub mod app {
     pub use picus_core::{
         AppPicusExt, BevyWindowOptions, PicusBuiltinsPlugin, PicusPlugin, SyncAssetSource,
-        SyncTextSource, WindowSize, bevy_app, bevy_asset, bevy_ecs, bevy_input, bevy_math,
-        bevy_scene, bevy_tasks, bevy_text, bevy_tween, bevy_window, rfd, run_app,
-        run_app_with_window_options,
+        SyncTextSource, WindowBackdropMaterial, WindowSize, bevy_app, bevy_asset, bevy_ecs,
+        bevy_input, bevy_math, bevy_scene, bevy_tasks, bevy_text, bevy_tween, bevy_window,
+        configure_window_for_backdrop, rfd, run_app, run_app_with_window_options,
     };
 }
 
@@ -48,7 +48,7 @@ pub mod components {
         UiTabBar, UiTabChanged, UiTable, UiText, UiTextInput, UiTextInputChanged, UiThemePicker,
         UiThemePickerChanged, UiThemePickerMenu, UiThemePickerOption, UiTitleBar, UiToast,
         UiToolbar, UiTooltip, UiTreeNode, UiTreeNodeToggled, UiView, UiVisibleResponsive,
-        UiWindow, button,
+        UiWindow, WindowBackdropMaterial, button,
         button_with_child, checkbox, slider, switch, text_input,
     };
     pub use picus_core::icon::{

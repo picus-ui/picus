@@ -127,6 +127,13 @@ windows attach as secondary runtimes. Access the primary window via `primary()` 
 `ensure_window(entity, is_primary)` to create a runtime for a window on demand. A
 `UiWindow(Entity)` binding component on a `UiRoot` directs synthesis into a specific
 window; roots without it bind to the primary window.
+`WindowBackdropMaterial` is the public top-level window backdrop contract. Attach it
+to a Bevy `Window` entity, or use
+`BevyWindowOptions::with_backdrop_material(...)` for the primary window. On Windows,
+Picus maps `Mica`, `Acrylic`, and `MicaAlt` to DWM system backdrops; unsupported
+platforms keep running and treat the native request as a no-op. Backdrop windows
+must be created transparent on Windows, and Picus' runner applies the required
+transparent window and alpha-composition flags before primary-window creation.
 
 System stages:
 
@@ -486,10 +493,13 @@ active bundle and falls back to the key or explicit fallback text.
 
 `picus_surface` owns wgpu instance/device/queue state, surface configuration,
 DPI-aware scene rendering, and swapchain presentation. It prefers opaque swapchain
-alpha for externally owned Bevy windows, keeps the Windows AMD premultiplied-alpha
-compatibility blit path as a fallback, and never blocks the Bevy thread waiting for
-GPU completion after `present()`. It attaches through raw window handles and tracks
-physical size, logical size, and scale factor.
+alpha for externally owned opaque Bevy windows, but transparent windows, including
+`WindowBackdropMaterial` windows, honor Bevy's requested composition mode and prefer
+post- or pre-multiplied alpha so native compositor material can show through. It
+keeps the Windows AMD premultiplied-alpha compatibility blit path as a fallback and
+never blocks the Bevy thread waiting for GPU completion after `present()`. It
+attaches through raw window handles and tracks physical size, logical size, scale
+factor, transparency, and composition alpha mode.
 
 ## 12. Plugin and App Helpers
 

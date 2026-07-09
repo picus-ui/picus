@@ -116,6 +116,8 @@ tokio = { version = "1.50.0", features = ["full"] }
 # reqwest: unify picus + codewhale feature sets and add `stream` for SSE
 # streaming of chat-completion deltas in example_picuscode.
 reqwest = { version = "0.13.1", default-features = false, features = ["blocking", "json", "form", "rustls", "stream", "socks"] }
+raw-window-handle = "0.6.2"
+windows-sys = "0.61.2"
 
 picus_core = { path = "crates/picus_core" }
 picus = { path = "crates/picus" }

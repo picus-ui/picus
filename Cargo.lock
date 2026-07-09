@@ -4654,8 +4654,10 @@ dependencies = [
  "bevy_window",
  "masonry_imaging",
  "pollster",
+ "raw-window-handle",
  "tracing",
  "wgpu",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

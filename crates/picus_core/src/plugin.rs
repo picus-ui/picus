@@ -6,6 +6,7 @@ use crate::bevy_tween::{
     BevyTweenRegisterSystems, DefaultTweenPlugins, TweenCorePlugin, TweenSystemSet,
     component_tween_system,
 };
+use crate::backdrop::apply_window_backdrop_materials;
 use crate::clipboard::{Clipboard, handle_clipboard_events};
 use crate::composition::{CompositionState, apply_composition_effects, sync_composition_visuals};
 use crate::drag_drop::{DragState, dispatch_drag_events, track_drag_state};
@@ -154,6 +155,7 @@ impl Plugin for PicusPlugin {
                     track_window_size,
                     collect_bevy_font_assets,
                     initialize_masonry_runtime_from_windows,
+                    apply_window_backdrop_materials,
                     sync_fonts_to_xilem,
                     sync_masonry_window_lifecycle,
                     track_drag_state,
@@ -347,6 +349,7 @@ mod tests {
         assert_component::<crate::TextStyle>();
         assert_component::<crate::StyleTransition>();
         assert_component::<crate::StopUiPointerPropagation>();
+        assert_component::<crate::WindowBackdropMaterial>();
 
         assert_component::<crate::AccessibleRole>();
         assert_component::<crate::AccessibleLabel>();

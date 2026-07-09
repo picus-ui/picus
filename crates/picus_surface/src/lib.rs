@@ -1,9 +1,9 @@
 #![expect(
     unsafe_code,
-    reason = "Creating a persistent wgpu surface from Bevy's raw window handles requires raw-window-handle unsafe entry points."
+    reason = "Creating a persistent wgpu surface and applying native window backdrops requires raw window handles and Win32 calls."
 )]
 
-use bevy_window::RawHandleWrapper;
+use bevy_window::{CompositeAlphaMode as BevyCompositeAlphaMode, RawHandleWrapper};
 use masonry_imaging::{
     PreparedFrame,
     texture_render::{RenderTarget, Renderer},
@@ -14,6 +14,111 @@ use wgpu::{
     Surface, SurfaceConfiguration, SurfaceTexture, Texture, TextureFormat, TextureUsages,
     TextureView,
 };
+
+/// Native desktop backdrop material requested for a top-level window.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum NativeWindowBackdropMaterial {
+    /// No native backdrop material.
+    #[default]
+    None,
+    /// Let the operating system choose the backdrop.
+    Auto,
+    /// Windows Mica system backdrop.
+    Mica,
+    /// Windows Desktop Acrylic system backdrop.
+    Acrylic,
+    /// Windows tabbed/Mica Alt system backdrop.
+    MicaAlt,
+}
+
+impl NativeWindowBackdropMaterial {
+    #[must_use]
+    pub const fn requires_transparent_surface(self) -> bool {
+        cfg!(windows) && !matches!(self, Self::None)
+    }
+}
+
+/// Error returned when a native window backdrop cannot be applied.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NativeWindowBackdropError {
+    /// The current target platform has no native Picus backdrop integration.
+    UnsupportedPlatform,
+    /// The raw window handle is not a supported native window kind.
+    UnsupportedWindowHandle,
+    /// The native API returned a failing HRESULT.
+    WindowsHresult(i32),
+}
+
+impl core::fmt::Display for NativeWindowBackdropError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::UnsupportedPlatform => write!(f, "native window backdrops are unsupported on this platform"),
+            Self::UnsupportedWindowHandle => write!(f, "native window backdrop requires a Win32 window handle"),
+            Self::WindowsHresult(hr) => write!(f, "DwmSetWindowAttribute failed with HRESULT {hr:#010x}"),
+        }
+    }
+}
+
+impl std::error::Error for NativeWindowBackdropError {}
+
+/// Apply a native backdrop material to a Bevy-owned window handle.
+///
+/// On Windows this uses DWM system backdrops. On other platforms this returns
+/// [`NativeWindowBackdropError::UnsupportedPlatform`].
+pub fn set_native_window_backdrop_material(
+    raw_handle: &RawHandleWrapper,
+    material: NativeWindowBackdropMaterial,
+) -> Result<(), NativeWindowBackdropError> {
+    set_native_window_backdrop_material_impl(raw_handle, material)
+}
+
+#[cfg(windows)]
+fn set_native_window_backdrop_material_impl(
+    raw_handle: &RawHandleWrapper,
+    material: NativeWindowBackdropMaterial,
+) -> Result<(), NativeWindowBackdropError> {
+    use raw_window_handle::RawWindowHandle;
+    use windows_sys::Win32::Graphics::Dwm::{
+        DWM_SYSTEMBACKDROP_TYPE, DWMSBT_AUTO, DWMSBT_MAINWINDOW, DWMSBT_NONE,
+        DWMSBT_TABBEDWINDOW, DWMSBT_TRANSIENTWINDOW, DWMWA_SYSTEMBACKDROP_TYPE,
+        DwmSetWindowAttribute,
+    };
+
+    let hwnd = match raw_handle.get_window_handle() {
+        RawWindowHandle::Win32(handle) => handle.hwnd.get() as windows_sys::Win32::Foundation::HWND,
+        _ => return Err(NativeWindowBackdropError::UnsupportedWindowHandle),
+    };
+
+    let backdrop: DWM_SYSTEMBACKDROP_TYPE = match material {
+        NativeWindowBackdropMaterial::None => DWMSBT_NONE,
+        NativeWindowBackdropMaterial::Auto => DWMSBT_AUTO,
+        NativeWindowBackdropMaterial::Mica => DWMSBT_MAINWINDOW,
+        NativeWindowBackdropMaterial::Acrylic => DWMSBT_TRANSIENTWINDOW,
+        NativeWindowBackdropMaterial::MicaAlt => DWMSBT_TABBEDWINDOW,
+    };
+    let hr = unsafe {
+        DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_SYSTEMBACKDROP_TYPE as u32,
+            (&backdrop as *const DWM_SYSTEMBACKDROP_TYPE).cast(),
+            core::mem::size_of::<DWM_SYSTEMBACKDROP_TYPE>() as u32,
+        )
+    };
+
+    if hr < 0 {
+        Err(NativeWindowBackdropError::WindowsHresult(hr))
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(not(windows))]
+fn set_native_window_backdrop_material_impl(
+    _raw_handle: &RawHandleWrapper,
+    _material: NativeWindowBackdropMaterial,
+) -> Result<(), NativeWindowBackdropError> {
+    Err(NativeWindowBackdropError::UnsupportedPlatform)
+}
 
 /// Metrics captured from an externally owned window.
 #[derive(Debug, Clone, Copy)]
@@ -28,6 +133,10 @@ pub struct ExistingWindowMetrics {
     pub logical_height: f64,
     /// Current scale factor.
     pub scale_factor: f64,
+    /// Whether the native window was created as transparent.
+    pub transparent: bool,
+    /// The Bevy-requested alpha composition mode for the native window.
+    pub composite_alpha_mode: BevyCompositeAlphaMode,
 }
 
 /// A Vello surface context attached to an externally owned Bevy window.
@@ -51,8 +160,7 @@ impl ExternalWindowSurface {
         let mut render_cx = RenderContext::new();
         let surface = pollster::block_on(render_cx.create_surface(
             target,
-            metrics.physical_width.max(1),
-            metrics.physical_height.max(1),
+            metrics,
             present_mode,
         ))?;
 
@@ -69,6 +177,7 @@ impl ExternalWindowSurface {
     /// caller should schedule a fresh paint.
     pub fn sync_window_metrics(&mut self, metrics: ExistingWindowMetrics) -> bool {
         self.scale_factor = metrics.scale_factor;
+        let mut changed = false;
 
         if self.surface.config.width != metrics.physical_width
             || self.surface.config.height != metrics.physical_height
@@ -78,10 +187,19 @@ impl ExternalWindowSurface {
                 metrics.physical_width.max(1),
                 metrics.physical_height.max(1),
             );
-            return true;
+            changed = true;
         }
 
-        false
+        let desired_alpha_mode = self
+            .render_cx
+            .desired_alpha_mode_for_surface(&self.surface, metrics);
+        if self.surface.config.alpha_mode != desired_alpha_mode {
+            self.render_cx
+                .set_surface_alpha_mode(&mut self.surface, desired_alpha_mode);
+            changed = true;
+        }
+
+        changed
     }
 
     /// Render a prepared Masonry frame and present it to the attached window surface.
@@ -184,16 +302,14 @@ impl RenderContext {
     async fn create_surface<'w>(
         &mut self,
         window: impl Into<wgpu::SurfaceTarget<'w>>,
-        width: u32,
-        height: u32,
+        metrics: ExistingWindowMetrics,
         present_mode: PresentMode,
     ) -> Result<RenderSurface<'w>, RenderSurfaceError> {
         self.create_render_surface(
             self.instance
                 .create_surface(window.into())
                 .map_err(RenderSurfaceError::CreateSurface)?,
-            width,
-            height,
+            metrics,
             present_mode,
         )
         .await
@@ -202,8 +318,7 @@ impl RenderContext {
     async fn create_render_surface<'w>(
         &mut self,
         surface: Surface<'w>,
-        width: u32,
-        height: u32,
+        metrics: ExistingWindowMetrics,
         present_mode: PresentMode,
     ) -> Result<RenderSurface<'w>, RenderSurfaceError> {
         let dev_id = self
@@ -224,45 +339,29 @@ impl RenderContext {
             })
             .ok_or(RenderSurfaceError::UnsupportedSurfaceFormat)?;
 
-        const PREMUL_BLEND_STATE: wgpu::BlendState = wgpu::BlendState {
-            alpha: wgpu::BlendComponent::REPLACE,
-            color: wgpu::BlendComponent {
-                src_factor: wgpu::BlendFactor::SrcAlpha,
-                dst_factor: wgpu::BlendFactor::Zero,
-                operation: wgpu::BlendOperation::Add,
-            },
-        };
-
         let adapter_name = device_handle.adapter.get_info().name;
-        let alpha_mode = choose_alpha_mode(&capabilities.alpha_modes);
-        let needs_premultiplied_blit = matches!(alpha_mode, CompositeAlphaMode::PreMultiplied)
-            || (matches!(
-                alpha_mode,
-                CompositeAlphaMode::Auto | CompositeAlphaMode::Opaque
-            ) && cfg!(windows)
-                && adapter_name.contains("AMD"));
-        let blitter = if needs_premultiplied_blit {
-            if cfg!(windows) && adapter_name.contains("AMD") {
-                tracing::info!("using premultiplied blitting for Windows AMD compatibility");
-            }
-            TextureBlitterBuilder::new(&device_handle.device, format)
-                .blend_state(PREMUL_BLEND_STATE)
-                .build()
-        } else {
-            TextureBlitter::new(&device_handle.device, format)
-        };
+        let alpha_mode = choose_alpha_mode(
+            &capabilities.alpha_modes,
+            metrics.transparent,
+            metrics.composite_alpha_mode,
+        );
+        let blitter = create_blitter(&device_handle.device, format, alpha_mode, &adapter_name);
 
         let config = SurfaceConfiguration {
             usage: TextureUsages::RENDER_ATTACHMENT,
             format,
-            width,
-            height,
+            width: metrics.physical_width.max(1),
+            height: metrics.physical_height.max(1),
             present_mode,
             desired_maximum_frame_latency: 1,
             alpha_mode,
             view_formats: vec![],
         };
-        let (target_texture, target_view) = create_targets(width, height, &device_handle.device);
+        let (target_texture, target_view) = create_targets(
+            metrics.physical_width.max(1),
+            metrics.physical_height.max(1),
+            &device_handle.device,
+        );
 
         let surface = RenderSurface {
             surface,
@@ -289,6 +388,33 @@ impl RenderContext {
     fn configure_surface(&self, surface: &RenderSurface<'_>) {
         let device = &self.devices[surface.dev_id].device;
         surface.surface.configure(device, &surface.config);
+    }
+
+    fn desired_alpha_mode_for_surface(
+        &self,
+        surface: &RenderSurface<'_>,
+        metrics: ExistingWindowMetrics,
+    ) -> CompositeAlphaMode {
+        let device_handle = &self.devices[surface.dev_id];
+        let capabilities = surface.surface.get_capabilities(&device_handle.adapter);
+        choose_alpha_mode(
+            &capabilities.alpha_modes,
+            metrics.transparent,
+            metrics.composite_alpha_mode,
+        )
+    }
+
+    fn set_surface_alpha_mode(
+        &self,
+        surface: &mut RenderSurface<'_>,
+        alpha_mode: CompositeAlphaMode,
+    ) {
+        let device_handle = &self.devices[surface.dev_id];
+        let adapter_name = device_handle.adapter.get_info().name;
+        surface.blitter =
+            create_blitter(&device_handle.device, surface.format, alpha_mode, &adapter_name);
+        surface.config.alpha_mode = alpha_mode;
+        self.configure_surface(surface);
     }
 
     async fn device(&mut self, compatible_surface: Option<&Surface<'_>>) -> Option<usize> {
@@ -358,15 +484,95 @@ fn create_targets(width: u32, height: u32, device: &Device) -> (Texture, Texture
     (target_texture, target_view)
 }
 
-fn choose_alpha_mode(modes: &[CompositeAlphaMode]) -> CompositeAlphaMode {
-    if modes.contains(&CompositeAlphaMode::Opaque) {
-        CompositeAlphaMode::Opaque
-    } else if modes.contains(&CompositeAlphaMode::PreMultiplied) {
-        CompositeAlphaMode::PreMultiplied
-    } else if modes.contains(&CompositeAlphaMode::PostMultiplied) {
-        CompositeAlphaMode::PostMultiplied
+fn map_requested_alpha_mode(mode: BevyCompositeAlphaMode) -> Option<CompositeAlphaMode> {
+    match mode {
+        BevyCompositeAlphaMode::Auto => None,
+        BevyCompositeAlphaMode::Opaque => Some(CompositeAlphaMode::Opaque),
+        BevyCompositeAlphaMode::PreMultiplied => Some(CompositeAlphaMode::PreMultiplied),
+        BevyCompositeAlphaMode::PostMultiplied => Some(CompositeAlphaMode::PostMultiplied),
+        BevyCompositeAlphaMode::Inherit => Some(CompositeAlphaMode::Inherit),
+    }
+}
+
+fn choose_alpha_mode(
+    modes: &[CompositeAlphaMode],
+    transparent: bool,
+    requested: BevyCompositeAlphaMode,
+) -> CompositeAlphaMode {
+    if let Some(requested) = map_requested_alpha_mode(requested)
+        && modes.contains(&requested)
+    {
+        return requested;
+    }
+
+    let preferences: &[CompositeAlphaMode] = if transparent {
+        &[
+            CompositeAlphaMode::PostMultiplied,
+            CompositeAlphaMode::PreMultiplied,
+            CompositeAlphaMode::Inherit,
+            CompositeAlphaMode::Auto,
+            CompositeAlphaMode::Opaque,
+        ]
     } else {
-        CompositeAlphaMode::Auto
+        &[
+            CompositeAlphaMode::Opaque,
+            CompositeAlphaMode::PreMultiplied,
+            CompositeAlphaMode::PostMultiplied,
+            CompositeAlphaMode::Inherit,
+            CompositeAlphaMode::Auto,
+        ]
+    };
+
+    for mode in preferences {
+        if modes.contains(mode) {
+            return *mode;
+        }
+    }
+
+    CompositeAlphaMode::Auto
+}
+
+fn create_blitter(
+    device: &Device,
+    format: TextureFormat,
+    alpha_mode: CompositeAlphaMode,
+    adapter_name: &str,
+) -> TextureBlitter {
+    const PREMUL_BLEND_STATE: wgpu::BlendState = wgpu::BlendState {
+        alpha: wgpu::BlendComponent::REPLACE,
+        color: wgpu::BlendComponent {
+            src_factor: wgpu::BlendFactor::SrcAlpha,
+            dst_factor: wgpu::BlendFactor::Zero,
+            operation: wgpu::BlendOperation::Add,
+        },
+    };
+
+    let needs_premultiplied_blit = matches!(alpha_mode, CompositeAlphaMode::PreMultiplied)
+        || (matches!(
+            alpha_mode,
+            CompositeAlphaMode::Auto | CompositeAlphaMode::Opaque
+        ) && cfg!(windows)
+            && adapter_name.contains("AMD"));
+    if needs_premultiplied_blit {
+        if cfg!(windows) && adapter_name.contains("AMD") {
+            tracing::info!("using premultiplied blitting for Windows AMD compatibility");
+        }
+        TextureBlitterBuilder::new(device, format)
+            .blend_state(PREMUL_BLEND_STATE)
+            .build()
+    } else {
+        TextureBlitter::new(device, format)
+    }
+}
+
+#[cfg(test)]
+fn native_backdrop_ordinal(material: NativeWindowBackdropMaterial) -> i32 {
+    match material {
+        NativeWindowBackdropMaterial::Auto => 0,
+        NativeWindowBackdropMaterial::None => 1,
+        NativeWindowBackdropMaterial::Mica => 2,
+        NativeWindowBackdropMaterial::Acrylic => 3,
+        NativeWindowBackdropMaterial::MicaAlt => 4,
     }
 }
 
@@ -424,23 +630,59 @@ mod tests {
     use super::*;
 
     #[test]
-    fn alpha_mode_prefers_opaque_surfaces() {
+    fn alpha_mode_prefers_opaque_surfaces_by_default() {
         let modes = [
             CompositeAlphaMode::PostMultiplied,
             CompositeAlphaMode::Opaque,
             CompositeAlphaMode::PreMultiplied,
         ];
 
-        assert_eq!(choose_alpha_mode(&modes), CompositeAlphaMode::Opaque);
+        assert_eq!(
+            choose_alpha_mode(&modes, false, BevyCompositeAlphaMode::Auto),
+            CompositeAlphaMode::Opaque
+        );
     }
 
     #[test]
-    fn alpha_mode_falls_back_to_premultiplied_before_postmultiplied() {
+    fn alpha_mode_prefers_postmultiplied_for_transparent_windows() {
         let modes = [
-            CompositeAlphaMode::PostMultiplied,
+            CompositeAlphaMode::Opaque,
             CompositeAlphaMode::PreMultiplied,
+            CompositeAlphaMode::PostMultiplied,
         ];
 
-        assert_eq!(choose_alpha_mode(&modes), CompositeAlphaMode::PreMultiplied);
+        assert_eq!(
+            choose_alpha_mode(&modes, true, BevyCompositeAlphaMode::Auto),
+            CompositeAlphaMode::PostMultiplied
+        );
+    }
+
+    #[test]
+    fn alpha_mode_honors_explicit_supported_request() {
+        let modes = [
+            CompositeAlphaMode::Opaque,
+            CompositeAlphaMode::PreMultiplied,
+            CompositeAlphaMode::PostMultiplied,
+        ];
+
+        assert_eq!(
+            choose_alpha_mode(&modes, false, BevyCompositeAlphaMode::PostMultiplied),
+            CompositeAlphaMode::PostMultiplied
+        );
+    }
+
+    #[test]
+    fn native_backdrop_materials_match_dwm_system_backdrop_values() {
+        assert_eq!(native_backdrop_ordinal(NativeWindowBackdropMaterial::Auto), 0);
+        assert_eq!(native_backdrop_ordinal(NativeWindowBackdropMaterial::None), 1);
+        assert_eq!(native_backdrop_ordinal(NativeWindowBackdropMaterial::Mica), 2);
+        assert_eq!(
+            native_backdrop_ordinal(NativeWindowBackdropMaterial::Acrylic),
+            3
+        );
+        assert_eq!(
+            native_backdrop_ordinal(NativeWindowBackdropMaterial::MicaAlt),
+            4
+        );
     }
 }
