@@ -167,6 +167,11 @@ Runtime invariants:
   paint/animation work or has not produced its first frame, renders through
   `picus_surface`, blits to the swapchain, presents, and forwards Masonry redraw
   requests through Bevy `RequestRedraw`.
+- Surface configuration, acquisition, blit, presentation, and swapchain-view
+  validation errors are captured instead of reaching wgpu's default fatal
+  handler. Transient `Outdated`, `Lost`, `Other`, `Suboptimal`, and `Timeout`
+  states skip the affected frame and request a redraw; successful `present()`
+  is the only event that marks a window as having painted.
 - Font registration broadcasts to all attached window runtimes, is retained for
   future windows, and is replayed into each new `WindowRuntime` when it attaches.
 

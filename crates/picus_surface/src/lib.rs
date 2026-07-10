@@ -191,6 +191,17 @@ pub struct ExternalWindowSurface {
     scale_factor: f64,
 }
 
+/// Result of rendering and presenting one frame to an external window surface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RenderFrameResult {
+    /// The frame was submitted and presented successfully.
+    Presented,
+    /// The surface was temporarily unavailable and the caller should request another frame.
+    Retry,
+    /// Rendering failed in a way that should not cause an immediate redraw loop.
+    Failed,
+}
+
 impl ExternalWindowSurface {
     /// Create an attached Vello surface from a Bevy-owned raw-handle wrapper.
     pub fn new_from_bevy_raw_handle(
@@ -248,35 +259,43 @@ impl ExternalWindowSurface {
     }
 
     /// Render a prepared Masonry frame and present it to the attached window surface.
-    pub fn render_frame(&mut self, renderer: &mut Renderer, frame: PreparedFrame<'_>) {
+    #[must_use]
+    pub fn render_frame(
+        &mut self,
+        renderer: &mut Renderer,
+        frame: PreparedFrame<'_>,
+    ) -> RenderFrameResult {
         let dev_id = self.surface.dev_id;
         let adapter = &self.render_cx.devices[dev_id].adapter;
         let device = &self.render_cx.devices[dev_id].device;
         let queue = &self.render_cx.devices[dev_id].queue;
 
-        let surface_texture = match get_current_surface_texture(&self.surface.surface) {
-            Ok(texture) => texture,
-            Err(wgpu::SurfaceError::Outdated) => {
-                let current_width = self.surface.config.width.max(1);
-                let current_height = self.surface.config.height.max(1);
-                self.render_cx
-                    .resize_surface(&mut self.surface, current_width, current_height);
-
-                match get_current_surface_texture(&self.surface.surface) {
-                    Ok(texture) => texture,
-                    Err(error) => {
-                        tracing::error!(
-                            "Couldn't get swap chain texture after configuring. Cause: '{error:?}'"
-                        );
-                        return;
-                    }
+        let mut did_reconfigure = false;
+        let surface_texture = loop {
+            match get_current_surface_texture(&self.surface.surface, device) {
+                Ok(texture) if texture.suboptimal => {
+                    discard_surface_texture(device, texture);
+                    self.render_cx.configure_surface(&self.surface);
+                    tracing::debug!("swap chain texture was suboptimal; surface reconfigured");
+                    return RenderFrameResult::Retry;
                 }
-            }
-            Err(error) => {
-                tracing::error!(
-                    "Couldn't get swap chain texture, operation unrecoverable: {error:?}"
-                );
-                return;
+                Ok(texture) => break texture,
+                Err(error) => match surface_recovery_action(&error) {
+                    SurfaceRecoveryAction::Reconfigure if !did_reconfigure => {
+                        did_reconfigure = true;
+                        self.render_cx.configure_surface(&self.surface);
+                    }
+                    SurfaceRecoveryAction::Reconfigure | SurfaceRecoveryAction::Retry => {
+                        tracing::warn!(
+                            "couldn't acquire swap chain texture; retrying next frame: {error}"
+                        );
+                        return RenderFrameResult::Retry;
+                    }
+                    SurfaceRecoveryAction::Fail => {
+                        tracing::error!("couldn't acquire swap chain texture: {error}");
+                        return RenderFrameResult::Failed;
+                    }
+                },
             }
         };
 
@@ -291,26 +310,56 @@ impl ExternalWindowSurface {
             frame,
         ) {
             tracing::error!("failed to render Masonry frame to texture: {error}");
-            return;
+            discard_surface_texture(device, surface_texture);
+            return RenderFrameResult::Failed;
         }
 
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("External Window Surface Blit"),
-        });
-        self.surface.blitter.copy(
-            device,
-            &mut encoder,
-            &self.surface.target_view,
-            &surface_texture
+        let (surface_view, view_errors) = capture_device_errors(device, || {
+            surface_texture
                 .texture
-                .create_view(&wgpu::TextureViewDescriptor::default()),
-        );
-        queue.submit([encoder.finish()]);
-        surface_texture.present();
+                .create_view(&wgpu::TextureViewDescriptor {
+                    label: Some("Picus Swap Chain Texture View"),
+                    ..Default::default()
+                })
+        });
+        if !view_errors.is_empty() {
+            log_device_errors("creating the swap chain texture view", view_errors);
+            discard_surface_texture(device, surface_texture);
+            self.render_cx.configure_surface(&self.surface);
+            return RenderFrameResult::Retry;
+        }
+        let ((), blit_errors) = capture_device_errors(device, || {
+            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("External Window Surface Blit"),
+            });
+            self.surface.blitter.copy(
+                device,
+                &mut encoder,
+                &self.surface.target_view,
+                &surface_view,
+            );
+            queue.submit([encoder.finish()]);
+        });
+        if !blit_errors.is_empty() {
+            log_device_errors("submitting the swap chain blit", blit_errors);
+            discard_surface_texture(device, surface_texture);
+            self.render_cx.configure_surface(&self.surface);
+            return RenderFrameResult::Retry;
+        }
+
+        let ((), present_errors) =
+            capture_device_errors(device, || surface_texture.present());
+        if !present_errors.is_empty() {
+            log_device_errors("presenting the swap chain texture", present_errors);
+            self.render_cx.configure_surface(&self.surface);
+            return RenderFrameResult::Retry;
+        }
 
         if let Err(error) = device.poll(wgpu::PollType::Poll) {
             tracing::trace!("non-blocking GPU poll after present returned: {error}");
         }
+
+        RenderFrameResult::Presented
     }
 }
 
@@ -422,7 +471,13 @@ impl RenderContext {
     }
 
     fn resize_surface(&self, surface: &mut RenderSurface<'_>, width: u32, height: u32) {
-        let (texture, view) = create_targets(width, height, &self.devices[surface.dev_id].device);
+        let device = &self.devices[surface.dev_id].device;
+        let ((texture, view), errors) =
+            capture_device_errors(device, || create_targets(width, height, device));
+        if !errors.is_empty() {
+            log_device_errors("resizing the Vello render target", errors);
+            return;
+        }
         surface.target_texture = texture;
         surface.target_view = view;
         surface.config.width = width;
@@ -432,7 +487,10 @@ impl RenderContext {
 
     fn configure_surface(&self, surface: &RenderSurface<'_>) {
         let device = &self.devices[surface.dev_id].device;
-        surface.surface.configure(device, &surface.config);
+        let ((), errors) = capture_device_errors(device, || {
+            surface.surface.configure(device, &surface.config);
+        });
+        log_device_errors("configuring the window surface", errors);
     }
 
     fn desired_alpha_mode_for_surface(
@@ -525,7 +583,7 @@ fn backend_options_for_surface(transparent: bool) -> wgpu::BackendOptions {
 
 fn create_targets(width: u32, height: u32, device: &Device) -> (Texture, TextureView) {
     let target_texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: None,
+        label: Some("Picus Vello Render Target"),
         size: wgpu::Extent3d {
             width,
             height,
@@ -538,7 +596,10 @@ fn create_targets(width: u32, height: u32, device: &Device) -> (Texture, Texture
         format: TextureFormat::Rgba8Unorm,
         view_formats: &[],
     });
-    let target_view = target_texture.create_view(&wgpu::TextureViewDescriptor::default());
+    let target_view = target_texture.create_view(&wgpu::TextureViewDescriptor {
+        label: Some("Picus Vello Render Target View"),
+        ..Default::default()
+    });
     (target_texture, target_view)
 }
 
@@ -661,10 +722,68 @@ impl core::fmt::Display for RenderSurfaceError {
 
 impl std::error::Error for RenderSurfaceError {}
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SurfaceRecoveryAction {
+    Reconfigure,
+    Retry,
+    Fail,
+}
+
+fn surface_recovery_action(error: &wgpu::SurfaceError) -> SurfaceRecoveryAction {
+    match error {
+        wgpu::SurfaceError::Outdated
+        | wgpu::SurfaceError::Lost
+        | wgpu::SurfaceError::Other => SurfaceRecoveryAction::Reconfigure,
+        wgpu::SurfaceError::Timeout => SurfaceRecoveryAction::Retry,
+        wgpu::SurfaceError::OutOfMemory => SurfaceRecoveryAction::Fail,
+    }
+}
+
 fn get_current_surface_texture(
     surface: &Surface<'_>,
+    device: &Device,
 ) -> Result<SurfaceTexture, wgpu::SurfaceError> {
-    surface.get_current_texture()
+    let (result, errors) = capture_device_errors(device, || surface.get_current_texture());
+    if errors.is_empty() {
+        return result;
+    }
+
+    log_device_errors("acquiring the swap chain texture", errors);
+    if let Ok(texture) = result {
+        discard_surface_texture(device, texture);
+    }
+    Err(wgpu::SurfaceError::Other)
+}
+
+fn discard_surface_texture(device: &Device, texture: SurfaceTexture) {
+    let ((), errors) = capture_device_errors(device, || drop(texture));
+    log_device_errors("discarding the swap chain texture", errors);
+}
+
+fn capture_device_errors<T>(
+    device: &Device,
+    operation: impl FnOnce() -> T,
+) -> (T, Vec<wgpu::Error>) {
+    let out_of_memory = device.push_error_scope(wgpu::ErrorFilter::OutOfMemory);
+    let internal = device.push_error_scope(wgpu::ErrorFilter::Internal);
+    let validation = device.push_error_scope(wgpu::ErrorFilter::Validation);
+    let result = operation();
+
+    let errors = [
+        pollster::block_on(validation.pop()),
+        pollster::block_on(internal.pop()),
+        pollster::block_on(out_of_memory.pop()),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    (result, errors)
+}
+
+fn log_device_errors(operation: &str, errors: Vec<wgpu::Error>) {
+    for error in errors {
+        tracing::warn!("wgpu error while {operation}: {error}");
+    }
 }
 
 struct RenderSurface<'surface> {
@@ -747,6 +866,36 @@ mod tests {
         assert_eq!(
             choose_alpha_mode(&modes, false, BevyCompositeAlphaMode::PostMultiplied),
             CompositeAlphaMode::PostMultiplied
+        );
+    }
+
+    #[test]
+    fn recoverable_surface_changes_reconfigure_the_swap_chain() {
+        for error in [
+            wgpu::SurfaceError::Outdated,
+            wgpu::SurfaceError::Lost,
+            wgpu::SurfaceError::Other,
+        ] {
+            assert_eq!(
+                surface_recovery_action(&error),
+                SurfaceRecoveryAction::Reconfigure
+            );
+        }
+    }
+
+    #[test]
+    fn surface_timeout_retries_without_reconfiguration() {
+        assert_eq!(
+            surface_recovery_action(&wgpu::SurfaceError::Timeout),
+            SurfaceRecoveryAction::Retry
+        );
+    }
+
+    #[test]
+    fn surface_out_of_memory_does_not_start_a_redraw_loop() {
+        assert_eq!(
+            surface_recovery_action(&wgpu::SurfaceError::OutOfMemory),
+            SurfaceRecoveryAction::Fail
         );
     }
 

@@ -38,7 +38,7 @@ use masonry_core::{
     properties::Dimensions,
 };
 use masonry_imaging::{Layer as ImagingLayer, PreparedFrame, texture_render::Renderer};
-use picus_surface::{ExistingWindowMetrics, ExternalWindowSurface};
+use picus_surface::{ExistingWindowMetrics, ExternalWindowSurface, RenderFrameResult};
 use picus_view::{
     ViewCtx,
     picus_widget::{
@@ -831,12 +831,17 @@ impl WindowRuntime {
             &overlays,
         );
 
-        surface.render_frame(&mut self.renderer, frame);
-        self.has_painted_once = true;
+        let render_result = surface.render_frame(&mut self.renderer, frame);
+        let painted = matches!(render_result, RenderFrameResult::Presented);
+        if painted {
+            self.has_painted_once = true;
+        } else if matches!(render_result, RenderFrameResult::Retry) {
+            self.needs_redraw = true;
+        }
         self.drain_redraw_signals();
 
         PaintFrameResult {
-            painted: true,
+            painted,
             wants_redraw: self.needs_redraw
                 || self.needs_anim_frame
                 || self.render_root.needs_anim()
