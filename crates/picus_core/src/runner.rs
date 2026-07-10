@@ -1,4 +1,5 @@
-use crate::backdrop::WindowBackdropMaterial;
+use crate::backdrop::{ThemeManagedWindowBackdrop, WindowBackdropMaterial};
+use crate::styling::{StyleSheet, resolve_theme_backdrop_material};
 use crate::xilem::winit::{dpi::Size, error::EventLoopError};
 use bevy_a11y::AccessibilityPlugin;
 use bevy_app::App;
@@ -14,6 +15,7 @@ pub struct BevyWindowOptions {
     initial_inner_size: Option<Size>,
     min_inner_size: Option<Size>,
     backdrop_material: Option<WindowBackdropMaterial>,
+    theme_managed_backdrop: bool,
 }
 
 impl BevyWindowOptions {
@@ -47,6 +49,7 @@ impl BevyWindowOptions {
     #[must_use]
     pub fn with_backdrop_material(mut self, material: WindowBackdropMaterial) -> Self {
         self.backdrop_material = Some(material);
+        self.theme_managed_backdrop = false;
         self
     }
 
@@ -61,6 +64,22 @@ impl BevyWindowOptions {
     pub fn with_acrylic_backdrop(self) -> Self {
         self.with_backdrop_material(WindowBackdropMaterial::Acrylic)
     }
+}
+
+fn apply_theme_backdrop_option(app: &App, options: &mut BevyWindowOptions) {
+    if options.backdrop_material.is_some() {
+        return;
+    }
+    let Some(material) = app
+        .world()
+        .get_resource::<StyleSheet>()
+        .and_then(resolve_theme_backdrop_material)
+    else {
+        return;
+    };
+
+    options.backdrop_material = Some(material);
+    options.theme_managed_backdrop = true;
 }
 
 fn size_to_logical(size: Size) -> (f32, f32) {
@@ -165,7 +184,11 @@ fn configure_primary_window(app: &mut App, title: &str, options: &BevyWindowOpti
 
     if let Some(entity) = primary_entity {
         if let Some(material) = options.backdrop_material {
-            app.world_mut().entity_mut(entity).insert(material);
+            let mut entity = app.world_mut().entity_mut(entity);
+            entity.insert(material);
+            if options.theme_managed_backdrop {
+                entity.insert(ThemeManagedWindowBackdrop);
+            }
         }
         return;
     }
@@ -174,6 +197,9 @@ fn configure_primary_window(app: &mut App, title: &str, options: &BevyWindowOpti
     let mut entity_commands = app.world_mut().spawn((window, PrimaryWindow));
     if let Some(material) = options.backdrop_material {
         entity_commands.insert(material);
+        if options.theme_managed_backdrop {
+            entity_commands.insert(ThemeManagedWindowBackdrop);
+        }
     }
 }
 
@@ -194,7 +220,8 @@ pub fn run_app_with_window_options(
     configure_window: impl Fn(BevyWindowOptions) -> BevyWindowOptions + Send + Sync + 'static,
 ) -> Result<(), EventLoopError> {
     let title = window_title.into();
-    let options = configure_window(BevyWindowOptions::default());
+    let mut options = configure_window(BevyWindowOptions::default());
+    apply_theme_backdrop_option(&bevy_app, &mut options);
     let primary_window = build_primary_window(&title, &options);
     ensure_native_windowing_plugins(&mut bevy_app, &primary_window);
     configure_primary_window(&mut bevy_app, &title, &options);
@@ -206,7 +233,9 @@ pub fn run_app_with_window_options(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{StyleValue, ThemeBackdrop};
     use crate::xilem::winit::dpi::{LogicalSize, PhysicalSize};
+    use std::collections::HashMap;
 
     #[test]
     fn options_apply_initial_and_min_sizes() {
@@ -273,6 +302,35 @@ mod tests {
                 bevy_window::CompositeAlphaMode::Auto
             }
         );
+    }
+
+    #[test]
+    fn theme_backdrop_is_applied_before_primary_window_creation() {
+        let mut app = App::new();
+        app.insert_resource(StyleSheet {
+            backdrop: Some(ThemeBackdrop {
+                material: StyleValue::value(WindowBackdropMaterial::Mica),
+                styles: HashMap::new(),
+            }),
+            ..StyleSheet::default()
+        });
+        let mut options = BevyWindowOptions::default();
+
+        apply_theme_backdrop_option(&app, &mut options);
+        configure_primary_window(&mut app, "Theme backdrop", &options);
+
+        let world = app.world_mut();
+        let mut query = world.query_filtered::<(
+            &Window,
+            &WindowBackdropMaterial,
+            &ThemeManagedWindowBackdrop,
+        ), bevy_ecs::query::With<PrimaryWindow>>();
+        let (window, material, _) = query
+            .iter(world)
+            .next()
+            .expect("theme-managed primary window should exist");
+        assert_eq!(*material, WindowBackdropMaterial::Mica);
+        assert_eq!(window.transparent, cfg!(windows));
     }
 
     #[test]

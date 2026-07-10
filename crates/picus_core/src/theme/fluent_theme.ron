@@ -3,7 +3,12 @@
 (
   default_variant: "dark",
   font_family: (Var: "font-family-base"),
+  backdrop: (
+    material: (Var: "window-backdrop"),
+    styles: {},
+  ),
   tokens: {
+    "window-backdrop": Backdrop("none"),
     "transparent": Color(Rgba(0.0, 0.0, 0.0, 0.0)),
     // Border radius matching Fluent v9 borderRadii
     "radius-none": Float(0.0),
@@ -142,7 +147,7 @@
           align_items: Stretch,
         ),
         colors: (
-          bg: Var("surface-bg"),
+          bg: Var("fill-layer-background"),
         ),
       ),
     ),
@@ -191,7 +196,7 @@
           min_width: 96.0,
         ),
         colors: (
-          bg: Var("surface-subtle"),
+          bg: Var("fill-control-default"),
           border: Var("border-default"),
           text: Var("text-primary"),
         ),
@@ -207,7 +212,7 @@
       selector: And([Type("UiButton"), PseudoClass(Hovered)]),
       setter: (
         colors: (
-          bg: Var("surface-subtle-hover"),
+          bg: Var("fill-control-secondary"),
           border: Var("border-default-hover"),
           text: Var("text-primary"),
         ),
@@ -217,7 +222,7 @@
       selector: And([Type("UiButton"), PseudoClass(Pressed)]),
       setter: (
         colors: (
-          bg: Var("surface-subtle-pressed"),
+          bg: Var("fill-control-tertiary"),
           border: Var("border-default-pressed"),
           text: Var("text-primary"),
         ),
@@ -408,7 +413,7 @@
       selector: And([Type("UiButton"), Class("button.disabled")]),
       setter: (
         colors: (
-          bg: Var("surface-disabled"),
+          bg: Var("fill-control-disabled"),
           border: Var("border-disabled"),
           text: Var("text-disabled"),
         ),
@@ -447,7 +452,7 @@
           gap: Var("gap-md"),
         ),
         colors: (
-          bg: Var("transparent"),
+          bg: Var("fill-subtle-transparent"),
           border: Var("transparent"),
           text: Var("text-primary"),
         ),
@@ -458,7 +463,7 @@
       selector: And([Type("UiCheckbox"), PseudoClass(Hovered)]),
       setter: (
         colors: (
-          bg: Var("surface-subtle-hover"),
+          bg: Var("fill-subtle-secondary"),
           border: Var("border-default-hover"),
         ),
       ),
@@ -467,7 +472,7 @@
       selector: And([Type("UiCheckbox"), PseudoClass(Pressed)]),
       setter: (
         colors: (
-          bg: Var("surface-subtle-pressed"),
+          bg: Var("fill-subtle-tertiary"),
           border: Var("border-default-pressed"),
         ),
       ),
@@ -535,7 +540,7 @@
           gap: Var("gap-md"),
         ),
         colors: (
-          bg: Var("transparent"),
+          bg: Var("fill-subtle-transparent"),
           border: Var("transparent"),
           text: Var("text-primary"),
         ),
@@ -546,7 +551,7 @@
       selector: And([Type("UiSwitch"), PseudoClass(Hovered)]),
       setter: (
         colors: (
-          bg: Var("surface-subtle-hover"),
+          bg: Var("fill-subtle-secondary"),
           border: Var("border-default-hover"),
         ),
       ),
@@ -555,7 +560,7 @@
       selector: And([Type("UiSwitch"), PseudoClass(Pressed)]),
       setter: (
         colors: (
-          bg: Var("surface-subtle-pressed"),
+          bg: Var("fill-subtle-tertiary"),
           border: Var("border-default-pressed"),
         ),
       ),
@@ -736,7 +741,7 @@
           border_width: Var("border-thin"),
         ),
         colors: (
-          bg: Var("surface-panel"),
+          bg: Var("fill-layer-default"),
           border: Var("border-default"),
         ),
       ),
@@ -753,7 +758,7 @@
           align_items: Center,
         ),
         colors: (
-          bg: Var("surface-subtle"),
+          bg: Var("fill-control-default"),
           border: Var("border-default"),
           text: Var("text-primary"),
         ),
@@ -768,7 +773,7 @@
       selector: And([Type("UiComboBox"), PseudoClass(Hovered)]),
       setter: (
         colors: (
-          bg: Var("surface-subtle-hover"),
+          bg: Var("fill-control-secondary"),
           border: Var("border-default-hover"),
         ),
       ),
@@ -777,7 +782,7 @@
       selector: And([Type("UiComboBox"), PseudoClass(Pressed)]),
       setter: (
         colors: (
-          bg: Var("surface-subtle-pressed"),
+          bg: Var("fill-control-tertiary"),
           border: Var("border-default-pressed"),
         ),
       ),
@@ -1234,7 +1239,7 @@
           align_items: Stretch,
         ),
         colors: (
-          bg: Var("surface-elevated"),
+          bg: Var("fill-layer-default"),
           border: Var("border-default"),
         ),
         box_shadow: Var("shadow-flyout"),
@@ -2004,7 +2009,7 @@
           align_items: Stretch,
         ),
         colors: (
-          bg: Var("surface-panel"),
+          bg: Var("fill-layer-default"),
           border: Var("border-default"),
           text: Var("text-primary"),
         ),
@@ -2019,7 +2024,7 @@
           border_width: Var("border-thin"),
         ),
         colors: (
-          bg: Var("transparent"),
+          bg: Var("fill-subtle-transparent"),
           border: Var("transparent"),
           text: Var("text-primary"),
         ),
@@ -2030,7 +2035,7 @@
       selector: And([Class("widget.list_view.item"), PseudoClass(Hovered)]),
       setter: (
         colors: (
-          bg: Var("surface-overlay-item-hover"),
+          bg: Var("fill-subtle-secondary"),
         ),
       ),
     ),
@@ -2038,7 +2043,7 @@
       selector: And([Class("widget.list_view.item"), PseudoClass(Pressed)]),
       setter: (
         colors: (
-          bg: Var("surface-overlay-item-pressed"),
+          bg: Var("fill-subtle-tertiary"),
         ),
       ),
     ),
@@ -2287,7 +2292,7 @@
           corner_radius: Var("radius-md"),
         ),
         colors: (
-          bg: Var("surface-panel"),
+          bg: Var("fill-layer-default"),
           border: Var("border-default"),
         ),
       ),
@@ -2304,7 +2309,7 @@
           border_width: Var("border-thin"),
         ),
         colors: (
-          bg: Var("surface-card"),
+          bg: Var("fill-card-default"),
           border: Var("border-subtle"),
           text: Var("text-primary"),
         ),
@@ -2626,7 +2631,7 @@
           align_items: Stretch,
         ),
         colors: (
-          bg: Var("surface-panel"),
+          bg: Var("fill-layer-default"),
           border: Var("border-default"),
           text: Var("text-primary"),
         ),
@@ -2641,7 +2646,7 @@
           border_width: Var("border-thin"),
         ),
         colors: (
-          bg: Var("surface-bg-secondary"),
+          bg: Var("fill-layer-alt"),
           border: Var("border-default"),
         ),
       ),
@@ -2657,7 +2662,7 @@
           align_items: Stretch,
         ),
         colors: (
-          bg: Var("surface-panel"),
+          bg: Var("fill-layer-default"),
           border: Var("transparent"),
           text: Var("text-primary"),
         ),
@@ -2672,7 +2677,7 @@
           border_width: Var("border-thin"),
         ),
         colors: (
-          bg: Var("transparent"),
+          bg: Var("fill-subtle-transparent"),
           border: Var("transparent"),
           text: Var("text-secondary"),
         ),
@@ -2683,7 +2688,7 @@
       selector: And([Class("nav.item"), PseudoClass(Hovered)]),
       setter: (
         colors: (
-          bg: Var("surface-subtle-hover"),
+          bg: Var("fill-subtle-secondary"),
           text: Var("text-primary"),
         ),
       ),
@@ -2692,7 +2697,7 @@
       selector: And([Class("nav.item"), PseudoClass(Pressed)]),
       setter: (
         colors: (
-          bg: Var("surface-subtle-pressed"),
+          bg: Var("fill-subtle-tertiary"),
           text: Var("text-primary"),
         ),
       ),
@@ -3216,7 +3221,59 @@
   ],
   variants: {
     "dark": (
+      backdrop: (
+        material: (Var: "window-backdrop"),
+        styles: {
+          "mica": (
+            tokens: {
+              "fill-layer-background": Color(Rgba8(0, 0, 0, 0)),
+              "fill-layer-default": Color(Rgba8(58, 58, 58, 76)),
+              "fill-layer-alt": Color(Rgba8(255, 255, 255, 13)),
+              "fill-control-default": Color(Rgba8(255, 255, 255, 15)),
+              "fill-control-secondary": Color(Rgba8(255, 255, 255, 21)),
+              "fill-control-tertiary": Color(Rgba8(255, 255, 255, 8)),
+              "fill-control-disabled": Color(Rgba8(255, 255, 255, 11)),
+              "fill-subtle-transparent": Color(Rgba8(255, 255, 255, 0)),
+              "fill-subtle-secondary": Color(Rgba8(255, 255, 255, 15)),
+              "fill-subtle-tertiary": Color(Rgba8(255, 255, 255, 10)),
+              "fill-card-default": Color(Rgba8(255, 255, 255, 13)),
+              "fill-card-secondary": Color(Rgba8(255, 255, 255, 8)),
+              "fill-smoke-default": Color(Rgba8(0, 0, 0, 77)),
+            },
+          ),
+          "acrylic": (
+            tokens: {
+              "fill-layer-background": Color(Rgba8(0, 0, 0, 0)),
+              "fill-layer-default": Color(Rgba8(255, 255, 255, 9)),
+              "fill-layer-alt": Color(Rgba8(255, 255, 255, 9)),
+              "fill-control-default": Color(Rgba8(255, 255, 255, 15)),
+              "fill-control-secondary": Color(Rgba8(255, 255, 255, 21)),
+              "fill-control-tertiary": Color(Rgba8(255, 255, 255, 8)),
+              "fill-control-disabled": Color(Rgba8(255, 255, 255, 11)),
+              "fill-subtle-transparent": Color(Rgba8(255, 255, 255, 0)),
+              "fill-subtle-secondary": Color(Rgba8(255, 255, 255, 15)),
+              "fill-subtle-tertiary": Color(Rgba8(255, 255, 255, 10)),
+              "fill-card-default": Color(Rgba8(255, 255, 255, 13)),
+              "fill-card-secondary": Color(Rgba8(255, 255, 255, 8)),
+              "fill-smoke-default": Color(Rgba8(0, 0, 0, 77)),
+            },
+          ),
+        },
+      ),
       tokens: {
+        "fill-layer-background": Color(Hex("#1F1F1F")),
+        "fill-layer-default": Color(Hex("#292929")),
+        "fill-layer-alt": Color(Hex("#1F1F1F")),
+        "fill-control-default": Color(Hex("#292929")),
+        "fill-control-secondary": Color(Hex("#3D3D3D")),
+        "fill-control-tertiary": Color(Hex("#1F1F1F")),
+        "fill-control-disabled": Color(Hex("#1C1C1C")),
+        "fill-subtle-transparent": Color(Rgba8(255, 255, 255, 0)),
+        "fill-subtle-secondary": Color(Hex("#3D3D3D")),
+        "fill-subtle-tertiary": Color(Hex("#1F1F1F")),
+        "fill-card-default": Color(Hex("#2D2D2D")),
+        "fill-card-secondary": Color(Hex("#292929")),
+        "fill-smoke-default": Color(Rgba8(0, 0, 0, 148)),
         "surface-bg": Color(Hex("#1F1F1F")),
         "surface-panel": Color(Hex("#292929")),
         "surface-elevated": Color(Hex("#1F1F1F")),
@@ -3364,7 +3421,59 @@
     ),
 
     "light": (
+      backdrop: (
+        material: (Var: "window-backdrop"),
+        styles: {
+          "mica": (
+            tokens: {
+              "fill-layer-background": Color(Rgba8(0, 0, 0, 0)),
+              "fill-layer-default": Color(Rgba8(255, 255, 255, 128)),
+              "fill-layer-alt": Color(Rgba8(255, 255, 255, 255)),
+              "fill-control-default": Color(Rgba8(0, 0, 0, 15)),
+              "fill-control-secondary": Color(Rgba8(0, 0, 0, 9)),
+              "fill-control-tertiary": Color(Rgba8(0, 0, 0, 6)),
+              "fill-control-disabled": Color(Rgba8(0, 0, 0, 11)),
+              "fill-subtle-transparent": Color(Rgba8(255, 255, 255, 0)),
+              "fill-subtle-secondary": Color(Rgba8(0, 0, 0, 9)),
+              "fill-subtle-tertiary": Color(Rgba8(0, 0, 0, 6)),
+              "fill-card-default": Color(Rgba8(255, 255, 255, 179)),
+              "fill-card-secondary": Color(Rgba8(246, 246, 246, 128)),
+              "fill-smoke-default": Color(Rgba8(0, 0, 0, 77)),
+            },
+          ),
+          "acrylic": (
+            tokens: {
+              "fill-layer-background": Color(Rgba8(0, 0, 0, 0)),
+              "fill-layer-default": Color(Rgba8(255, 255, 255, 64)),
+              "fill-layer-alt": Color(Rgba8(255, 255, 255, 64)),
+              "fill-control-default": Color(Rgba8(0, 0, 0, 15)),
+              "fill-control-secondary": Color(Rgba8(0, 0, 0, 9)),
+              "fill-control-tertiary": Color(Rgba8(0, 0, 0, 6)),
+              "fill-control-disabled": Color(Rgba8(0, 0, 0, 11)),
+              "fill-subtle-transparent": Color(Rgba8(255, 255, 255, 0)),
+              "fill-subtle-secondary": Color(Rgba8(0, 0, 0, 9)),
+              "fill-subtle-tertiary": Color(Rgba8(0, 0, 0, 6)),
+              "fill-card-default": Color(Rgba8(255, 255, 255, 128)),
+              "fill-card-secondary": Color(Rgba8(246, 246, 246, 96)),
+              "fill-smoke-default": Color(Rgba8(0, 0, 0, 77)),
+            },
+          ),
+        },
+      ),
       tokens: {
+        "fill-layer-background": Color(Hex("#FFFFFF")),
+        "fill-layer-default": Color(Hex("#FFFFFF")),
+        "fill-layer-alt": Color(Hex("#FAFAFA")),
+        "fill-control-default": Color(Hex("#F5F5F5")),
+        "fill-control-secondary": Color(Hex("#EBEBEB")),
+        "fill-control-tertiary": Color(Hex("#E0E0E0")),
+        "fill-control-disabled": Color(Hex("#F0F0F0")),
+        "fill-subtle-transparent": Color(Rgba8(255, 255, 255, 0)),
+        "fill-subtle-secondary": Color(Hex("#EBEBEB")),
+        "fill-subtle-tertiary": Color(Hex("#E0E0E0")),
+        "fill-card-default": Color(Hex("#FFFFFF")),
+        "fill-card-secondary": Color(Hex("#F6F6F6")),
+        "fill-smoke-default": Color(Rgba8(0, 0, 0, 64)),
         "surface-bg": Color(Hex("#FFFFFF")),
         "surface-panel": Color(Hex("#FFFFFF")),
         "surface-elevated": Color(Hex("#FFFFFF")),
@@ -3513,6 +3622,19 @@
 
     "high-contrast": (
       tokens: {
+        "fill-layer-background": Color(Hex("#000000")),
+        "fill-layer-default": Color(Hex("#000000")),
+        "fill-layer-alt": Color(Hex("#0A0A0A")),
+        "fill-control-default": Color(Hex("#0A0A0A")),
+        "fill-control-secondary": Color(Hex("#1C1C1C")),
+        "fill-control-tertiary": Color(Hex("#303030")),
+        "fill-control-disabled": Color(Hex("#000000")),
+        "fill-subtle-transparent": Color(Rgba8(0, 0, 0, 0)),
+        "fill-subtle-secondary": Color(Hex("#1C1C1C")),
+        "fill-subtle-tertiary": Color(Hex("#303030")),
+        "fill-card-default": Color(Hex("#000000")),
+        "fill-card-secondary": Color(Hex("#0A0A0A")),
+        "fill-smoke-default": Color(Rgba8(0, 0, 0, 204)),
         "surface-bg": Color(Hex("#000000")),
         "surface-panel": Color(Hex("#000000")),
         "surface-elevated": Color(Hex("#000000")),

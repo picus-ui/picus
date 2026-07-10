@@ -67,13 +67,16 @@ pub mod projection {
 /// Styling, themes, and selector APIs.
 pub mod styling {
     pub use picus_core::{
-        ActiveStyleVariant, BaseStyleSheet, ColorStyle, ComputedStyle, CurrentColorStyle,
-        InlineStyle, InteractionState, LayoutStyle, PseudoClass, Selector, StyleClass, StyleDirty,
-        StylePseudoState, StyleRule, StyleSetter, StyleSheet, StyleTransition, SyncAssetSource,
-        SyncTextSource, TargetColorStyle, TextStyle, apply_active_stylesheet_ron, mark_style_dirty,
+        ActiveStyleVariant, BackdropStyle, BaseStyleSheet, ColorStyle, ComputedStyle,
+        CurrentColorStyle, InlineStyle, InteractionState, LayoutStyle, PseudoClass, Selector,
+        StyleClass, StyleDirty, StylePseudoState, StyleRule, StyleSetter, StyleSheet,
+        StyleTransition, SyncAssetSource, SyncTextSource, TargetColorStyle, TextStyle,
+        ThemeBackdrop, ThemeBackdropOverride, TokenValue, WINDOW_BACKDROP_TOKEN,
+        apply_active_stylesheet_ron, clear_theme_backdrop_material_override, mark_style_dirty,
         parse_stylesheet_ron, register_builtin_style_type_aliases, resolve_style,
         resolve_style_for_classes, resolve_style_for_classes_with_state,
-        resolve_style_for_entity_classes, set_active_style_variant_by_name,
+        resolve_style_for_entity_classes, resolve_theme_backdrop_material,
+        set_active_style_variant_by_name, set_theme_backdrop_material,
     };
 }
 

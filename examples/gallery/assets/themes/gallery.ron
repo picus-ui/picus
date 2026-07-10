@@ -9,7 +9,7 @@
           gap: Var("gap-md"),
         ),
         colors: (
-          bg: Var("surface-bg"),
+          bg: Var("fill-layer-background"),
         ),
         transition: Var("duration-fast"),
       ),
@@ -26,7 +26,7 @@
           align_items: Center,
         ),
         colors: (
-          bg: Var("surface-panel"),
+          bg: Var("fill-layer-default"),
           border: Var("border-default"),
         ),
       ),
@@ -101,7 +101,7 @@
           border_width: Var("border-thin"),
         ),
         colors: (
-          bg: Var("surface-subtle"),
+          bg: Var("fill-layer-alt"),
           border: Var("border-default"),
           text: Var("text-secondary"),
         ),
@@ -135,7 +135,7 @@
           border_width: Var("border-thin"),
         ),
         colors: (
-          bg: Var("surface-panel"),
+          bg: Var("fill-layer-alt"),
           border: Var("border-default"),
         ),
       ),
@@ -255,7 +255,7 @@
           border_width: Var("border-thin"),
         ),
         colors: (
-          bg: Var("surface-elevated"),
+          bg: Var("fill-card-default"),
           border: Var("border-default"),
         ),
         box_shadow: Var("shadow-ui-component"),

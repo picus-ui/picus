@@ -36,10 +36,14 @@ use picus::{
     UiThemePickerChanged,
     UiToast,
     UiTreeNodeToggled,
+    WindowBackdropMaterial,
+    set_theme_backdrop_material,
     spawn_in_overlay_root,
 };
 
-use crate::state::{GalleryButtonAction, GalleryPage, GalleryRuntime, GalleryState};
+use crate::state::{
+    GalleryBackdropPicker, GalleryButtonAction, GalleryPage, GalleryRuntime, GalleryState,
+};
 
 /// Main event handler system: drains all UI action queues and updates gallery state.
 ///
@@ -280,6 +284,20 @@ pub fn drain_gallery_events(world: &mut World) {
         .resource_mut::<UiEventQueue>()
         .drain_actions::<UiRadioGroupChanged>()
     {
+        if world.get::<GalleryBackdropPicker>(event.action.group).is_some() {
+            let material = match event.action.selected {
+                0 => WindowBackdropMaterial::None,
+                2 => WindowBackdropMaterial::Acrylic,
+                _ => WindowBackdropMaterial::Mica,
+            };
+            set_theme_backdrop_material(world, material);
+            update_status(
+                world,
+                format!("Window backdrop: {}", material.theme_name()),
+            );
+            continue;
+        }
+
         update_status(
             world,
             format!(

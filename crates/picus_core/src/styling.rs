@@ -48,9 +48,12 @@ use serde::{
     },
 };
 
-use crate::UiEventQueue;
+use crate::{UiEventQueue, WindowBackdropMaterial};
 
 pub(crate) const DEFAULT_TEXT_SIZE: f32 = 15.0;
+
+/// Conventional Fluent theme token that selects the top-level window backdrop.
+pub const WINDOW_BACKDROP_TOKEN: &str = "window-backdrop";
 
 /// Marker component for CSS-like class names attached to an entity.
 #[derive(Component, Debug, Clone, Default, PartialEq, Eq)]
@@ -406,8 +409,29 @@ pub enum TokenValue {
     FontFamily(Vec<String>),
     BoxShadow(BoxShadow),
     Transition(StyleTransition),
+    /// Native top-level window backdrop material.
+    Backdrop(WindowBackdropMaterial),
     /// Cubic bezier curve control points (x1, y1, x2, y2).
     Curve(f32, f32, f32, f32),
+}
+
+/// Token and selector overrides activated for one window backdrop material.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct BackdropStyle {
+    pub tokens: HashMap<String, TokenValue>,
+    pub rules: Vec<StyleRule>,
+}
+
+/// Theme-level backdrop selection and material-specific style overrides.
+///
+/// `material` commonly references [`WINDOW_BACKDROP_TOKEN`]. The selected
+/// [`BackdropStyle`] is merged over the normal variant before it becomes the
+/// live stylesheet, allowing one object to define which controls reveal each
+/// native material.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ThemeBackdrop {
+    pub material: StyleValue<WindowBackdropMaterial>,
+    pub styles: HashMap<WindowBackdropMaterial, BackdropStyle>,
 }
 
 impl From<LayoutStyle> for LayoutStyleValue {
@@ -497,6 +521,7 @@ impl StyleRule {
 pub struct StyleSheet {
     pub default_variant: Option<String>,
     pub font_family: Option<StyleValue<Vec<String>>>,
+    pub backdrop: Option<ThemeBackdrop>,
     pub tokens: HashMap<String, TokenValue>,
     pub rules: Vec<StyleRule>,
 }
@@ -545,6 +570,10 @@ pub struct ActiveStyleVariant(pub Option<String>);
 /// Last successfully applied runtime style variant name.
 #[derive(Resource, Debug, Clone, Default, PartialEq, Eq)]
 pub struct AppliedStyleVariant(pub Option<String>);
+
+/// Optional application override for the active theme's backdrop token.
+#[derive(Resource, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ThemeBackdropOverride(pub Option<WindowBackdropMaterial>);
 
 /// Name-to-component-type map used by selector type tags loaded from RON assets.
 #[derive(Resource, Debug, Clone, Default)]
@@ -669,10 +698,80 @@ fn merge_sheet_inplace(sheet: &mut StyleSheet, incoming: StyleSheet) {
     if incoming.font_family.is_some() {
         sheet.font_family = incoming.font_family;
     }
+    if incoming.backdrop.is_some() {
+        sheet.backdrop = incoming.backdrop;
+    }
     for (name, token) in incoming.tokens {
         sheet.tokens.insert(name, token);
     }
     upsert_rules_by_selector(sheet, incoming.rules);
+}
+
+fn resolve_backdrop_value(
+    tokens: &HashMap<String, TokenValue>,
+    value: &StyleValue<WindowBackdropMaterial>,
+) -> Option<WindowBackdropMaterial> {
+    match value {
+        StyleValue::Value(material) => Some(*material),
+        StyleValue::Var(token) => match tokens.get(token) {
+            Some(TokenValue::Backdrop(material)) => Some(*material),
+            _ => {
+                warn_missing_or_invalid_token(token, "backdrop.material", "Backdrop");
+                None
+            }
+        },
+    }
+}
+
+/// Resolve the native window material selected by a stylesheet backdrop object.
+#[must_use]
+pub fn resolve_theme_backdrop_material(
+    stylesheet: &StyleSheet,
+) -> Option<WindowBackdropMaterial> {
+    stylesheet
+        .backdrop
+        .as_ref()
+        .and_then(|backdrop| resolve_backdrop_value(&stylesheet.tokens, &backdrop.material))
+}
+
+fn apply_selected_backdrop_style(stylesheet: &mut StyleSheet) {
+    let Some(material) = resolve_theme_backdrop_material(stylesheet) else {
+        return;
+    };
+    let Some(style) = stylesheet
+        .backdrop
+        .as_ref()
+        .and_then(|backdrop| {
+            backdrop.styles.get(&material).or_else(|| match material {
+                WindowBackdropMaterial::Auto | WindowBackdropMaterial::MicaAlt => {
+                    backdrop.styles.get(&WindowBackdropMaterial::Mica)
+                }
+                WindowBackdropMaterial::None
+                | WindowBackdropMaterial::Mica
+                | WindowBackdropMaterial::Acrylic => None,
+            })
+        })
+        .cloned()
+    else {
+        return;
+    };
+
+    stylesheet.tokens.extend(style.tokens);
+    upsert_rules_by_selector(stylesheet, style.rules);
+}
+
+fn apply_theme_backdrop_override(world: &World, stylesheet: &mut StyleSheet) {
+    let Some(material) = world
+        .get_resource::<ThemeBackdropOverride>()
+        .and_then(|override_material| override_material.0)
+    else {
+        return;
+    };
+
+    stylesheet.tokens.insert(
+        WINDOW_BACKDROP_TOKEN.to_string(),
+        TokenValue::Backdrop(material),
+    );
 }
 
 fn apply_base_stylesheet(world: &mut World, new_base: StyleSheet) {
@@ -692,11 +791,17 @@ fn apply_base_stylesheet(world: &mut World, new_base: StyleSheet) {
         )
     };
 
+    let mut new_base = new_base;
+    apply_theme_backdrop_override(world, &mut new_base);
+    apply_selected_backdrop_style(&mut new_base);
     world.resource_mut::<BaseStyleSheet>().0 = new_base.clone();
 
     let active_font_family = world
         .get_resource::<ActiveStyleSheet>()
         .and_then(|active| active.0.font_family.clone());
+    let active_backdrop = world
+        .get_resource::<ActiveStyleSheet>()
+        .and_then(|active| active.0.backdrop.clone());
     let active_selectors = world
         .get_resource::<ActiveStyleSheetSelectors>()
         .map(|selectors| selectors.0.clone())
@@ -708,6 +813,7 @@ fn apply_base_stylesheet(world: &mut World, new_base: StyleSheet) {
 
     let mut runtime_sheet = world.resource_mut::<StyleSheet>();
     runtime_sheet.font_family = active_font_family.or(new_base.font_family.clone());
+    runtime_sheet.backdrop = active_backdrop.or(new_base.backdrop.clone());
     runtime_sheet.rules.retain(|rule| {
         !previous_base_selectors.contains(&rule.selector)
             || active_selectors.contains(&rule.selector)
@@ -865,6 +971,50 @@ pub fn set_active_style_variant_by_name(world: &mut World, variant_name: &str) {
     world.insert_resource(ActiveStyleVariant(Some(variant_name.to_string())));
 }
 
+/// Override the active theme's [`WINDOW_BACKDROP_TOKEN`] and immediately
+/// reapply the current style variant.
+///
+/// The override persists across light/dark variant changes until cleared with
+/// [`clear_theme_backdrop_material_override`].
+pub fn set_theme_backdrop_material(world: &mut World, material: WindowBackdropMaterial) {
+    world.insert_resource(ThemeBackdropOverride(Some(material)));
+    if world
+        .get_resource::<ActiveStyleVariant>()
+        .is_some_and(|active| active.0.is_some())
+        && let Err(error) = apply_active_style_variant(world)
+    {
+        tracing::warn!(
+            material = material.theme_name(),
+            "failed to apply theme backdrop override: {error}"
+        );
+    }
+    reapply_active_backdrop_stylesheet(world);
+}
+
+/// Clear an application backdrop override and restore the active variant's
+/// [`WINDOW_BACKDROP_TOKEN`] value.
+pub fn clear_theme_backdrop_material_override(world: &mut World) {
+    world.insert_resource(ThemeBackdropOverride(None));
+    if world
+        .get_resource::<ActiveStyleVariant>()
+        .is_some_and(|active| active.0.is_some())
+        && let Err(error) = apply_active_style_variant(world)
+    {
+        tracing::warn!("failed to restore theme backdrop material: {error}");
+    }
+    reapply_active_backdrop_stylesheet(world);
+}
+
+fn reapply_active_backdrop_stylesheet(world: &mut World) {
+    let active = world
+        .get_resource::<ActiveStyleSheet>()
+        .map(|active| active.0.clone())
+        .filter(|active| active.backdrop.is_some());
+    if let Some(active) = active {
+        apply_active_stylesheet_impl(world, active, false);
+    }
+}
+
 /// Set desired active style variant to the registered default variant.
 pub fn set_active_style_variant_to_registered_default(world: &mut World) -> io::Result<()> {
     let default_variant = world
@@ -935,55 +1085,11 @@ pub fn register_embedded_fluent_theme_variants(world: &mut World) -> io::Result<
 /// and tokens currently owned by the active stylesheet asset.
 pub fn merge_base_stylesheet_ron(world: &mut World, ron_text: &str) -> io::Result<()> {
     let parsed = parse_stylesheet_ron(ron_text)?;
-
     world.init_resource::<BaseStyleSheet>();
-    world.init_resource::<StyleSheet>();
-    world.init_resource::<ActiveStyleSheetTokenNames>();
 
-    let incoming_font_family = parsed.font_family;
-    let incoming_tokens = parsed.tokens;
-    let incoming_rules = parsed.rules;
-
-    {
-        let mut base_sheet = world.resource_mut::<BaseStyleSheet>();
-        if incoming_font_family.is_some() {
-            base_sheet.0.font_family = incoming_font_family.clone();
-        }
-        for (name, token) in &incoming_tokens {
-            base_sheet.0.tokens.insert(name.clone(), token.clone());
-        }
-        upsert_rules_by_selector(&mut base_sheet.0, incoming_rules.clone());
-    }
-
-    let active_selectors = world
-        .get_resource::<ActiveStyleSheetSelectors>()
-        .map(|selectors| selectors.0.clone())
-        .unwrap_or_default();
-    let active_tokens = world
-        .get_resource::<ActiveStyleSheetTokenNames>()
-        .map(|names| names.0.clone())
-        .unwrap_or_default();
-
-    let filtered = incoming_rules
-        .into_iter()
-        .filter(|rule| !active_selectors.contains(&rule.selector))
-        .collect::<Vec<_>>();
-
-    {
-        let active_font_family = world
-            .get_resource::<ActiveStyleSheet>()
-            .and_then(|active| active.0.font_family.clone());
-        let mut runtime_sheet = world.resource_mut::<StyleSheet>();
-        if active_font_family.is_none() && incoming_font_family.is_some() {
-            runtime_sheet.font_family = incoming_font_family;
-        }
-        for (name, token) in incoming_tokens {
-            if !active_tokens.contains(name.as_str()) {
-                runtime_sheet.tokens.insert(name, token);
-            }
-        }
-        upsert_rules_by_selector(&mut runtime_sheet, filtered);
-    }
+    let mut merged = world.resource::<BaseStyleSheet>().0.clone();
+    merge_sheet_inplace(&mut merged, parsed);
+    apply_base_stylesheet(world, merged);
 
     Ok(())
 }
@@ -1020,7 +1126,7 @@ pub fn ensure_active_stylesheet_asset_handle(world: &mut World) {
 /// in-memory source until another active stylesheet source is selected.
 fn apply_active_stylesheet_impl(
     world: &mut World,
-    loaded_stylesheet: StyleSheet,
+    mut loaded_stylesheet: StyleSheet,
     clear_asset_binding: bool,
 ) {
     world.init_resource::<ActiveStyleSheet>();
@@ -1029,7 +1135,12 @@ fn apply_active_stylesheet_impl(
     world.init_resource::<StyleSheet>();
     world.init_resource::<ActiveStyleSheetAsset>();
 
-    world.resource_mut::<ActiveStyleSheet>().0 = loaded_stylesheet.clone();
+    let source_stylesheet = loaded_stylesheet.clone();
+    if loaded_stylesheet.backdrop.is_some() {
+        apply_theme_backdrop_override(world, &mut loaded_stylesheet);
+        apply_selected_backdrop_style(&mut loaded_stylesheet);
+    }
+    world.resource_mut::<ActiveStyleSheet>().0 = source_stylesheet;
 
     let incoming_selectors = loaded_stylesheet
         .rules
@@ -1053,6 +1164,9 @@ fn apply_active_stylesheet_impl(
     let base_font_family = world
         .get_resource::<BaseStyleSheet>()
         .and_then(|base| base.0.font_family.clone());
+    let base_backdrop = world
+        .get_resource::<BaseStyleSheet>()
+        .and_then(|base| base.0.backdrop.clone());
 
     let mut runtime_sheet = world.resource_mut::<StyleSheet>();
     runtime_sheet
@@ -1062,6 +1176,7 @@ fn apply_active_stylesheet_impl(
         .tokens
         .retain(|name, _| !previous_asset_token_names.contains(name));
     runtime_sheet.font_family = loaded_stylesheet.font_family.clone().or(base_font_family);
+    runtime_sheet.backdrop = loaded_stylesheet.backdrop.clone().or(base_backdrop);
     runtime_sheet.rules.extend(loaded_stylesheet.rules);
     runtime_sheet.tokens.extend(loaded_stylesheet.tokens);
 
@@ -2809,6 +2924,8 @@ struct StyleSheetDef {
     default_variant: Option<String>,
     #[serde(default)]
     font_family: OptionalStyleValueDef<FontFamilyStackDef>,
+    #[serde(default, deserialize_with = "deserialize_optional_theme_backdrop")]
+    backdrop: Option<ThemeBackdropDef>,
     #[serde(default)]
     tokens: HashMap<String, TokenDef>,
     #[serde(default)]
@@ -2820,12 +2937,76 @@ struct StyleSheetVariantsDef {
     default_variant: String,
     #[serde(default)]
     font_family: OptionalStyleValueDef<FontFamilyStackDef>,
+    #[serde(default, deserialize_with = "deserialize_optional_theme_backdrop")]
+    backdrop: Option<ThemeBackdropDef>,
     #[serde(default)]
     tokens: HashMap<String, TokenDef>,
     #[serde(default)]
     rules: Vec<StyleRuleDef>,
     #[serde(default)]
     variants: HashMap<String, StyleSheetDef>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ThemeBackdropDef {
+    material: StyleValueDef<String>,
+    #[serde(default)]
+    styles: HashMap<String, BackdropStyleDef>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct BackdropStyleDef {
+    #[serde(default)]
+    tokens: HashMap<String, TokenDef>,
+    #[serde(default)]
+    rules: Vec<StyleRuleDef>,
+}
+
+fn deserialize_optional_theme_backdrop<'de, D>(
+    deserializer: D,
+) -> Result<Option<ThemeBackdropDef>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    struct OptionalThemeBackdropVisitor;
+
+    impl<'de> Visitor<'de> for OptionalThemeBackdropVisitor {
+        type Value = Option<ThemeBackdropDef>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter.write_str("a backdrop object, Some((...)), or None")
+        }
+
+        fn visit_none<E>(self) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(None)
+        }
+
+        fn visit_unit<E>(self) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(None)
+        }
+
+        fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+        where
+            D: serde::Deserializer<'de>,
+        {
+            ThemeBackdropDef::deserialize(deserializer).map(Some)
+        }
+
+        fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
+        where
+            A: serde::de::MapAccess<'de>,
+        {
+            ThemeBackdropDef::deserialize(MapAccessDeserializer::new(map)).map(Some)
+        }
+    }
+
+    deserializer.deserialize_any(OptionalThemeBackdropVisitor)
 }
 
 fn deserialize_optional_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
@@ -3196,6 +3377,7 @@ enum TokenDef {
     FontFamily(FontFamilyStackDef),
     BoxShadow(BoxShadowDef),
     Transition(StyleTransition),
+    Backdrop(String),
     /// Cubic bezier curve control points.
     Curve(f32, f32, f32, f32),
 }
@@ -3208,6 +3390,9 @@ impl TokenDef {
             Self::FontFamily(value) => Ok(TokenValue::FontFamily(value.into_vec())),
             Self::BoxShadow(value) => Ok(TokenValue::BoxShadow(value.into_box_shadow()?)),
             Self::Transition(value) => Ok(TokenValue::Transition(value)),
+            Self::Backdrop(value) => WindowBackdropMaterial::from_theme_name(&value)
+                .map(TokenValue::Backdrop)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error)),
             Self::Curve(x1, y1, x2, y2) => Ok(TokenValue::Curve(x1, y1, x2, y2)),
         }
     }
@@ -3679,24 +3864,67 @@ fn parse_hex_color(hex: &str) -> io::Result<Color> {
     }
 }
 
+fn style_rules_from_defs(rules: Vec<StyleRuleDef>) -> io::Result<Vec<StyleRule>> {
+    rules
+        .into_iter()
+        .map(|rule| {
+            Ok(StyleRule::new_with_values(
+                rule.selector.into(),
+                rule.setter.into_setter()?,
+            ))
+        })
+        .collect()
+}
+
+fn token_values_from_defs(
+    tokens: HashMap<String, TokenDef>,
+) -> io::Result<HashMap<String, TokenValue>> {
+    tokens
+        .into_iter()
+        .map(|(name, token)| Ok((name, token.into_token_value()?)))
+        .collect()
+}
+
+impl ThemeBackdropDef {
+    fn into_theme_backdrop(self) -> io::Result<ThemeBackdrop> {
+        let material = match self.material {
+            StyleValueDef::Value(name) => StyleValue::Value(
+                WindowBackdropMaterial::from_theme_name(&name)
+                    .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?,
+            ),
+            StyleValueDef::Var(token) => StyleValue::Var(token),
+        };
+        let mut styles = HashMap::new();
+        for (name, style) in self.styles {
+            let material = WindowBackdropMaterial::from_theme_name(&name)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+            styles.insert(
+                material,
+                BackdropStyle {
+                    tokens: token_values_from_defs(style.tokens)?,
+                    rules: style_rules_from_defs(style.rules)?,
+                },
+            );
+        }
+
+        Ok(ThemeBackdrop { material, styles })
+    }
+}
+
 fn stylesheet_from_def(parsed: StyleSheetDef) -> io::Result<StyleSheet> {
     let mut sheet = StyleSheet {
         default_variant: parsed.default_variant,
         font_family: into_style_value(parsed.font_family.into_option(), |value| {
             Ok(value.into_vec())
         })?,
+        backdrop: parsed
+            .backdrop
+            .map(ThemeBackdropDef::into_theme_backdrop)
+            .transpose()?,
         ..Default::default()
     };
-    for (name, token) in parsed.tokens {
-        sheet.tokens.insert(name, token.into_token_value()?);
-    }
-
-    for rule in parsed.rules {
-        sheet.add_rule(StyleRule::new_with_values(
-            rule.selector.into(),
-            rule.setter.into_setter()?,
-        ));
-    }
+    sheet.tokens = token_values_from_defs(parsed.tokens)?;
+    sheet.rules = style_rules_from_defs(parsed.rules)?;
 
     Ok(sheet)
 }
@@ -3731,6 +3959,7 @@ fn stylesheet_variants_from_ron_bytes(bytes: &[u8]) -> io::Result<RegisteredStyl
     let base_sheet = stylesheet_from_def(StyleSheetDef {
         default_variant: None,
         font_family: parsed.font_family,
+        backdrop: parsed.backdrop,
         tokens: parsed.tokens,
         rules: parsed.rules,
     })?;
@@ -4107,25 +4336,25 @@ mod tests {
             resolve_style_for_entity_classes(app.world(), hovered, ["widget.list_view.item"]);
         assert_eq!(
             list_item.colors.bg,
-            Some(token_color(app.world(), "surface-overlay-item-hover"))
+            Some(token_color(app.world(), "fill-subtle-secondary"))
         );
 
         let nav_item = resolve_style_for_entity_classes(app.world(), hovered, ["nav.item"]);
         assert_eq!(
             nav_item.colors.bg,
-            Some(token_color(app.world(), "surface-subtle-hover"))
+            Some(token_color(app.world(), "fill-subtle-secondary"))
         );
 
         let nav_sidebar = resolve_style_for_classes(app.world(), ["nav.sidebar"]);
         assert_eq!(
             nav_sidebar.colors.bg,
-            Some(token_color(app.world(), "surface-bg-secondary"))
+            Some(token_color(app.world(), "fill-layer-alt"))
         );
 
         let nav_content = resolve_style_for_classes(app.world(), ["nav.content"]);
         assert_eq!(
             nav_content.colors.bg,
-            Some(token_color(app.world(), "surface-panel"))
+            Some(token_color(app.world(), "fill-layer-default"))
         );
 
         let switch_on = resolve_style_for_entity_classes(
@@ -4410,6 +4639,143 @@ mod tests {
             Some(&crate::TokenValue::Color(crate::xilem::Color::from_rgb8(
                 0xEE, 0xEE, 0xEE,
             )))
+        );
+    }
+    #[test]
+    fn stylesheet_parses_backdrop_token_and_material_styles() {
+        let sheet = crate::parse_stylesheet_ron_for_tests(
+            r##"(
+                backdrop: (
+                    material: (Var: "window-backdrop"),
+                    styles: {
+                        "mica": (
+                            tokens: {
+                                "fill-layer-background": Color(Rgba8(0, 0, 0, 0)),
+                            },
+                        ),
+                    },
+                ),
+                tokens: {
+                    "window-backdrop": Backdrop("mica"),
+                },
+            )"##,
+        )
+        .expect("stylesheet backdrop object should parse");
+
+        assert_eq!(
+            crate::resolve_theme_backdrop_material(&sheet),
+            Some(crate::WindowBackdropMaterial::Mica)
+        );
+        assert!(
+            sheet
+                .backdrop
+                .as_ref()
+                .is_some_and(|backdrop| backdrop
+                    .styles
+                    .contains_key(&crate::WindowBackdropMaterial::Mica))
+        );
+    }
+    #[test]
+    fn fluent_backdrop_override_updates_material_and_public_fill_tokens() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+        crate::set_active_style_variant_by_name(app.world_mut(), "dark");
+        crate::apply_active_style_variant(app.world_mut())
+            .expect("embedded Fluent dark theme should apply");
+
+        let root = app.world_mut().spawn(crate::UiRoot).id();
+        assert_eq!(
+            crate::resolve_theme_backdrop_material(app.world().resource::<crate::StyleSheet>()),
+            Some(crate::WindowBackdropMaterial::None)
+        );
+        assert_eq!(
+            resolve_style(app.world(), root).colors.bg,
+            Some(crate::xilem::Color::from_rgb8(0x1F, 0x1F, 0x1F))
+        );
+
+        crate::set_theme_backdrop_material(
+            app.world_mut(),
+            crate::WindowBackdropMaterial::Mica,
+        );
+
+        let sheet = app.world().resource::<crate::StyleSheet>();
+        assert_eq!(
+            crate::resolve_theme_backdrop_material(sheet),
+            Some(crate::WindowBackdropMaterial::Mica)
+        );
+        assert_eq!(
+            sheet.tokens.get(crate::WINDOW_BACKDROP_TOKEN),
+            Some(&crate::TokenValue::Backdrop(
+                crate::WindowBackdropMaterial::Mica
+            ))
+        );
+        assert_eq!(
+            resolve_style(app.world(), root).colors.bg,
+            Some(crate::xilem::Color::TRANSPARENT)
+        );
+
+        crate::clear_theme_backdrop_material_override(app.world_mut());
+        assert_eq!(
+            crate::resolve_theme_backdrop_material(app.world().resource::<crate::StyleSheet>()),
+            Some(crate::WindowBackdropMaterial::None)
+        );
+        assert_eq!(
+            resolve_style(app.world(), root).colors.bg,
+            Some(crate::xilem::Color::from_rgb8(0x1F, 0x1F, 0x1F))
+        );
+    }
+    #[test]
+    fn active_stylesheet_backdrop_override_restores_unexpanded_source() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+        crate::apply_active_stylesheet_ron(
+            app.world_mut(),
+            r##"(
+                backdrop: (
+                    material: (Var: "window-backdrop"),
+                    styles: {
+                        "mica": (
+                            tokens: {
+                                "demo-layer": Color(Rgba8(0, 0, 0, 0)),
+                            },
+                        ),
+                    },
+                ),
+                tokens: {
+                    "window-backdrop": Backdrop("none"),
+                    "demo-layer": Color(Hex("#223344")),
+                },
+                rules: [
+                    (
+                        selector: Class("demo.backdrop"),
+                        setter: (colors: (bg: Var("demo-layer"))),
+                    ),
+                ],
+            )"##,
+        )
+        .expect("active backdrop stylesheet should apply");
+        let entity = app
+            .world_mut()
+            .spawn(crate::StyleClass(vec!["demo.backdrop".to_string()]))
+            .id();
+
+        assert_eq!(
+            resolve_style(app.world(), entity).colors.bg,
+            Some(crate::xilem::Color::from_rgb8(0x22, 0x33, 0x44))
+        );
+        crate::set_theme_backdrop_material(
+            app.world_mut(),
+            crate::WindowBackdropMaterial::Mica,
+        );
+        assert_eq!(
+            resolve_style(app.world(), entity).colors.bg,
+            Some(crate::xilem::Color::TRANSPARENT)
+        );
+
+        crate::clear_theme_backdrop_material_override(app.world_mut());
+        assert_eq!(
+            resolve_style(app.world(), entity).colors.bg,
+            Some(crate::xilem::Color::from_rgb8(0x22, 0x33, 0x44))
         );
     }
     #[test]

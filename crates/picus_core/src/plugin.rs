@@ -6,7 +6,7 @@ use crate::bevy_tween::{
     BevyTweenRegisterSystems, DefaultTweenPlugins, TweenCorePlugin, TweenSystemSet,
     component_tween_system,
 };
-use crate::backdrop::apply_window_backdrop_materials;
+use crate::backdrop::{apply_window_backdrop_materials, sync_theme_window_backdrops};
 use crate::clipboard::{Clipboard, handle_clipboard_events};
 use crate::composition::{CompositionState, apply_composition_effects, sync_composition_visuals};
 use crate::drag_drop::{DragState, dispatch_drag_events, track_drag_state};
@@ -51,7 +51,7 @@ use crate::{
         ActiveStyleSheet, ActiveStyleSheetAsset, ActiveStyleSheetSelectors,
         ActiveStyleSheetTokenNames, ActiveStyleVariant, AppliedStyleVariant, BaseStyleSheet,
         ReducedMotion, RegisteredStyleVariants, StyleAssetEventCursor, StyleSheet,
-        StyleSheetRonLoader, activate_debounced_hovers, animate_style_transitions,
+        StyleSheetRonLoader, ThemeBackdropOverride, activate_debounced_hovers, animate_style_transitions,
         ensure_active_stylesheet_asset_handle, mark_style_dirty,
         register_builtin_style_type_aliases, register_embedded_fluent_theme_variants,
         sync_active_style_variant, sync_style_targets, sync_stylesheet_asset_events,
@@ -121,6 +121,7 @@ impl Plugin for PicusPlugin {
             .init_resource::<ActiveStyleSheetTokenNames>()
             .init_resource::<ActiveStyleVariant>()
             .init_resource::<AppliedStyleVariant>()
+            .init_resource::<ThemeBackdropOverride>()
             .init_resource::<RegisteredStyleVariants>()
             .init_resource::<StyleAssetEventCursor>()
             .init_resource::<XilemFontBridge>()
@@ -193,6 +194,7 @@ impl Plugin for PicusPlugin {
                     ensure_active_stylesheet_asset_handle,
                     sync_stylesheet_asset_events,
                     sync_active_style_variant,
+                    sync_theme_window_backdrops,
                     mark_style_dirty,
                     sync_style_targets,
                 )

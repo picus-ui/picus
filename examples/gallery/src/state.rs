@@ -10,6 +10,10 @@
 use bevy_ecs::prelude::*;
 use picus::{FluentIcon, ToastKind};
 
+/// Marks the Window/Menu page's theme-backed native material picker.
+#[derive(Component, Debug, Clone, Copy, Default)]
+pub struct GalleryBackdropPicker;
+
 /// A sidebar category heading that groups related pages.
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

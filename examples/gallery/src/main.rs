@@ -326,6 +326,8 @@ fn build_gallery_app() -> App {
                 .after(picus::handle_overlay_actions),
         );
 
+    picus::set_theme_backdrop_material(app.world_mut(), picus::WindowBackdropMaterial::Mica);
+
     app
 }
 
@@ -348,6 +350,37 @@ mod tests {
         let sheet = picus::parse_stylesheet_ron(include_str!("../assets/themes/gallery.ron"))
             .expect("embedded gallery stylesheet should parse");
         assert_eq!(sheet.default_variant.as_deref(), Some("dark"));
+    }
+
+    #[test]
+    fn gallery_uses_theme_managed_mica_and_exposes_material_picker() {
+        let mut app = build_gallery_app();
+        let window = app
+            .world_mut()
+            .spawn((Window::default(), PrimaryWindow))
+            .id();
+
+        app.update();
+
+        assert_eq!(
+            picus::resolve_theme_backdrop_material(
+                app.world().resource::<picus::StyleSheet>()
+            ),
+            Some(picus::WindowBackdropMaterial::Mica)
+        );
+        assert_eq!(
+            app.world().get::<picus::WindowBackdropMaterial>(window),
+            Some(&picus::WindowBackdropMaterial::Mica)
+        );
+        let mut picker_query = app
+            .world_mut()
+            .query_filtered::<&picus::UiRadioGroup, With<state::GalleryBackdropPicker>>();
+        let picker = picker_query
+            .iter(app.world())
+            .next()
+            .expect("gallery should expose a backdrop material picker");
+        assert_eq!(picker.options, ["None", "Mica", "Acrylic"]);
+        assert_eq!(picker.selected, 1);
     }
 
     #[test]

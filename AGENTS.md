@@ -134,6 +134,11 @@ Picus maps `Mica`, `Acrylic`, and `MicaAlt` to DWM system backdrops; unsupported
 platforms keep running and treat the native request as a no-op. Backdrop windows
 must be created transparent on Windows, and Picus' runner applies the required
 transparent window and alpha-composition flags before primary-window creation.
+When the active stylesheet declares a theme `backdrop` object, windows without an
+explicit application-owned `WindowBackdropMaterial` are theme-managed. Explicit
+window components and `with_backdrop_material(...)` remain higher priority. The
+runner resolves the active theme material before creating the primary window, and
+runtime theme changes synchronize the component and native DWM material.
 
 System stages:
 
@@ -387,6 +392,25 @@ Runtime styling invariants:
 - `ComputedStyle.font_family` carries resolved font-family data for projectors.
 - Color transitions use `bevy_tween`; projectors read resolved plus animated style
   through `resolve_style`.
+- Stylesheet RON may declare a theme-level `backdrop` object. Its `material` is a
+  literal lowercase material name or a typed token reference, normally
+  `(Var: "window-backdrop")`; the token uses
+  `"window-backdrop": Backdrop("none"|"auto"|"mica"|"acrylic"|"mica-alt")`.
+  `backdrop.styles` maps lowercase material names to token and selector-rule
+  overrides merged only for the selected material. `auto` and `mica-alt` fall
+  back to the `mica` style when no exact style entry exists.
+- Applications may call `set_theme_backdrop_material(...)` and
+  `clear_theme_backdrop_material_override(...)`; the override persists across
+  light/dark variant changes. Manual `WindowBackdropMaterial` components still
+  win.
+- The Fluent bundle exposes backdrop-aware public fill tokens:
+  `fill-layer-background`, `fill-layer-default`, `fill-layer-alt`,
+  `fill-control-default`, `fill-control-secondary`, `fill-control-tertiary`,
+  `fill-control-disabled`, `fill-subtle-transparent`, `fill-subtle-secondary`,
+  `fill-subtle-tertiary`, `fill-card-default`, `fill-card-secondary`, and
+  `fill-smoke-default`. Normal values are opaque; Mica/Acrylic styles replace
+  them with WinUI-inspired alpha values. Rules must reference these tokens
+  instead of hard-coding backdrop alpha values.
 
 Built-in Fluent theming is a multi-variant bundle at
 `crates/picus_core/src/theme/fluent_theme.ron` with `dark`, `light`, and
@@ -402,6 +426,9 @@ surface, while `overlay.toast.info/success/warning/error` provide intent colors
 for the media/icon and accent stripe rather than recoloring the whole card.
 Checkbox check glyph color resolves through the `checkbox-check-glyph` token; do
 not reuse button-oriented `text-on-accent` for `template.checkbox.mark`.
+The gallery defaults its theme backdrop override to Mica and exposes a
+None/Mica/Acrylic picker on the Window/Menu page so native material and public
+fill-token changes are exercised together.
 Picus-only helpers that do not correspond to Fluent UI components, such as
 `UiGroupBox`, must not receive default box styling from this built-in Fluent
 bundle; examples or applications that want a visible group box provide their own

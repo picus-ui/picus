@@ -7,6 +7,8 @@ use picus_surface::{
     set_native_window_backdrop_material,
 };
 
+use crate::styling::{StyleSheet, resolve_theme_backdrop_material};
+
 /// Native desktop backdrop material for a top-level [`Window`].
 ///
 /// Attach this component to a Bevy window entity to request the corresponding
@@ -33,6 +35,32 @@ pub enum WindowBackdropMaterial {
 }
 
 impl WindowBackdropMaterial {
+    /// Stable lowercase name used by theme files and public tooling.
+    #[must_use]
+    pub const fn theme_name(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Auto => "auto",
+            Self::Mica => "mica",
+            Self::Acrylic => "acrylic",
+            Self::MicaAlt => "mica-alt",
+        }
+    }
+
+    /// Parse a backdrop name used by a theme file.
+    pub fn from_theme_name(name: &str) -> Result<Self, String> {
+        match name.trim().to_ascii_lowercase().as_str() {
+            "none" => Ok(Self::None),
+            "auto" => Ok(Self::Auto),
+            "mica" => Ok(Self::Mica),
+            "acrylic" => Ok(Self::Acrylic),
+            "mica-alt" | "mica_alt" | "micaalt" => Ok(Self::MicaAlt),
+            _ => Err(format!(
+                "unknown window backdrop `{name}`; expected none, auto, mica, acrylic, or mica-alt"
+            )),
+        }
+    }
+
     /// Returns `true` when this material needs a transparent window surface.
     #[must_use]
     pub const fn requires_transparent_surface(self) -> bool {
@@ -78,6 +106,41 @@ pub fn configure_window_for_backdrop(window: &mut Window, material: WindowBackdr
 
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct AppliedWindowBackdropMaterial(WindowBackdropMaterial);
+
+/// Marks windows whose backdrop component is owned by the active theme.
+#[derive(Component, Debug, Clone, Copy, Default)]
+pub(crate) struct ThemeManagedWindowBackdrop;
+
+/// Synchronize the active theme backdrop to windows without an explicit
+/// application-owned [`WindowBackdropMaterial`].
+pub(crate) fn sync_theme_window_backdrops(
+    mut commands: Commands,
+    stylesheet: Res<StyleSheet>,
+    mut windows: Query<(
+        Entity,
+        &mut Window,
+        Option<&WindowBackdropMaterial>,
+        Option<&ThemeManagedWindowBackdrop>,
+    )>,
+) {
+    let Some(material) = resolve_theme_backdrop_material(&stylesheet) else {
+        return;
+    };
+
+    for (entity, mut window, current, managed) in &mut windows {
+        if current.is_some() && managed.is_none() {
+            continue;
+        }
+        if current.is_some_and(|current| *current == material) && managed.is_some() {
+            continue;
+        }
+
+        material.configure_window(&mut window);
+        commands
+            .entity(entity)
+            .insert((material, ThemeManagedWindowBackdrop));
+    }
+}
 
 /// Synchronize requested native backdrop materials to attached winit windows.
 pub(crate) fn apply_window_backdrop_materials(
@@ -174,6 +237,9 @@ fn log_backdrop_error(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{StyleSheet, StyleValue, ThemeBackdrop};
+    use bevy_app::{App, Update};
+    use std::collections::HashMap;
 
     #[test]
     fn backdrop_material_configures_transparent_window() {
@@ -200,5 +266,52 @@ mod tests {
 
         assert!(!window.transparent);
         assert_eq!(window.composite_alpha_mode, CompositeAlphaMode::Auto);
+    }
+
+    #[test]
+    fn theme_backdrop_manages_unconfigured_windows() {
+        let mut app = App::new();
+        app.insert_resource(StyleSheet {
+            backdrop: Some(ThemeBackdrop {
+                material: StyleValue::value(WindowBackdropMaterial::Mica),
+                styles: HashMap::new(),
+            }),
+            ..StyleSheet::default()
+        })
+        .add_systems(Update, sync_theme_window_backdrops);
+        let window = app.world_mut().spawn(Window::default()).id();
+
+        app.update();
+
+        assert_eq!(
+            app.world().get::<WindowBackdropMaterial>(window),
+            Some(&WindowBackdropMaterial::Mica)
+        );
+        assert!(app.world().get::<ThemeManagedWindowBackdrop>(window).is_some());
+    }
+
+    #[test]
+    fn explicit_window_backdrop_takes_precedence_over_theme() {
+        let mut app = App::new();
+        app.insert_resource(StyleSheet {
+            backdrop: Some(ThemeBackdrop {
+                material: StyleValue::value(WindowBackdropMaterial::Mica),
+                styles: HashMap::new(),
+            }),
+            ..StyleSheet::default()
+        })
+        .add_systems(Update, sync_theme_window_backdrops);
+        let window = app
+            .world_mut()
+            .spawn((Window::default(), WindowBackdropMaterial::Acrylic))
+            .id();
+
+        app.update();
+
+        assert_eq!(
+            app.world().get::<WindowBackdropMaterial>(window),
+            Some(&WindowBackdropMaterial::Acrylic)
+        );
+        assert!(app.world().get::<ThemeManagedWindowBackdrop>(window).is_none());
     }
 }

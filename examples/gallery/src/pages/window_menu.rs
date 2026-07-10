@@ -2,10 +2,13 @@
 //!
 //! Corresponds to Fluent UI's CommandBar and ContextualMenu components.
 
-use crate::helpers::{card, grid, note, toast_button};
+use crate::{
+    helpers::{card, grid, note, toast_button},
+    state::GalleryBackdropPicker,
+};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 use picus::{
-    ToastKind, UiMenuBar, UiMenuBarItem, UiMenuItem, UiTitleBar,
+    ToastKind, UiMenuBar, UiMenuBarItem, UiMenuItem, UiRadioGroup, UiTitleBar,
     scene::{CommandsSceneExt, bsn, template_value},
 };
 
@@ -73,6 +76,18 @@ pub fn spawn_window_menu_page(commands: &mut Commands, parent: Entity) -> Entity
         commands,
         chrome,
         "UiTitleBar draws a custom window chrome with minimize/maximize/close controls.",
+    );
+
+    let backdrop = card(commands, g, "Window backdrop");
+    commands.spawn_scene(bsn! {
+        template_value(UiRadioGroup::new(["None", "Mica", "Acrylic"]).with_selected(1))
+        GalleryBackdropPicker
+        ChildOf(backdrop)
+    });
+    note(
+        commands,
+        backdrop,
+        "The active Fluent theme applies the native material and its backdrop-aware fill tokens together.",
     );
 
     toast_button(
