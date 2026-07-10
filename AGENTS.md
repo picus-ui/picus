@@ -4,41 +4,7 @@ Repository guide for automated agents and humans working in the same style. Keep
 this file focused on enforceable process rules, public architecture contracts, and
 cross-cutting design decisions that code comments cannot express well.
 
-## 1. Operating Rules
-
-1. **Design contract**
-   - Keep implementation, examples, tests, and this file aligned.
-   - Update this file with changes to public architecture, styling behavior, public
-     APIs, config/schema, activation protocol, example UX, or repository workflow.
-
-2. **Verification**
-   - Add or update tests for behavior changes.
-   - Use Rust 1.95.0 or newer for Bevy 0.19 workspace checks.
-   - Run `cargo check` and `cargo test` once per change set.
-   - Leave no compiler or Clippy warnings.
-
-3. **Rust dependencies**
-   - After adding a Rust dependency, check whether `cargo upgrade` is available.
-   - If available, run it and prefer the newest reasonable compatible version.
-   - If unavailable, skip version probing and continue.
-
-4. **Runtime commands**
-   - Avoid `cargo run` unless an interactive issue or runtime log requires it.
-   - Prefer tests, static checks, and targeted diagnostics.
-
-5. **Fluent IDs**
-   - Fluent `.ftl` message IDs use hyphen namespacing, such as
-     `nav-home-title`.
-   - Do not use dots in Fluent message IDs; Fluent reserves dots for attributes.
-   - Style class names may use dots, such as `todo.root`.
-
-6. **Committing**
-   - Run `cargo fmt` only before committing, as part of the final pre-commit workflow.
-   - Run `cargo clippy --all-targets --all-features -- -D warnings` before committing.
-   - Formatting-only changes are not semantic modifications. Do not rebuild or retest after a pure formatting change.
-   - All commit messages must be written in English.
-
-## 2. Workspace
+## 1. Workspace
 
 `picus` is a Bevy-first UI framework that combines ECS state management with a
 retained Masonry Core UI runtime. User applications depend on the public `picus`
@@ -77,7 +43,7 @@ Example applications live under `examples/`: `async_downloader`, `calculator`,
 `chess_game`, `game_2048`, `gallery`, `overlay_hit_routing`, `picuscode`,
 `shared_utils`, `timer`, and `todo_list`.
 
-## 2.1. example_picuscode / CodeWhale integration
+## 1.1. example_picuscode / CodeWhale integration
 
 `example_picuscode` is a Codex-desktop-style GUI for CodeWhale. It embeds the
 CodeWhale runtime in-process via a dedicated bridge thread (see
@@ -112,7 +78,7 @@ viewing, tool-call approval, MCP management, hooks, execpolicy, context/fleet/
 skills) is tracked as follow-up work; the bridge already exposes the
 `codewhale-protocol` `EventFrame` surface needed to render those frames as UI.
 
-## 3. Runtime Architecture
+## 2. Runtime Architecture
 
 Bevy owns scheduling, windows, and input. Masonry Core runs as a retained runtime
 resource driven by Bevy systems; GUI apps use Bevy's native `App::run()` and
@@ -175,7 +141,7 @@ Runtime invariants:
 - Font registration broadcasts to all attached window runtimes, is retained for
   future windows, and is replayed into each new `WindowRuntime` when it attaches.
 
-## 4. Input, IME, and Hit Testing
+## 3. Input, IME, and Hit Testing
 
 `inject_bevy_input_into_masonry` translates Bevy window/input messages into
 Masonry Core pointer, text, IME, focus, resize, and rescale events. Events are
@@ -196,7 +162,7 @@ callbacks update Bevy window `ime_enabled` and `ime_position`.
 Layout-affecting styles such as padding, border, background, and corner radius are
 applied to the target widget so Masonry Core hit testing matches the visible box model.
 
-## 5. ECS UI Model
+## 4. ECS UI Model
 
 Logical UI components live under `crates/picus_core/src/components/*.rs`.
 Built-ins are registered through `PicusBuiltinsPlugin`; applications register custom
@@ -235,7 +201,7 @@ styled container that never emits click actions. `UiCheckbox.indeterminate` adds
 a tri-state dash appearance; clicking an indeterminate checkbox transitions to
 checked.
 
-## 6. BSN UI Authoring and Migration
+## 5. BSN UI Authoring and Migration
 
 Picus supports Bevy Scene Notation as the preferred Rust-embedded description
 language for static or mostly static ECS UI trees. `PicusPlugin` installs
@@ -283,7 +249,7 @@ Migration rules from old spawn code:
     with a meaningful entity reference or let the relevant ECS system populate
     them.
 
-## 7. Synthesis and Events
+## 6. Synthesis and Events
 
 UI synthesis is driven by `UiProjectorRegistry` in `PostUpdate`. It gathers
 `UiRoot` and `UiOverlayRoot` entities, projects ECS trees recursively, stores
@@ -352,7 +318,7 @@ Interactive controls use the ECS event route:
 - `OverlayPointerRoutingState` suppresses consumed overlay click paths so trigger
   controls do not remain pressed.
 
-## 8. Styling Contract
+## 7. Styling Contract
 
 The styling system is CSS-like, ECS-driven, and centered in
 `crates/picus_core/src/styling.rs`.
@@ -466,7 +432,7 @@ Projectors should resolve style through the styling helpers, then apply it with 
 widget, label, or text-input style helpers. Use
 `resolve_style_for_entity_classes(...)` for pseudo-state-sensitive class styling.
 
-## 9. Scroll Views and Overlays
+## 8. Scroll Views and Overlays
 
 `UiScrollView` is a logical ECS component projected through a Masonry Core portal view.
 It stores scroll offset, viewport/content geometry, and optional external scrollbar
@@ -501,7 +467,7 @@ Overlay invariants:
 - Overlay entities reparent under `UiOverlayRoot` to avoid normal layout clipping.
 - `UiToast` uses configurable placement and defaults to bottom-end behavior.
 
-## 9.1. Markdown and Streaming Text
+## 8.1. Markdown and Streaming Text
 
 `UiMarkdown` renders a Markdown source string as a vertical stack of styled blocks
 (headings, paragraphs, lists, block quotes, fenced code blocks, thematic breaks).
@@ -531,7 +497,7 @@ Retained labels and text areas allow outline hinting only at window scale factor
 up to 125%; higher-DPI text uses unhinted grayscale outlines to avoid uneven pixel
 snapping over native backdrops.
 
-## 10. Assets, Fonts, Icons, and I18n
+## 9. Assets, Fonts, Icons, and I18n
 
 `picus_core::icons` provides `IconGlyph`, bundled Lucide `PicusIcon` glyphs, and
 Fluent Design / WinUI `FluentIcon` glyphs. Lucide glyphs use the bundled
@@ -553,7 +519,7 @@ after an attached runtime exists.
 `AppI18n` is the synchronous i18n registry. `LocalizeText` resolves through the
 active bundle and falls back to the key or explicit fallback text.
 
-## 11. Surface
+## 10. Surface
 
 `picus_surface` owns wgpu instance/device/queue state, surface configuration,
 DPI-aware scene rendering, and swapchain presentation. It prefers opaque swapchain
@@ -571,7 +537,7 @@ the Bevy thread waiting for GPU completion after `present()`. It attaches throug
 raw window handles and tracks physical size, logical size, scale factor,
 transparency, and composition alpha mode.
 
-## 12. Plugin and App Helpers
+## 11. Plugin and App Helpers
 
 `PicusPlugin` installs the framework resources, built-in message types, schedule
 systems, Bevy `ScenePlugin`, `DefaultTweenPlugins`, embedded Fluent variants, and core projectors.
