@@ -436,7 +436,6 @@ impl RenderContext {
             })
             .ok_or(RenderSurfaceError::UnsupportedSurfaceFormat)?;
 
-        let adapter_name = device_handle.adapter.get_info().name;
         let alpha_mode = choose_alpha_mode(
             &capabilities.alpha_modes,
             metrics.transparent,
@@ -447,7 +446,6 @@ impl RenderContext {
             format,
             alpha_mode,
             metrics.transparent,
-            &adapter_name,
         );
 
         let config = SurfaceConfiguration {
@@ -523,13 +521,11 @@ impl RenderContext {
         transparent: bool,
     ) {
         let device_handle = &self.devices[surface.dev_id];
-        let adapter_name = device_handle.adapter.get_info().name;
         surface.blitter = create_blitter(
             &device_handle.device,
             surface.format,
             alpha_mode,
             transparent,
-            &adapter_name,
         );
         surface.config.alpha_mode = alpha_mode;
         self.configure_surface(surface);
@@ -679,7 +675,6 @@ fn create_blitter(
     format: TextureFormat,
     alpha_mode: CompositeAlphaMode,
     transparent: bool,
-    adapter_name: &str,
 ) -> TextureBlitter {
     const PREMUL_BLEND_STATE: wgpu::BlendState = wgpu::BlendState {
         alpha: wgpu::BlendComponent::REPLACE,
@@ -693,13 +688,8 @@ fn create_blitter(
     let needs_premultiplied_blit = needs_premultiplied_blit(
         alpha_mode,
         transparent,
-        cfg!(windows),
-        adapter_name,
     );
     if needs_premultiplied_blit {
-        if cfg!(windows) && adapter_name.contains("AMD") {
-            tracing::info!("using premultiplied blitting for Windows AMD compatibility");
-        }
         TextureBlitterBuilder::new(device, format)
             .blend_state(PREMUL_BLEND_STATE)
             .build()
@@ -711,17 +701,9 @@ fn create_blitter(
 fn needs_premultiplied_blit(
     alpha_mode: CompositeAlphaMode,
     transparent: bool,
-    windows: bool,
-    adapter_name: &str,
 ) -> bool {
     matches!(alpha_mode, CompositeAlphaMode::PreMultiplied)
-        || (windows && transparent)
-        || (windows
-            && adapter_name.contains("AMD")
-            && matches!(
-                alpha_mode,
-                CompositeAlphaMode::Auto | CompositeAlphaMode::Opaque
-            ))
+        || (cfg!(windows) && transparent)
 }
 
 #[cfg(test)]
@@ -902,19 +884,11 @@ mod tests {
     }
 
     #[test]
-    fn windows_transparent_surfaces_always_premultiply_the_final_blit() {
-        assert!(needs_premultiplied_blit(
-            CompositeAlphaMode::Auto,
-            true,
-            true,
-            "Generic GPU",
-        ));
-        assert!(!needs_premultiplied_blit(
-            CompositeAlphaMode::Auto,
-            true,
-            false,
-            "Generic GPU",
-        ));
+    fn transparent_surfaces_premultiply_on_windows_only() {
+        assert_eq!(
+            needs_premultiplied_blit(CompositeAlphaMode::Auto, true),
+            cfg!(windows)
+        );
     }
 
     #[test]
@@ -922,8 +896,6 @@ mod tests {
         assert!(needs_premultiplied_blit(
             CompositeAlphaMode::PreMultiplied,
             false,
-            false,
-            "Generic GPU",
         ));
     }
 

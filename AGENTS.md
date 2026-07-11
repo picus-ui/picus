@@ -531,9 +531,8 @@ the default HWND swapchain is opaque and must not be used for backdrop surfaces.
 The final blit premultiplies Picus' straight-alpha Vello texture for every Windows
 transparent DirectComposition surface, even when wgpu reports `Auto` instead of
 `PreMultiplied`; otherwise translucent fills and grayscale glyph edges become
-incorrectly opaque. It keeps the Windows AMD premultiplied-alpha compatibility
-path as a fallback for non-transparent `Auto`/`Opaque` surfaces and never blocks
-the Bevy thread waiting for GPU completion after `present()`. It attaches through
+incorrectly opaque. It never blocks the Bevy thread waiting for GPU completion
+after `present()`. It attaches through
 raw window handles and tracks physical size, logical size, scale factor,
 transparency, and composition alpha mode.
 
