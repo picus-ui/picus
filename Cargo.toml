@@ -118,6 +118,7 @@ tokio = { version = "1.50.0", features = ["full"] }
 reqwest = { version = "0.13.1", default-features = false, features = ["blocking", "json", "form", "rustls", "stream", "socks"] }
 raw-window-handle = "0.6.2"
 windows-sys = "0.61.2"
+minhook = "0.9"
 
 picus_core = { path = "crates/picus_core" }
 picus = { path = "crates/picus" }

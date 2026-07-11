@@ -4,6 +4,7 @@ use bevy_ecs::prelude::*;
 use bevy_window::{CompositeAlphaMode, RawHandleWrapper, Window, WindowWrapper};
 use picus_surface::{
     NativeWindowBackdropColorScheme, NativeWindowBackdropError, NativeWindowBackdropMaterial,
+    set_force_no_redirection_bitmap_on_create,
     set_native_window_backdrop_material_with_color_scheme,
 };
 use serde::Deserialize;
@@ -104,6 +105,7 @@ impl WindowBackdropMaterial {
             if window.composite_alpha_mode != CompositeAlphaMode::PreMultiplied {
                 window.composite_alpha_mode = CompositeAlphaMode::PreMultiplied;
             }
+            set_force_no_redirection_bitmap_on_create(true);
         }
     }
 

@@ -3,6 +3,9 @@
     reason = "Creating a persistent wgpu surface and applying native window backdrops requires raw window handles and Win32 calls."
 )]
 
+#[cfg(windows)]
+mod win32_create_window_hook;
+
 use bevy_window::{CompositeAlphaMode as BevyCompositeAlphaMode, RawHandleWrapper};
 use masonry_imaging::{
     PreparedFrame,
@@ -10,9 +13,9 @@ use masonry_imaging::{
 };
 use wgpu::util::{TextureBlitter, TextureBlitterBuilder};
 use wgpu::{
-    CompositeAlphaMode, Device, Dx12SwapchainKind, Instance, MemoryBudgetThresholds, MemoryHints,
-    PresentMode, Surface, SurfaceConfiguration, SurfaceTexture, Texture, TextureFormat,
-    TextureUsages, TextureView,
+    Backend, Backends, CompositeAlphaMode, Device, DeviceType, Dx12SwapchainKind, Instance,
+    MemoryBudgetThresholds, MemoryHints, PresentMode, Surface, SurfaceConfiguration,
+    SurfaceTexture, Texture, TextureFormat, TextureUsages, TextureView,
 };
 
 /// Native desktop backdrop material requested for a top-level window.
@@ -73,6 +76,29 @@ impl core::fmt::Display for NativeWindowBackdropError {
 
 impl std::error::Error for NativeWindowBackdropError {}
 
+/// Enable creation-time `WS_EX_NOREDIRECTIONBITMAP` injection via MinHook on
+/// `user32!CreateWindowExW`. Call before Bevy/winit creates the HWND when a
+/// transparent composition surface is required. No-op on non-Windows.
+pub fn set_force_no_redirection_bitmap_on_create(enable: bool) {
+    #[cfg(windows)]
+    win32_create_window_hook::set_force_no_redirection_bitmap_on_create(enable);
+    #[cfg(not(windows))]
+    let _ = enable;
+}
+
+/// Whether creation-time `WS_EX_NOREDIRECTIONBITMAP` injection is enabled.
+#[must_use]
+pub fn force_no_redirection_bitmap_on_create() -> bool {
+    #[cfg(windows)]
+    {
+        win32_create_window_hook::force_no_redirection_bitmap_on_create()
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
+}
+
 /// Apply a native backdrop material to a Bevy-owned window handle.
 ///
 /// On Windows this uses DWM system backdrops. On other platforms this returns
@@ -107,13 +133,16 @@ fn set_native_window_backdrop_material_impl(
     use windows_sys::Win32::Graphics::Dwm::{
         DWM_SYSTEMBACKDROP_TYPE, DWMSBT_AUTO, DWMSBT_MAINWINDOW, DWMSBT_NONE,
         DWMSBT_TABBEDWINDOW, DWMSBT_TRANSIENTWINDOW, DWMWA_SYSTEMBACKDROP_TYPE,
-        DWMWA_USE_IMMERSIVE_DARK_MODE, DwmSetWindowAttribute,
+        DWMWA_USE_IMMERSIVE_DARK_MODE, DwmExtendFrameIntoClientArea, DwmSetWindowAttribute,
     };
+    use windows_sys::Win32::UI::Controls::MARGINS;
 
     let hwnd = match raw_handle.get_window_handle() {
         RawWindowHandle::Win32(handle) => handle.hwnd.get() as windows_sys::Win32::Foundation::HWND,
         _ => return Err(NativeWindowBackdropError::UnsupportedWindowHandle),
     };
+
+    prepare_hwnd_for_composition_surface(hwnd);
 
     if !matches!(color_scheme, NativeWindowBackdropColorScheme::System) {
         let use_dark_mode: i32 = i32::from(matches!(
@@ -148,12 +177,71 @@ fn set_native_window_backdrop_material_impl(
             core::mem::size_of::<DWM_SYSTEMBACKDROP_TYPE>() as u32,
         )
     };
+    if hr < 0 {
+        return Err(NativeWindowBackdropError::WindowsHresult(hr));
+    }
 
+    let margins = if matches!(material, NativeWindowBackdropMaterial::None) {
+        MARGINS {
+            cxLeftWidth: 0,
+            cxRightWidth: 0,
+            cyTopHeight: 0,
+            cyBottomHeight: 0,
+        }
+    } else {
+        MARGINS {
+            cxLeftWidth: -1,
+            cxRightWidth: -1,
+            cyTopHeight: -1,
+            cyBottomHeight: -1,
+        }
+    };
+    let hr = unsafe { DwmExtendFrameIntoClientArea(hwnd, &margins) };
     if hr < 0 {
         Err(NativeWindowBackdropError::WindowsHresult(hr))
     } else {
         Ok(())
     }
+}
+
+/// Companion HWND styles for DirectComposition: layered window, disable blur-behind,
+/// full window opacity (per-pixel alpha comes from DXGI).
+#[cfg(windows)]
+fn prepare_hwnd_for_composition_surface(hwnd: windows_sys::Win32::Foundation::HWND) {
+    use windows_sys::Win32::Graphics::Dwm::{
+        DWM_BB_ENABLE, DWM_BLURBEHIND, DwmEnableBlurBehindWindow,
+    };
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GWL_EXSTYLE, GetWindowLongPtrW, LWA_ALPHA, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE,
+        SWP_NOSIZE, SWP_NOZORDER, SetLayeredWindowAttributes, SetWindowLongPtrW, SetWindowPos,
+        WS_EX_LAYERED, WS_EX_NOREDIRECTIONBITMAP,
+    };
+
+    let ex = unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) };
+    let desired = ex | WS_EX_NOREDIRECTIONBITMAP as isize | WS_EX_LAYERED as isize;
+    if desired != ex {
+        unsafe {
+            SetWindowLongPtrW(hwnd, GWL_EXSTYLE, desired);
+            SetWindowPos(
+                hwnd,
+                core::ptr::null_mut(),
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+            );
+        }
+    }
+
+    let blur = DWM_BLURBEHIND {
+        dwFlags: DWM_BB_ENABLE,
+        fEnable: false.into(),
+        hRgnBlur: core::ptr::null_mut(),
+        fTransitionOnMaximized: false.into(),
+    };
+    let _ = unsafe { DwmEnableBlurBehindWindow(hwnd, &blur) };
+    let _ = unsafe { SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA) };
 }
 
 #[cfg(not(windows))]
@@ -209,6 +297,16 @@ impl ExternalWindowSurface {
         metrics: ExistingWindowMetrics,
         present_mode: PresentMode,
     ) -> Result<Self, RenderSurfaceError> {
+        #[cfg(windows)]
+        if metrics.transparent {
+            use raw_window_handle::RawWindowHandle;
+            if let RawWindowHandle::Win32(handle) = raw_handle.get_window_handle() {
+                prepare_hwnd_for_composition_surface(
+                    handle.hwnd.get() as windows_sys::Win32::Foundation::HWND,
+                );
+            }
+        }
+
         // SAFETY: The caller provides a `RawHandleWrapper` originating from Bevy's
         // `WindowWrapper`, which internally keeps an owning reference to the window alive.
         // We create a thread-locked handle target only for surface initialization.
@@ -370,6 +468,8 @@ struct RenderContext {
     instance: Instance,
     /// Created devices used by this context.
     devices: Vec<DeviceHandle>,
+    /// Prefer a DX12 adapter for DirectComposition premultiplied alpha.
+    prefer_composition_adapter: bool,
 }
 
 struct DeviceHandle {
@@ -380,7 +480,7 @@ struct DeviceHandle {
 
 impl RenderContext {
     fn new(transparent: bool) -> Self {
-        let backends = wgpu::Backends::from_env().unwrap_or_default();
+        let backends = backends_for_surface();
         let flags = wgpu::InstanceFlags::from_build_config().with_env();
         let backend_options = backend_options_for_surface(transparent);
         let instance = Instance::new(&wgpu::InstanceDescriptor {
@@ -393,6 +493,7 @@ impl RenderContext {
         Self {
             instance,
             devices: Vec::new(),
+            prefer_composition_adapter: cfg!(windows) && transparent,
         }
     }
 
@@ -550,10 +651,12 @@ impl RenderContext {
     }
 
     async fn new_device(&mut self, compatible_surface: Option<&Surface<'_>>) -> Option<usize> {
-        let adapter =
-            wgpu::util::initialize_adapter_from_env_or_default(&self.instance, compatible_surface)
-                .await
-                .ok()?;
+        let adapter = select_adapter(
+            &self.instance,
+            compatible_surface,
+            self.prefer_composition_adapter,
+        )
+        .await?;
 
         let requested_features = wgpu::Features::CLEAR_TEXTURE;
         let required_features = adapter.features() & requested_features;
@@ -577,6 +680,68 @@ impl RenderContext {
         });
         Some(self.devices.len() - 1)
     }
+}
+
+fn backends_for_surface() -> Backends {
+    Backends::from_env().unwrap_or_default()
+}
+
+/// Pick a GPU adapter. When `prefer_composition` is set, prefer DX12 so
+/// [`Dx12SwapchainKind::DxgiFromVisual`] premultiplied alpha is available.
+async fn select_adapter(
+    instance: &Instance,
+    compatible_surface: Option<&Surface<'_>>,
+    prefer_composition: bool,
+) -> Option<wgpu::Adapter> {
+    if let Ok(adapter) =
+        wgpu::util::initialize_adapter_from_env(instance, compatible_surface).await
+    {
+        return Some(adapter);
+    }
+
+    if !prefer_composition {
+        return wgpu::util::initialize_adapter_from_env_or_default(instance, compatible_surface)
+            .await
+            .ok();
+    }
+
+    let adapters = instance.enumerate_adapters(Backends::all()).await;
+    let mut best: Option<(u32, wgpu::Adapter)> = None;
+    for adapter in adapters {
+        if let Some(surface) = compatible_surface
+            && !adapter.is_surface_supported(surface)
+        {
+            continue;
+        }
+        let score = composition_adapter_score(&adapter);
+        match &best {
+            Some((best_score, _)) if score <= *best_score => {}
+            _ => best = Some((score, adapter)),
+        }
+    }
+    if let Some((_, adapter)) = best {
+        return Some(adapter);
+    }
+
+    wgpu::util::initialize_adapter_from_env_or_default(instance, compatible_surface)
+        .await
+        .ok()
+}
+
+fn composition_adapter_score(adapter: &wgpu::Adapter) -> u32 {
+    let info = adapter.get_info();
+    let mut score = 0u32;
+    if info.backend == Backend::Dx12 {
+        score += 1_000;
+    }
+    match info.device_type {
+        DeviceType::DiscreteGpu => score += 100,
+        DeviceType::IntegratedGpu => score += 50,
+        DeviceType::VirtualGpu => score += 25,
+        DeviceType::Cpu => score += 1,
+        DeviceType::Other => {}
+    }
+    score
 }
 
 fn backend_options_for_surface(transparent: bool) -> wgpu::BackendOptions {
@@ -827,6 +992,7 @@ impl std::fmt::Debug for RenderSurface<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::mpsc;
 
     #[cfg(windows)]
     #[test]
@@ -835,6 +1001,21 @@ mod tests {
             backend_options_for_surface(true).dx12.presentation_system,
             Dx12SwapchainKind::DxgiFromVisual
         );
+    }
+
+    #[test]
+    fn composition_adapter_score_prefers_dx12_over_vulkan() {
+        let dx12_discrete = 1_000u32 + 100;
+        let vulkan_discrete = 100u32;
+        assert!(dx12_discrete > vulkan_discrete);
+    }
+
+    #[test]
+    fn backends_for_surface_keeps_multi_backend_default() {
+        if Backends::from_env().is_some() {
+            return;
+        }
+        assert_eq!(backends_for_surface(), Backends::default());
     }
 
     #[test]
@@ -942,5 +1123,329 @@ mod tests {
             native_backdrop_ordinal(NativeWindowBackdropMaterial::MicaAlt),
             4
         );
+    }
+
+    /// Pixel layout used by the GPU blit transparency tests (2×2 RGBA8):
+    ///
+    /// ```text
+    /// (0,0) transparent black  (0, 0, 0, 0)
+    /// (1,0) half-white         (255, 255, 255, 128)
+    /// (0,1) opaque red         (255, 0, 0, 255)
+    /// (1,1) quarter-blue       (0, 0, 255, 64)
+    /// ```
+    const BLIT_TEST_WIDTH: u32 = 2;
+    const BLIT_TEST_HEIGHT: u32 = 2;
+    const BLIT_TEST_SOURCE: [[u8; 4]; 4] = [
+        [0, 0, 0, 0],
+        [255, 255, 255, 128],
+        [255, 0, 0, 255],
+        [0, 0, 255, 64],
+    ];
+
+    fn create_headless_device() -> Option<(Device, wgpu::Queue)> {
+        let instance = Instance::new(&wgpu::InstanceDescriptor {
+            backends: backends_for_surface(),
+            flags: wgpu::InstanceFlags::from_build_config().with_env(),
+            memory_budget_thresholds: MemoryBudgetThresholds::default(),
+            // Match transparent-window backend options so Windows tests exercise the
+            // same DX12 presentation system selection used by Mica surfaces.
+            backend_options: backend_options_for_surface(true),
+        });
+
+        let adapter = pollster::block_on(async {
+            select_adapter(&instance, None, cfg!(windows)).await
+        })?;
+
+        let (device, queue) = pollster::block_on(async {
+            adapter
+                .request_device(&wgpu::DeviceDescriptor {
+                    label: Some("picus_surface transparency test device"),
+                    required_features: wgpu::Features::empty(),
+                    required_limits: wgpu::Limits::downlevel_defaults(),
+                    memory_hints: MemoryHints::default(),
+                    trace: wgpu::Trace::Off,
+                    experimental_features: wgpu::ExperimentalFeatures::disabled(),
+                })
+                .await
+                .ok()
+        })?;
+
+        Some((device, queue))
+    }
+
+    fn create_rgba8_texture(
+        device: &Device,
+        width: u32,
+        height: u32,
+        usage: TextureUsages,
+        label: &str,
+    ) -> Texture {
+        device.create_texture(&wgpu::TextureDescriptor {
+            label: Some(label),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: TextureFormat::Rgba8Unorm,
+            usage,
+            view_formats: &[],
+        })
+    }
+
+    fn write_rgba8_pixels(
+        queue: &wgpu::Queue,
+        texture: &Texture,
+        width: u32,
+        height: u32,
+        pixels: &[[u8; 4]],
+    ) {
+        assert_eq!(pixels.len(), (width * height) as usize);
+        let bytes: Vec<u8> = pixels.iter().flat_map(|px| px.iter().copied()).collect();
+        queue.write_texture(
+            texture.as_image_copy(),
+            &bytes,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(width * 4),
+                rows_per_image: Some(height),
+            },
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+        );
+    }
+
+    fn readback_rgba8_pixels(
+        device: &Device,
+        queue: &wgpu::Queue,
+        texture: &Texture,
+        width: u32,
+        height: u32,
+    ) -> Vec<[u8; 4]> {
+        let unpadded_bytes_per_row = width * 4;
+        let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
+        let padded_bytes_per_row = unpadded_bytes_per_row.div_ceil(align) * align;
+        let buffer_size = u64::from(padded_bytes_per_row) * u64::from(height);
+
+        let readback = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("picus_surface pixel readback"),
+            size: buffer_size,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("picus_surface pixel readback encoder"),
+        });
+        encoder.copy_texture_to_buffer(
+            texture.as_image_copy(),
+            wgpu::TexelCopyBufferInfo {
+                buffer: &readback,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(padded_bytes_per_row),
+                    rows_per_image: Some(height),
+                },
+            },
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+        );
+        queue.submit(Some(encoder.finish()));
+
+        let slice = readback.slice(..);
+        let (sender, receiver) = mpsc::channel();
+        slice.map_async(wgpu::MapMode::Read, move |result| {
+            let _ = sender.send(result);
+        });
+        device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .expect("GPU poll for pixel readback should succeed");
+        receiver
+            .recv()
+            .expect("map_async callback should fire")
+            .expect("mapping readback buffer should succeed");
+
+        let mapped = slice.get_mapped_range();
+        let mut pixels = Vec::with_capacity((width * height) as usize);
+        for y in 0..height {
+            let row_start = (y * padded_bytes_per_row) as usize;
+            for x in 0..width {
+                let i = row_start + (x as usize) * 4;
+                pixels.push([mapped[i], mapped[i + 1], mapped[i + 2], mapped[i + 3]]);
+            }
+        }
+        drop(mapped);
+        readback.unmap();
+        pixels
+    }
+
+    /// Blit a Vello-like source texture into a surface-like destination using the
+    /// same [`create_blitter`] path production code uses, then read destination pixels.
+    fn blit_surface_like_pixels(
+        transparent: bool,
+        alpha_mode: CompositeAlphaMode,
+    ) -> Option<Vec<[u8; 4]>> {
+        let (device, queue) = create_headless_device()?;
+
+        let source = create_rgba8_texture(
+            &device,
+            BLIT_TEST_WIDTH,
+            BLIT_TEST_HEIGHT,
+            TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+            "vello-like source",
+        );
+        write_rgba8_pixels(
+            &queue,
+            &source,
+            BLIT_TEST_WIDTH,
+            BLIT_TEST_HEIGHT,
+            &BLIT_TEST_SOURCE,
+        );
+
+        // Destination mirrors a swapchain texture: render target + readback for the test.
+        let destination = create_rgba8_texture(
+            &device,
+            BLIT_TEST_WIDTH,
+            BLIT_TEST_HEIGHT,
+            TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC | TextureUsages::COPY_DST,
+            "surface-like destination",
+        );
+        // Seed with non-zero garbage so LoadOp::Load cannot hide a failed blit.
+        write_rgba8_pixels(
+            &queue,
+            &destination,
+            BLIT_TEST_WIDTH,
+            BLIT_TEST_HEIGHT,
+            &[[1, 2, 3, 4]; 4],
+        );
+
+        let blitter = create_blitter(&device, TextureFormat::Rgba8Unorm, alpha_mode, transparent);
+        let source_view = source.create_view(&wgpu::TextureViewDescriptor::default());
+        let dest_view = destination.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("surface-like transparency blit"),
+        });
+        blitter.copy(&device, &mut encoder, &source_view, &dest_view);
+        queue.submit(Some(encoder.finish()));
+
+        Some(readback_rgba8_pixels(
+            &device,
+            &queue,
+            &destination,
+            BLIT_TEST_WIDTH,
+            BLIT_TEST_HEIGHT,
+        ))
+    }
+
+    fn pixel_at(pixels: &[[u8; 4]], x: u32, y: u32) -> [u8; 4] {
+        pixels[(y * BLIT_TEST_WIDTH + x) as usize]
+    }
+
+    fn assert_approx_premultiplied(src: [u8; 4], out: [u8; 4], label: &str) {
+        let alpha = src[3];
+        let expected = [
+            ((u16::from(src[0]) * u16::from(alpha) + 127) / 255) as u8,
+            ((u16::from(src[1]) * u16::from(alpha) + 127) / 255) as u8,
+            ((u16::from(src[2]) * u16::from(alpha) + 127) / 255) as u8,
+            alpha,
+        ];
+        for channel in 0..4 {
+            let delta = out[channel].abs_diff(expected[channel]);
+            assert!(
+                delta <= 1,
+                "{label}: channel {channel} expected ~{:?} got {:?}; full expected {:?} out {:?}",
+                expected[channel],
+                out[channel],
+                expected,
+                out
+            );
+        }
+    }
+
+    /// GPU integration: transparent-window blit path preserves fully transparent
+    /// destination pixels (alpha == 0) so DWM Mica/Acrylic can show through.
+    #[test]
+    fn transparent_surface_blit_keeps_specific_pixels_transparent() {
+        let Some(pixels) = blit_surface_like_pixels(true, CompositeAlphaMode::PreMultiplied)
+        else {
+            eprintln!("skipping GPU transparency test: no compatible wgpu adapter");
+            return;
+        };
+
+        let transparent = pixel_at(&pixels, 0, 0);
+        assert_eq!(
+            transparent,
+            [0, 0, 0, 0],
+            "pixel (0,0) must remain fully transparent so native Mica can composite through"
+        );
+
+        let opaque_red = pixel_at(&pixels, 0, 1);
+        assert_eq!(
+            opaque_red,
+            [255, 0, 0, 255],
+            "pixel (0,1) must stay opaque red after the surface blit"
+        );
+
+        // On Windows (and when PreMultiplied is requested) the final blit premultiplies
+        // straight-alpha Vello output; other platforms keep source RGBA as-is for Auto.
+        if needs_premultiplied_blit(CompositeAlphaMode::PreMultiplied, true) {
+            assert_approx_premultiplied(
+                BLIT_TEST_SOURCE[1],
+                pixel_at(&pixels, 1, 0),
+                "half-white pixel (1,0)",
+            );
+            assert_approx_premultiplied(
+                BLIT_TEST_SOURCE[3],
+                pixel_at(&pixels, 1, 1),
+                "quarter-blue pixel (1,1)",
+            );
+        } else {
+            assert_eq!(pixel_at(&pixels, 1, 0), BLIT_TEST_SOURCE[1]);
+            assert_eq!(pixel_at(&pixels, 1, 1), BLIT_TEST_SOURCE[3]);
+        }
+    }
+
+    /// GPU integration: mica-style Auto transparent windows on Windows also leave
+    /// clear pixels at alpha 0 after the production blit path.
+    #[test]
+    fn mica_style_auto_transparent_blit_preserves_zero_alpha_pixels() {
+        let Some(pixels) = blit_surface_like_pixels(true, CompositeAlphaMode::Auto) else {
+            eprintln!("skipping GPU transparency test: no compatible wgpu adapter");
+            return;
+        };
+
+        let transparent = pixel_at(&pixels, 0, 0);
+        assert_eq!(
+            transparent[3], 0,
+            "pixel (0,0) alpha must be 0 for Mica-style transparent surfaces; got {transparent:?}"
+        );
+        assert_eq!(
+            transparent[0], 0,
+            "fully transparent pixel must not leak non-zero RGB (got {transparent:?})"
+        );
+        assert_eq!(transparent[1], 0);
+        assert_eq!(transparent[2], 0);
+
+        // Opaque content must still land correctly.
+        assert_eq!(pixel_at(&pixels, 0, 1), [255, 0, 0, 255]);
+
+        if needs_premultiplied_blit(CompositeAlphaMode::Auto, true) {
+            // Windows transparent Auto path uses the premultiply blitter.
+            assert_approx_premultiplied(
+                BLIT_TEST_SOURCE[1],
+                pixel_at(&pixels, 1, 0),
+                "Windows Auto half-white",
+            );
+        }
     }
 }
