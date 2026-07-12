@@ -30,6 +30,7 @@ members = [
 	"thirdparty/CodeWhale/crates/tools",
 	"thirdparty/CodeWhale/crates/mcp",
 	"thirdparty/CodeWhale/crates/hooks",
+	"thirdparty/CodeWhale/crates/release",
 	"thirdparty/CodeWhale/crates/core",
 ]
 exclude = [
@@ -119,6 +120,8 @@ reqwest = { version = "0.13.1", default-features = false, features = ["blocking"
 raw-window-handle = "0.6.2"
 windows-sys = "0.61.2"
 minhook = "0.9"
+# rustls: needed by codewhale-release (release discovery uses rustls directly).
+rustls = { version = "0.23.36", default-features = false, features = ["ring", "std", "tls12"] }
 
 picus_core = { path = "crates/picus_core" }
 picus = { path = "crates/picus" }
@@ -139,6 +142,7 @@ codewhale-state = { path = "thirdparty/CodeWhale/crates/state" }
 codewhale-tools = { path = "thirdparty/CodeWhale/crates/tools" }
 codewhale-mcp = { path = "thirdparty/CodeWhale/crates/mcp" }
 codewhale-hooks = { path = "thirdparty/CodeWhale/crates/hooks" }
+codewhale-release = { path = "thirdparty/CodeWhale/crates/release" }
 codewhale-core = { path = "thirdparty/CodeWhale/crates/core" }
 
 # Used by example_picuscode for SSE streaming of chat-completion deltas.

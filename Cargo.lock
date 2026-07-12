@@ -1497,7 +1497,7 @@ dependencies = [
 
 [[package]]
 name = "codewhale-agent"
-version = "0.8.67"
+version = "0.8.68"
 dependencies = [
  "codewhale-config",
  "serde",
@@ -1505,7 +1505,7 @@ dependencies = [
 
 [[package]]
 name = "codewhale-config"
-version = "0.8.67"
+version = "0.8.68"
 dependencies = [
  "anyhow",
  "codewhale-execpolicy",
@@ -1522,7 +1522,7 @@ dependencies = [
 
 [[package]]
 name = "codewhale-core"
-version = "0.8.67"
+version = "0.8.68"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1543,7 +1543,7 @@ dependencies = [
 
 [[package]]
 name = "codewhale-execpolicy"
-version = "0.8.67"
+version = "0.8.68"
 dependencies = [
  "anyhow",
  "codewhale-protocol",
@@ -1552,12 +1552,13 @@ dependencies = [
 
 [[package]]
 name = "codewhale-hooks"
-version = "0.8.67"
+version = "0.8.68"
 dependencies = [
  "anyhow",
  "async-trait",
  "chrono",
  "codewhale-protocol",
+ "codewhale-release",
  "reqwest",
  "serde",
  "serde_json",
@@ -1566,7 +1567,7 @@ dependencies = [
 
 [[package]]
 name = "codewhale-mcp"
-version = "0.8.67"
+version = "0.8.68"
 dependencies = [
  "anyhow",
  "serde",
@@ -1575,7 +1576,7 @@ dependencies = [
 
 [[package]]
 name = "codewhale-protocol"
-version = "0.8.67"
+version = "0.8.68"
 dependencies = [
  "chrono",
  "serde",
@@ -1584,8 +1585,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "codewhale-release"
+version = "0.8.68"
+dependencies = [
+ "anyhow",
+ "reqwest",
+ "rustls",
+ "semver",
+ "serde",
+ "serde_json",
+ "webpki-roots",
+]
+
+[[package]]
 name = "codewhale-secrets"
-version = "0.8.67"
+version = "0.8.68"
 dependencies = [
  "dirs",
  "keyring",
@@ -1598,7 +1612,7 @@ dependencies = [
 
 [[package]]
 name = "codewhale-state"
-version = "0.8.67"
+version = "0.8.68"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1611,7 +1625,7 @@ dependencies = [
 
 [[package]]
 name = "codewhale-tools"
-version = "0.8.67"
+version = "0.8.68"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5471,6 +5485,7 @@ checksum = "ef86cd5876211988985292b91c96a8f2d298df24e75989a43a3c73f2d4d8168b"
 dependencies = [
  "aws-lc-rs",
  "once_cell",
+ "ring",
  "rustls-pki-types",
  "rustls-webpki",
  "subtle",
@@ -7109,6 +7124,15 @@ name = "webpki-root-certs"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f31141ce3fc3e300ae89b78c0dd67f9708061d1d2eda54b8209346fd6be9a92c"
+dependencies = [
+ "rustls-pki-types",
+]
+
+[[package]]
+name = "webpki-roots"
+version = "1.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf85cb06032201fa7c6f829d7db5a7e5aa45bcc0655327713065f6f0576731bf"
 dependencies = [
  "rustls-pki-types",
 ]
