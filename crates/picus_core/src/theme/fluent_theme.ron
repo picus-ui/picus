@@ -493,39 +493,24 @@
       ),
     ),
 
+    // WinUI Slider: transparent container (`SliderContainerBackground` =
+    // ControlFillColorTransparent). Track + dual thumb paint inside the
+    // retained Slider widget — no card chrome around the control.
     (
       selector: Type("UiSlider"),
       setter: (
         layout: (
-          padding: Var("space-sm"),
-          corner_radius: Var("radius-md"),
-          border_width: Var("border-thin"),
-          gap: Var("gap-md"),
+          padding: 0.0,
+          corner_radius: 0.0,
+          border_width: 0.0,
+          gap: 0.0,
         ),
         colors: (
-          bg: Var("surface-subtle"),
-          border: Var("border-default"),
+          bg: Var("transparent"),
+          border: Var("transparent"),
           text: Var("text-primary"),
         ),
         transition: Var("duration-fast"),
-      ),
-    ),
-    (
-      selector: And([Type("UiSlider"), PseudoClass(Hovered)]),
-      setter: (
-        colors: (
-          bg: Var("surface-subtle-hover"),
-          border: Var("border-default-hover"),
-        ),
-      ),
-    ),
-    (
-      selector: And([Type("UiSlider"), PseudoClass(Pressed)]),
-      setter: (
-        colors: (
-          bg: Var("surface-subtle-pressed"),
-          border: Var("border-default-pressed"),
-        ),
       ),
     ),
     (
@@ -730,16 +715,19 @@
       ),
     ),
 
+    // WinUI ProgressBar shell: transparent. Track/fill are template parts
+    // (1px ControlStrongStroke track + 3px Accent fill) so the bar never
+    // reads as a thick pill like the Slider track.
     (
       selector: Type("UiProgressBar"),
       setter: (
         layout: (
           padding: 0.0,
-          corner_radius: Var("radius-pill"),
+          corner_radius: 0.0,
           border_width: 0.0,
         ),
         colors: (
-          bg: Var("scrollbar-track"),
+          bg: Var("transparent"),
           border: Var("transparent"),
         ),
       ),
@@ -3008,19 +2996,63 @@
         ),
       ),
     ),
+    // Template parts for composed slider chrome (track / outer+inner thumb).
+    // Retained Slider widget owns paint today; these classes stay available
+    // for expand() template parts and future composed projection.
     (
       selector: Class("template.slider.track"),
       setter: (
+        layout: (
+          padding: 0.0,
+          corner_radius: 2.0,
+          border_width: 0.0,
+        ),
         colors: (
-          text: Var("text-secondary"),
+          bg: Var("stroke-control-strong"),
+          border: Var("transparent"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("template.slider.track.fill"),
+      setter: (
+        layout: (
+          padding: 0.0,
+          corner_radius: 2.0,
+          border_width: 0.0,
+        ),
+        colors: (
+          bg: Var("surface-accent"),
+          border: Var("transparent"),
         ),
       ),
     ),
     (
       selector: Class("template.slider.thumb"),
       setter: (
+        layout: (
+          padding: 0.0,
+          corner_radius: Var("radius-pill"),
+          border_width: Var("border-thin"),
+        ),
         colors: (
-          text: Var("accent-primary"),
+          bg: Var("fill-thumb"),
+          border_brush: Var("border-elevation-circle"),
+        ),
+        box_shadow: Var("shadow-ui-component"),
+      ),
+    ),
+    (
+      selector: Class("template.slider.thumb.inner"),
+      setter: (
+        layout: (
+          padding: 0.0,
+          corner_radius: Var("radius-pill"),
+          border_width: 0.0,
+        ),
+        colors: (
+          bg: Var("surface-accent"),
+          border: Var("transparent"),
         ),
       ),
     ),
@@ -3107,12 +3139,28 @@
         box_shadow: Var("shadow-ui-component"),
       ),
     ),
+    // WinUI ProgressBarTrack: 1px, ControlStrongStroke, corner radius 0.5.
+    (
+      selector: Class("template.progress.track"),
+      setter: (
+        layout: (
+          padding: 0.0,
+          corner_radius: 0.5,
+          border_width: 0.0,
+        ),
+        colors: (
+          bg: Var("stroke-control-strong"),
+          border: Var("transparent"),
+        ),
+      ),
+    ),
+    // WinUI ProgressBar indicator: AccentFill, corner radius 1.5 (not pill).
     (
       selector: Class("template.progress.fill"),
       setter: (
         layout: (
           padding: 0.0,
-          corner_radius: Var("radius-pill"),
+          corner_radius: 1.5,
           border_width: 0.0,
         ),
         colors: (

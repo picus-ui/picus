@@ -121,6 +121,12 @@ pub const TEXT_SIZE_LARGE: f32 = 16.0;
 pub const BASIC_WIDGET_HEIGHT: Length = Length::const_px(18.0);
 /// Padding used inside control components like checkbox/radio indicator.
 pub const WIDGET_CONTROL_COMPONENT_PADDING: Length = Length::const_px(4.0);
+/// WinUI `SliderHorizontalHeight` — minimum vertical hit target for sliders.
+pub const SLIDER_HORIZONTAL_HEIGHT: f64 = 32.0;
+/// WinUI outer-thumb elevation rim (`SliderThumbBorderBrush` / ControlElevation).
+pub const SLIDER_OUTER_THUMB_BORDER: Color = Color::from_rgba8(0x00, 0x00, 0x00, 0x0F);
+/// WinUI `ControlStrongFillColorDefault` (dark) used for slider remaining track.
+pub const CONTROL_STRONG_FILL: Color = Color::from_rgba8(0xFF, 0xFF, 0xFF, 0x8B);
 
 // ── Scrollbar defaults ──────────────────────────────────────────────
 pub const SCROLLBAR_COLOR: Color = SCROLLBAR_THUMB;
@@ -459,20 +465,37 @@ pub fn default_property_set() -> DefaultProperties {
         properties.insert_stack::<RadioButton>(stack);
     }
 
-    // ── Slider (Fluent v9) ──────────────────────────────────────────
+    // ── Slider (WinUI Fluent) ───────────────────────────────────────
+    // Geometry: SliderTrackThemeHeight=4, SliderHorizontalThumb*=18,
+    // SliderInnerThumb*=12. Colors: remaining track ControlStrongFill,
+    // filled track + inner thumb AccentFill, outer thumb ControlSolidFill.
     properties.insert::<Slider, _>(TrackThickness(4.px()));
     properties.insert::<Slider, _>(TrackColor {
         active: BRAND_COLOR,
-        inactive: SURFACE_SUBTLE,
+        inactive: CONTROL_STRONG_FILL,
     });
-    properties.insert::<Slider, _>(ThumbColor(TEXT_COLOR));
-    properties.insert::<Slider, _>(ThumbRadius(7.px()));
+    properties.insert::<Slider, _>(ThumbColor(Color::WHITE));
+    properties.insert::<Slider, _>(ThumbRadius(9.px()));
+    properties.insert::<Slider, _>(Background::Color(Color::TRANSPARENT));
+    properties.insert::<Slider, _>(BorderWidth { width: 0.px() });
+    properties.insert::<Slider, _>(BorderColor {
+        color: Color::TRANSPARENT,
+    });
     {
         let mut stack = PropertyStack::new();
+        // Hover/press only retint the accent (track value + inner thumb).
         stack.push(
             Selector::new().with_hovered(true),
-            BorderColor {
-                color: BORDER_DEFAULT,
+            TrackColor {
+                active: BRAND_COLOR_HOVER,
+                inactive: CONTROL_STRONG_FILL,
+            },
+        );
+        stack.push(
+            Selector::new().with_active(true),
+            TrackColor {
+                active: BRAND_COLOR_PRESSED,
+                inactive: CONTROL_STRONG_FILL,
             },
         );
         stack.push(

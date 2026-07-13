@@ -310,22 +310,22 @@ impl Widget for Slider {
     ) -> Length {
         match axis {
             Axis::Horizontal => match len_req {
-                // TODO: Move this 100. to theme?
+                // WinUI Slider default min width is content-driven; 100px is a
+                // reasonable floor when unconstrained.
                 LenReq::MinContent | LenReq::MaxContent => Length::const_px(100.),
                 LenReq::FitContent(space) => space,
             },
             Axis::Vertical => {
+                // WinUI `SliderHorizontalHeight` = 32. Keep at least that hit
+                // target so the dual-thumb remains comfortably tappable.
                 let cache = ctx.property_cache();
                 let thumb_radius = props.get::<ThumbRadius>(cache);
                 let track_thickness = props.get::<TrackThickness>(cache);
 
                 let thumb_length = thumb_radius.0.saturating_add(thumb_radius.0);
                 let track_length = track_thickness.0;
-                let padding_length = theme::WIDGET_CONTROL_COMPONENT_PADDING;
-
-                thumb_length
-                    .max(track_length)
-                    .saturating_add(padding_length)
+                let content = thumb_length.max(track_length);
+                content.max(Length::const_px(theme::SLIDER_HORIZONTAL_HEIGHT))
             }
         }
     }
@@ -338,6 +338,9 @@ impl Widget for Slider {
         props: &PropertiesRef<'_>,
         painter: &mut Painter<'_>,
     ) {
+        // WinUI Slider container is transparent (`SliderContainerBackground` =
+        // ControlFillColorTransparent). Only paint an optional focus ring —
+        // never a filled chrome box, and never on hover alone.
         let bbox = ctx.border_box();
         let cache = ctx.property_cache();
         let p = PrePaintProps::fetch(props, cache);
@@ -348,18 +351,11 @@ impl Widget for Slider {
         let border_brush = resolve_border_brush(props, ctx.property_cache());
         paint_border_brush(painter, bbox, &border_brush, p.border_width, p.corner_radius);
 
-        if ctx.is_focus_target() || ctx.is_hovered() {
-            // TODO: Replace this custom implementation with the general paint_border()
-
+        if ctx.is_focus_target() {
             let focus_rect = bbox.inset(2.);
-
             let focus_color = p.border_color.color;
-            let focus_width = 2.;
-            let focus_radius = 4.;
-
-            let focus_path = focus_rect.to_rounded_rect(focus_radius);
-            let focus_stroke = Stroke::new(focus_width).with_miter_limit(10.);
-
+            let focus_path = focus_rect.to_rounded_rect(4.);
+            let focus_stroke = Stroke::new(2.).with_miter_limit(10.);
             painter
                 .stroke(focus_path, &focus_stroke, focus_color)
                 .draw();
@@ -372,31 +368,40 @@ impl Widget for Slider {
         props: &PropertiesRef<'_>,
         painter: &mut Painter<'_>,
     ) {
-        // Get parameters and resolve colors
+        // WinUI Fluent Slider geometry (from Slider_themeresources.xaml):
+        // - Track: 4px tall, corner radius 2, remaining = ControlStrongFill,
+        //   filled = AccentFill
+        // - Outer thumb: 18×18 solid (ControlSolidFill / fill-thumb) with
+        //   elevation border
+        // - Inner thumb: accent circle that scales with interaction
+        //   (12 normal / 14 hover / 10 pressed)
 
         let cache = ctx.property_cache();
         let track_color = props.get::<TrackColor>(cache);
-        let thumb_color = props.get::<ThumbColor>(cache).0;
+        let outer_thumb_color = props.get::<ThumbColor>(cache).0;
         let track_thickness = props.get::<TrackThickness>(cache).0.get();
-        let thumb_radius = props.get::<ThumbRadius>(cache).0.get();
-        let thumb_border_width = if ctx.is_active() {
-            2.5
+        let outer_radius = props.get::<ThumbRadius>(cache).0.get();
+
+        // Inner thumb radius matches WinUI scale relative to a 14px base:
+        // Normal 12 → 0.86, PointerOver 14 → 1.0, Pressed 10 → 0.71.
+        let inner_radius: f64 = if ctx.is_disabled() {
+            7.0 // WinUI Disabled keeps the larger (14px) inner thumb
+        } else if ctx.is_active() {
+            5.0
         } else if ctx.is_hovered() {
-            1.5
+            7.0
         } else {
-            2.
+            6.0
         };
 
-        // Calculate geometry based on state
         let size = ctx.content_box().size();
         let track_y = (size.height - track_thickness) / 2.0;
         let border_box = ctx.border_box();
+        let track_corner = (track_thickness * 0.5).min(2.0);
 
         // TODO: replace with proper disabled colors
-        // Push semitransparent layer if disabled
         if ctx.is_disabled() {
             const DISABLED_ALPHA: f32 = 0.4;
-            // Paint through a semitransparent isolated group when disabled.
             painter.push_fill_clip(border_box);
             painter.push_group(
                 GroupRef::new()
@@ -404,13 +409,22 @@ impl Widget for Slider {
             );
         }
 
-        let progress = (self.value - self.min) / (self.max - self.min).max(0.);
-        let track_rect = Rect::new(0., track_y, size.width, track_y + track_thickness)
-            .to_rounded_rect(track_thickness / 2.);
-        let track_active_frac =
-            progress * (1. - thumb_radius * 2. / size.width) + thumb_radius / size.width;
+        let span = (self.max - self.min).max(f64::EPSILON);
+        let progress = ((self.value - self.min) / span).clamp(0.0, 1.0);
+        let travel = (size.width - outer_radius * 2.).max(0.);
+        let thumb_x = outer_radius + progress * travel;
+        let thumb_y = size.height / 2.;
 
-        // Paint with a gradient so we get a straight line slice of the rounded rect.
+        // Active fill ends at the thumb center so the accent track meets the
+        // outer thumb without a gap (WinUI DecreaseRect + full TrackRect).
+        let track_active_frac = if size.width > f64::EPSILON {
+            (thumb_x / size.width).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+
+        let track_rect = Rect::new(0., track_y, size.width, track_y + track_thickness)
+            .to_rounded_rect(track_corner);
         let gradient = peniko::Gradient::new_linear((0., 0.), (size.width, 0.)).with_stops([
             (0., track_color.active),
             (track_active_frac as f32, track_color.active),
@@ -419,21 +433,21 @@ impl Widget for Slider {
         ]);
         painter.fill(track_rect, &gradient).draw();
 
-        // Paint thumb
-        let thumb_x = thumb_radius + progress * (size.width - thumb_radius * 2.).max(0.);
-        let thumb_y = size.height / 2.;
-        let thumb_circle = Circle::new((thumb_x, thumb_y), thumb_radius - thumb_border_width / 2.);
-
-        painter.fill(thumb_circle, thumb_color).draw();
+        // Outer thumb (solid fill + elevation-style rim).
+        let outer_circle = Circle::new((thumb_x, thumb_y), outer_radius);
+        painter.fill(outer_circle, outer_thumb_color).draw();
         painter
             .stroke(
-                thumb_circle,
-                &Stroke::new(thumb_border_width),
-                track_color.active,
+                outer_circle,
+                &Stroke::new(1.),
+                theme::SLIDER_OUTER_THUMB_BORDER,
             )
             .draw();
 
-        // Pop the semitransparent layer
+        // Inner accent thumb.
+        let inner_circle = Circle::new((thumb_x, thumb_y), inner_radius.min(outer_radius - 1.));
+        painter.fill(inner_circle, track_color.active).draw();
+
         if ctx.is_disabled() {
             painter.pop_group();
             painter.pop_clip();

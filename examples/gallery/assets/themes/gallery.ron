@@ -552,18 +552,16 @@
         ),
       ),
     ),
+    // Demo spacing only — do not re-skin ProgressBar as a card (that made it
+    // look like the old chrome-wrapped Slider). WinUI ProgressBar is a thin
+    // 3px accent track on ControlStrongStroke, not a surface-subtle panel.
     (
       selector: Class("gallery.progress"),
       setter: (
         layout: (
-          padding: Var("space-sm"),
-          corner_radius: Var("radius-md"),
-          border_width: Var("border-thin"),
-        ),
-        colors: (
-          bg: Var("surface-subtle"),
-          border: Var("border-default"),
-          text: Var("text-primary"),
+          padding: 0.0,
+          corner_radius: 1.5,
+          border_width: 0.0,
         ),
       ),
     ),

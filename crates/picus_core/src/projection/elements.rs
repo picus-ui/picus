@@ -38,9 +38,19 @@ const SWITCH_TRACK_WIDTH: f64 = 40.0;
 const SWITCH_TRACK_HEIGHT: f64 = 20.0;
 const SWITCH_THUMB_SIZE: f64 = 18.0;
 const SWITCH_THUMB_MARGIN: f64 = (SWITCH_TRACK_HEIGHT - SWITCH_THUMB_SIZE) * 0.5;
+// WinUI ProgressBar geometry (ProgressBar_themeresources.xaml):
+// MinHeight=3, TrackHeight=1, CornerRadius=1.5. Distinct from Slider
+// (4px track + 18px dual thumb on a 32px hit target).
+//
+// IMPORTANT: always set size with `.dims((w, h))`. Chaining
+// `.width(...).height(...)` replaces Dimensions and resets the other axis
+// to Auto, which collapses empty-label progress boxes to ~0 width.
 const PROGRESS_BAR_WIDTH: f64 = 240.0;
-const PROGRESS_BAR_HEIGHT: f64 = 8.0;
+const PROGRESS_BAR_HEIGHT: f64 = 3.0;
+const PROGRESS_BAR_TRACK_HEIGHT: f64 = 1.0;
 const PROGRESS_INDETERMINATE_WIDTH: f64 = 80.0;
+// WinUI SliderHorizontalHeight — keep composed/wrapped slider hit target.
+const SLIDER_HORIZONTAL_HEIGHT: f64 = 32.0;
 
 fn map_text_alignment_for_input(
     text_align: crate::styling::TextAlign,
@@ -277,17 +287,27 @@ pub(crate) fn project_checkbox(checkbox: &UiCheckbox, ctx: ProjectionCtx<'_>) ->
 
 pub(crate) fn project_slider(slider: &UiSlider, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
+    // WinUI Slider is a transparent hit-target around a 4px track + dual thumb.
+    // Stretch width so flex columns assign a real track length; fixed height is
+    // the WinUI 32px horizontal hit target. Theme keeps bg/border transparent.
     Arc::new(apply_widget_style(
-        slider_view(
-            ctx.entity,
-            slider.min,
-            slider.max,
-            slider.value,
-            move |value| WidgetUiAction::SetSliderValue {
-                slider: ctx.entity,
-                value,
-            },
-        ),
+        sized_box(
+            slider_view(
+                ctx.entity,
+                slider.min,
+                slider.max,
+                slider.value,
+                move |value| WidgetUiAction::SetSliderValue {
+                    slider: ctx.entity,
+                    value,
+                },
+            )
+            .step(slider.step),
+        )
+        .dims((
+            Dim::Stretch,
+            Dim::Fixed(Length::px(SLIDER_HORIZONTAL_HEIGHT)),
+        )),
         &style,
     ))
 }
@@ -408,7 +428,13 @@ pub(crate) fn project_switch(switch_component: &UiSwitch, ctx: ProjectionCtx<'_>
 }
 
 pub(crate) fn project_progress_bar(progress: &UiProgressBar, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
+    // WinUI: 1px ControlStrongStroke track + 3px Accent fill indicator.
+    // Sized with `.dims((w, h))` so fixed width is not clobbered by a second
+    // Dimensions prop (`.width().height()` leaves width as Auto → 0 for empty
+    // label boxes, which left the Progress card looking like a lone white
+    // slider thumb).
+    let track_style =
+        resolve_style_for_entity_classes(ctx.world, ctx.entity, ["template.progress.track"]);
     let (fill_width, fill_offset, fill_style) = match progress.progress {
         Some(value) => (
             PROGRESS_BAR_WIDTH * value.clamp(0.0, 1.0),
@@ -426,10 +452,25 @@ pub(crate) fn project_progress_bar(progress: &UiProgressBar, ctx: ProjectionCtx<
         ),
     };
 
+    let track_y = (PROGRESS_BAR_HEIGHT - PROGRESS_BAR_TRACK_HEIGHT) * 0.5;
+    let track: UiView = Arc::new(apply_widget_style(
+        sized_box(label("")).dims((
+            Length::px(PROGRESS_BAR_WIDTH),
+            Length::px(PROGRESS_BAR_TRACK_HEIGHT),
+        )),
+        &track_style,
+    ));
+    let track_layer: UiView = if track_y > 0.0 {
+        Arc::new(transformed(track).translate((0.0, track_y)))
+    } else {
+        track
+    };
+
     let fill: UiView = Arc::new(apply_widget_style(
-        sized_box(label(""))
-            .width(Dim::Fixed(Length::px(fill_width.max(0.0))))
-            .height(Dim::Fixed(Length::px(PROGRESS_BAR_HEIGHT))),
+        sized_box(label("")).dims((
+            Length::px(fill_width.max(0.0)),
+            Length::px(PROGRESS_BAR_HEIGHT),
+        )),
         &fill_style,
     ));
     let fill_layer = if fill_offset > 0.0 {
@@ -439,10 +480,11 @@ pub(crate) fn project_progress_bar(progress: &UiProgressBar, ctx: ProjectionCtx<
     };
 
     Arc::new(apply_widget_style(
-        sized_box(zstack(vec![fill_layer]).alignment(UnitPoint::LEFT))
-            .width(Dim::Fixed(Length::px(PROGRESS_BAR_WIDTH)))
-            .height(Dim::Fixed(Length::px(PROGRESS_BAR_HEIGHT))),
-        &style,
+        sized_box(zstack(vec![track_layer, fill_layer]).alignment(UnitPoint::TOP_LEFT)).dims((
+            Length::px(PROGRESS_BAR_WIDTH),
+            Length::px(PROGRESS_BAR_HEIGHT),
+        )),
+        &resolve_style(ctx.world, ctx.entity),
     ))
 }
 
