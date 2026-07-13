@@ -1353,25 +1353,39 @@ pub(crate) fn project_spinner(sp: &UiSpinner, ctx: ProjectionCtx<'_>) -> UiView 
 }
 
 // ---------------------------------------------------------------------------
-// Color Picker
+// Color Picker (WinUI-inspired vertical layout)
 // ---------------------------------------------------------------------------
 
-/// Dimensions for the color picker spectrum and hue slider.
-const SPECTRUM_SIZE: f64 = 200.0;
-const HUE_SLIDER_HEIGHT: f64 = 12.0;
-
-const COLOR_SWATCHES: [(u8, u8, u8); 25] = [
-    (255, 0, 0),     (255, 128, 0),   (255, 255, 0),   (128, 255, 0),   (0, 255, 0),
-    (0, 255, 128),   (0, 255, 255),   (0, 128, 255),   (0, 0, 255),     (128, 0, 255),
-    (255, 0, 255),   (255, 0, 128),   (255, 128, 128), (255, 192, 128), (255, 224, 128),
-    (224, 255, 128), (192, 255, 128), (128, 255, 128), (128, 255, 192), (128, 224, 255),
-    (128, 192, 255), (128, 128, 255), (192, 128, 255), (224, 224, 224), (255, 255, 255),
-];
+/// Spectrum pad size (WinUI vertical mode uses a large box; keep flyout-friendly).
+const SPECTRUM_SIZE: f64 = 220.0;
+/// Natural slider height room for thumb + track (do not squash to 12px).
+const SLIDER_ROW_HEIGHT: f64 = 28.0;
+const PREVIEW_SIZE: f64 = 36.0;
+const CHANNEL_INPUT_WIDTH: f64 = 72.0;
+const PANEL_CONTENT_WIDTH: f64 = SPECTRUM_SIZE;
 
 pub(crate) fn project_color_picker(picker: &UiColorPicker, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
-    let hex = format!("#{:02X}{:02X}{:02X}", picker.r, picker.g, picker.b);
-    let mut items = vec![apply_label_style(label(hex), &style).into_any_flex()];
+    let mut preview_style =
+        resolve_style_for_classes(ctx.world, ["overlay.color_picker.preview"]);
+    // Composite over a neutral checker-like mid gray when translucent.
+    let display_a = if picker.alpha_enabled {
+        picker.a
+    } else {
+        255
+    };
+    preview_style.colors.bg = Some(Color::from_rgba8(picker.r, picker.g, picker.b, display_a));
+    let preview = apply_widget_style(
+        sized_box(label(""))
+            .width(Dim::Fixed(Length::px(18.0)))
+            .height(Dim::Fixed(Length::px(18.0))),
+        &preview_style,
+    );
+    let hex = picker.hex_string();
+    let mut items = vec![
+        preview.into_any_flex(),
+        apply_label_style(label(hex), &style).into_any_flex(),
+    ];
     if let Some(icon_color) = style.colors.text {
         let icon = if picker.is_open {
             vector_icon(VectorIcon::ChevronUp, 10.0, icon_color)
@@ -1387,6 +1401,49 @@ pub(crate) fn project_color_picker(picker: &UiColorPicker, ctx: ProjectionCtx<'_
     ))
 }
 
+fn color_picker_channel_row(
+    entity: Entity,
+    world: &bevy_ecs::world::World,
+    channel: crate::ColorPickerChannel,
+    value_text: String,
+    label_text: &str,
+    placeholder: &str,
+) -> picus_view::view::AnyFlexChild<(), ()> {
+    let label_style =
+        resolve_style_for_classes(world, ["overlay.color_picker.channel_label"]);
+    let input_style = resolve_style_for_classes(world, ["overlay.color_picker.value"]);
+    let channel_for_change = channel;
+    let channel_for_enter = channel;
+    let input = apply_direct_text_input_style(
+        text_input_view(entity, value_text, move |text| {
+            OverlayUiAction::SetColorChannel {
+                channel: channel_for_change,
+                text,
+            }
+        })
+        .on_enter(move |text| {
+            crate::events::emit_ui_action(
+                entity,
+                OverlayUiAction::SetColorChannel {
+                    channel: channel_for_enter,
+                    text,
+                },
+            );
+        })
+        .placeholder(placeholder),
+        &input_style,
+    );
+    let input_box = sized_box(input)
+        .width(Dim::Fixed(Length::px(CHANNEL_INPUT_WIDTH)))
+        .height(Dim::Fixed(Length::px(28.0)));
+    flex_row(vec![
+        input_box.into_any_flex(),
+        apply_label_style(label(label_text.to_string()), &label_style).into_any_flex(),
+    ])
+    .gap(Length::px(8.0))
+    .into_any_flex()
+}
+
 pub(crate) fn project_color_picker_panel(
     panel: &UiColorPickerPanel,
     ctx: ProjectionCtx<'_>,
@@ -1397,18 +1454,23 @@ pub(crate) fn project_color_picker_panel(
     };
 
     let panel_style = default_panel_style(ctx.world, "overlay.color_picker.panel");
-    let swatch_style = resolve_style_for_classes(ctx.world, ["overlay.color_picker.swatch"]);
 
-    let (cur_r, cur_g, cur_b) = ctx
+    let picker = ctx
         .world
         .get::<UiColorPicker>(panel.anchor)
-        .map(|p| (p.r, p.g, p.b))
-        .unwrap_or((255, 255, 255));
+        .copied()
+        .unwrap_or_default();
+    let cur_r = picker.r;
+    let cur_g = picker.g;
+    let cur_b = picker.b;
+    let cur_a = picker.a;
+    let alpha_enabled = picker.alpha_enabled;
 
     let (cur_h, cur_s, cur_v) = crate::rgb_to_hsv(cur_r, cur_g, cur_b);
     let cur_h_deg = cur_h as f64;
     let cur_s_f64 = cur_s as f64;
     let cur_v_f64 = cur_v as f64;
+    let cur_alpha_f = cur_a as f64 / 255.0;
 
     // --- SV spectrum (2D draggable pad) ---
     let sv_spectrum = color_spectrum_view(
@@ -1424,35 +1486,66 @@ pub(crate) fn project_color_picker_panel(
             .height(Dim::Fixed(Length::px(SPECTRUM_SIZE))),
     );
 
-    // --- Horizontal hue slider (WinUI style, below SV spectrum) ---
+    // --- Hue slider (third dimension; WinUI ColorPickerSlider below spectrum) ---
     let hue_slider = slider_view(
         ctx.entity,
         0.0,
         360.0,
         cur_h_deg,
         |h| OverlayUiAction::SelectColorHue { h },
-    );
+    )
+    .step(1.0);
     let hue_area = Arc::new(
         sized_box(hue_slider)
             .width(Dim::Fixed(Length::px(SPECTRUM_SIZE)))
-            .height(Dim::Fixed(Length::px(HUE_SLIDER_HEIGHT))),
+            .height(Dim::Fixed(Length::px(SLIDER_ROW_HEIGHT))),
     );
 
-    // --- Color preview + hex input ---
+    // --- Alpha / opacity slider (WinUI AlphaSlider) ---
+    let alpha_area = if alpha_enabled {
+        let alpha_slider = slider_view(
+            ctx.entity,
+            0.0,
+            1.0,
+            cur_alpha_f,
+            |a| OverlayUiAction::SelectColorAlpha { a },
+        )
+        .step(0.01);
+        Some(Arc::new(
+            sized_box(alpha_slider)
+                .width(Dim::Fixed(Length::px(SPECTRUM_SIZE)))
+                .height(Dim::Fixed(Length::px(SLIDER_ROW_HEIGHT))),
+        ))
+    } else {
+        None
+    };
+
+    // --- Color preview + hex input (always visible, WinUI HexTextBox) ---
     let mut preview_style =
         resolve_style_for_classes(ctx.world, ["overlay.color_picker.preview"]);
-    preview_style.colors.bg = Some(Color::from_rgb8(cur_r, cur_g, cur_b));
+    preview_style.colors.bg = Some(Color::from_rgba8(
+        cur_r,
+        cur_g,
+        cur_b,
+        if alpha_enabled { cur_a } else { 255 },
+    ));
     let preview_box = sized_box(label(""))
-        .width(Dim::Fixed(Length::px(28.0)))
-        .height(Dim::Fixed(Length::px(28.0)));
+        .width(Dim::Fixed(Length::px(PREVIEW_SIZE)))
+        .height(Dim::Fixed(Length::px(PREVIEW_SIZE)));
     let preview_styled = apply_widget_style(preview_box, &preview_style);
-    let current_hex = format!("#{:02X}{:02X}{:02X}", cur_r, cur_g, cur_b);
+
+    let current_hex = crate::format_color_hex(cur_r, cur_g, cur_b, cur_a, alpha_enabled);
+    let hex_placeholder = if alpha_enabled {
+        "#AARRGGBB"
+    } else {
+        "#RRGGBB"
+    };
     let hex_input_style =
         resolve_style_for_classes(ctx.world, ["overlay.color_picker.value"]);
     let hex_input = apply_direct_text_input_style(
         text_input_view(
             ctx.entity,
-            current_hex.clone(),
+            current_hex,
             |text| OverlayUiAction::SetHexColor { hex: text },
         )
         .on_enter(move |text| {
@@ -1461,60 +1554,67 @@ pub(crate) fn project_color_picker_panel(
                 OverlayUiAction::SetHexColor { hex: text },
             );
         })
-        .placeholder("#RRGGBB"),
+        .placeholder(hex_placeholder),
         &hex_input_style,
     );
+    let hex_box = sized_box(hex_input)
+        .width(Dim::Fixed(Length::px(SPECTRUM_SIZE - PREVIEW_SIZE - 8.0)))
+        .height(Dim::Fixed(Length::px(PREVIEW_SIZE)));
     let preview_row = flex_row(vec![
         preview_styled.into_any_flex(),
-        hex_input.into_any_flex(),
+        hex_box.into_any_flex(),
     ])
     .gap(Length::px(8.0));
 
-    // --- Preset swatch grid (rows × 5 cols) ---
-    let swatch_rows_total = COLOR_SWATCHES.len().div_ceil(5);
-    let mut rows = Vec::new();
-    for row in 0..swatch_rows_total {
-        let mut row_items = Vec::new();
-        for col in 0..5 {
-            let idx = row * 5 + col;
-            if let Some(&(r, g, b)) = COLOR_SWATCHES.get(idx) {
-                let is_selected = r == cur_r && g == cur_g && b == cur_b;
-                let mut sw_style = swatch_style.clone();
-                sw_style.colors.bg = Some(Color::from_rgb8(r, g, b));
-                if is_selected {
-                    let selected_swatch_style = resolve_style_for_classes(
-                        ctx.world,
-                        [
-                            "overlay.color_picker.swatch",
-                            "overlay.color_picker.swatch.selected",
-                        ],
-                    );
-                    sw_style.layout.border_width = selected_swatch_style.layout.border_width;
-                    sw_style.colors.border = selected_swatch_style.colors.border;
-                }
-                let swatch_view = sized_box(label(""))
-                    .width(Dim::Fixed(Length::px(28.0)))
-                    .height(Dim::Fixed(Length::px(28.0)));
-                let swatch_styled = apply_widget_style(swatch_view, &sw_style);
-                let btn = button_with_child_view(
-                    ctx.entity,
-                    OverlayUiAction::SelectColorSwatch { r, g, b },
-                    swatch_styled,
-                );
-                row_items.push(apply_direct_widget_style(btn, &sw_style).into_any_flex());
-            }
-        }
-        rows.push(flex_row(row_items).gap(Length::px(4.0)).into_any_flex());
+    // --- RGB (+ Opacity) channel text inputs (WinUI ColorChannelTextInput) ---
+    let mut channel_rows = vec![
+        color_picker_channel_row(
+            ctx.entity,
+            ctx.world,
+            crate::ColorPickerChannel::Red,
+            cur_r.to_string(),
+            "Red",
+            "0–255",
+        ),
+        color_picker_channel_row(
+            ctx.entity,
+            ctx.world,
+            crate::ColorPickerChannel::Green,
+            cur_g.to_string(),
+            "Green",
+            "0–255",
+        ),
+        color_picker_channel_row(
+            ctx.entity,
+            ctx.world,
+            crate::ColorPickerChannel::Blue,
+            cur_b.to_string(),
+            "Blue",
+            "0–255",
+        ),
+    ];
+    if alpha_enabled {
+        channel_rows.push(color_picker_channel_row(
+            ctx.entity,
+            ctx.world,
+            crate::ColorPickerChannel::Alpha,
+            format!("{}%", picker.opacity_percent()),
+            "Opacity",
+            "100%",
+        ));
     }
-    let swatch_grid = flex_col(rows).gap(Length::px(4.0));
+    let channels = flex_col(channel_rows).gap(Length::px(8.0));
 
-    // --- Assemble panel ---
-    let panel_items = vec![
+    // --- Assemble panel (vertical WinUI orientation) ---
+    let mut panel_items = vec![
         sv_area.into_any_flex(),
         hue_area.into_any_flex(),
-        preview_row.into_any_flex(),
-        swatch_grid.into_any_flex(),
     ];
+    if let Some(alpha) = alpha_area {
+        panel_items.push(alpha.into_any_flex());
+    }
+    panel_items.push(preview_row.into_any_flex());
+    panel_items.push(channels.into_any_flex());
     let content = flex_col(panel_items).gap(Length::px(10.0));
 
     let computed_pos = ctx
@@ -1525,12 +1625,24 @@ pub(crate) fn project_color_picker_panel(
     let panel_width = if computed_pos.width > 1.0 {
         computed_pos.width
     } else {
-        SPECTRUM_SIZE + 24.0
+        PANEL_CONTENT_WIDTH + 24.0
     };
+    // Spectrum + hue + optional alpha + preview + 3–4 channel rows + gaps/padding.
+    let channel_count = if alpha_enabled { 4.0 } else { 3.0 };
+    let estimated_height = SPECTRUM_SIZE
+        + SLIDER_ROW_HEIGHT
+        + if alpha_enabled {
+            SLIDER_ROW_HEIGHT + 10.0
+        } else {
+            0.0
+        }
+        + PREVIEW_SIZE
+        + channel_count * 36.0
+        + 80.0;
     let panel_height = if computed_pos.height > 1.0 {
         computed_pos.height
     } else {
-        SPECTRUM_SIZE + HUE_SLIDER_HEIGHT + 28.0 + (swatch_rows_total as f64 * 32.0) + 60.0
+        estimated_height
     };
 
     let panel_view = apply_widget_style(

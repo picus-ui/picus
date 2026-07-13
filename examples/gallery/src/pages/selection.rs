@@ -38,6 +38,10 @@ pub fn spawn_selection_page(commands: &mut Commands, parent: Entity) -> Entity {
         ChildOf(pickers)
     });
     commands.spawn_scene(bsn! {
+        template_value(UiColorPicker::new_rgba(0xE5, 0x48, 0x4D, 0xCC))
+        ChildOf(pickers)
+    });
+    commands.spawn_scene(bsn! {
         template_value(UiDatePicker::new(2026, 5, 24))
         ChildOf(pickers)
     });

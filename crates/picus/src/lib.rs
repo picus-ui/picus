@@ -27,7 +27,7 @@ pub mod components {
         ScrollAxis, SplitDirection, TitleBarAction, TitleBarIcon, TitleBarState, ToastKind,
         UiAnyView, UiAvatar, UiBadge, UiBreadcrumb,
         UiBreadcrumbItem, UiButton, UiCanvas, UiCanvasCommand, UiCanvasPathCommand,
-        UiCanvasPosition, UiCard, UiCheckbox, UiCheckboxChanged, UiColorPicker,
+        UiCanvasPosition, UiCard, UiCheckbox, UiCheckboxChanged, ColorPickerChannel, UiColorPicker,
         UiColorPickerChanged, UiColorPickerPanel, UiComboBox, UiComboBoxChanged, UiComboOption,
         UiComponentTemplate, UiContextMenu, UiContextMenuItem, UiContextMenuItemSelected,
         UiContextMenuTrigger, UiDataCell, UiDataColumn, UiDataRow, UiDataTable,

@@ -78,7 +78,7 @@ pub fn spawn_overlay_page(commands: &mut Commands, parent: Entity) -> Entity {
         ChildOf(anchored)
     });
     commands.spawn_scene(bsn! {
-        template_value(UiColorPicker::new(0xE5, 0x48, 0x4D))
+        template_value(UiColorPicker::new_rgba(0xE5, 0x48, 0x4D, 0xE6))
         ChildOf(anchored)
     });
     commands.spawn_scene(bsn! {

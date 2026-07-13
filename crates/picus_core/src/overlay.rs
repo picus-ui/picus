@@ -56,13 +56,18 @@ pub enum OverlayUiAction {
     ToggleMenuBarItem,
     DismissMenuBarItem,
     SelectMenuBarItem { index: usize },
-    // Color picker overlay
+    // Color picker overlay (WinUI-style: spectrum / hue / alpha / channels / hex)
     ToggleColorPicker,
-    SelectColorSwatch { r: u8, g: u8, b: u8 },
     SelectColorSv { s: f64, v: f64 },
     SelectColorHue { h: f64 },
-    DismissColorPicker,
+    /// Alpha slider value in 0.0..=1.0.
+    SelectColorAlpha { a: f64 },
     SetHexColor { hex: String },
+    SetColorChannel {
+        channel: crate::ColorPickerChannel,
+        text: String,
+    },
+    DismissColorPicker,
     // Date picker overlay
     ToggleDatePicker,
     NavigateDateMonth { forward: bool },
@@ -1113,36 +1118,6 @@ pub fn handle_overlay_actions(world: &mut World) {
                 }
             }
 
-            OverlayUiAction::SelectColorSwatch { r, g, b } => {
-                let Some(anchor) = world
-                    .get::<UiColorPickerPanel>(event.entity)
-                    .map(|p| p.anchor)
-                else {
-                    continue;
-                };
-
-                let mut changed_event = None;
-                if let Some(mut picker) = world.get_mut::<UiColorPicker>(anchor) {
-                    picker.r = r;
-                    picker.g = g;
-                    picker.b = b;
-                    changed_event = Some(UiColorPickerChanged {
-                        picker: anchor,
-                        r,
-                        g,
-                        b,
-                    });
-                }
-
-                if world.get_entity(event.entity).is_ok() {
-                    close_color_picker_panel(world, event.entity);
-                }
-
-                if let Some(ev) = changed_event {
-                    world.resource::<UiEventQueue>().push_typed(anchor, ev);
-                }
-            }
-
             OverlayUiAction::SelectColorSv { s, v } => {
                 let Some(anchor) = world
                     .get::<UiColorPickerPanel>(event.entity)
@@ -1154,16 +1129,8 @@ pub fn handle_overlay_actions(world: &mut World) {
                 let mut changed_event = None;
                 if let Some(mut picker) = world.get_mut::<UiColorPicker>(anchor) {
                     let (h, _old_s, _old_v) =
-                        crate::rgb_to_hsv(
-                            picker.r,
-                            picker.g,
-                            picker.b,
-                        );
-                    let (r, g, b) = crate::hsv_to_rgb(
-                        h,
-                        s as f32,
-                        v as f32,
-                    );
+                        crate::rgb_to_hsv(picker.r, picker.g, picker.b);
+                    let (r, g, b) = crate::hsv_to_rgb(h, s as f32, v as f32);
                     picker.r = r;
                     picker.g = g;
                     picker.b = b;
@@ -1172,6 +1139,7 @@ pub fn handle_overlay_actions(world: &mut World) {
                         r,
                         g,
                         b,
+                        a: picker.a,
                     });
                 }
 
@@ -1190,16 +1158,9 @@ pub fn handle_overlay_actions(world: &mut World) {
 
                 let mut changed_event = None;
                 if let Some(mut picker) = world.get_mut::<UiColorPicker>(anchor) {
-                    let (_old_h, s, v) = crate::rgb_to_hsv(
-                        picker.r,
-                        picker.g,
-                        picker.b,
-                    );
-                    let (r, g, b) = crate::hsv_to_rgb(
-                        h as f32,
-                        s,
-                        v,
-                    );
+                    let (_old_h, s, v) =
+                        crate::rgb_to_hsv(picker.r, picker.g, picker.b);
+                    let (r, g, b) = crate::hsv_to_rgb(h as f32, s, v);
                     picker.r = r;
                     picker.g = g;
                     picker.b = b;
@@ -1208,6 +1169,36 @@ pub fn handle_overlay_actions(world: &mut World) {
                         r,
                         g,
                         b,
+                        a: picker.a,
+                    });
+                }
+
+                if let Some(ev) = changed_event {
+                    world.resource::<UiEventQueue>().push_typed(anchor, ev);
+                }
+            }
+
+            OverlayUiAction::SelectColorAlpha { a } => {
+                let Some(anchor) = world
+                    .get::<UiColorPickerPanel>(event.entity)
+                    .map(|p| p.anchor)
+                else {
+                    continue;
+                };
+
+                let alpha = (a.clamp(0.0, 1.0) * 255.0).round() as u8;
+                let mut changed_event = None;
+                if let Some(mut picker) = world.get_mut::<UiColorPicker>(anchor) {
+                    if !picker.alpha_enabled {
+                        continue;
+                    }
+                    picker.a = alpha;
+                    changed_event = Some(UiColorPickerChanged {
+                        picker: anchor,
+                        r: picker.r,
+                        g: picker.g,
+                        b: picker.b,
+                        a: alpha,
                     });
                 }
 
@@ -1224,28 +1215,80 @@ pub fn handle_overlay_actions(world: &mut World) {
                     continue;
                 };
 
-                let hex = hex.trim();
-                let hex_stripped = hex.strip_prefix('#').unwrap_or(hex);
-                if hex_stripped.len() != 6 {
-                    continue;
-                }
-                let Ok(parsed) = u32::from_str_radix(hex_stripped, 16) else {
+                let Some(parsed) = crate::parse_color_hex(&hex) else {
                     continue;
                 };
-                let r = ((parsed >> 16) & 0xFF) as u8;
-                let g = ((parsed >> 8) & 0xFF) as u8;
-                let b = (parsed & 0xFF) as u8;
 
                 let mut changed_event = None;
                 if let Some(mut picker) = world.get_mut::<UiColorPicker>(anchor) {
-                    picker.r = r;
-                    picker.g = g;
-                    picker.b = b;
+                    picker.r = parsed.r;
+                    picker.g = parsed.g;
+                    picker.b = parsed.b;
+                    if let Some(a) = parsed.a {
+                        if picker.alpha_enabled {
+                            picker.a = a;
+                        }
+                    }
                     changed_event = Some(UiColorPickerChanged {
                         picker: anchor,
-                        r,
-                        g,
-                        b,
+                        r: picker.r,
+                        g: picker.g,
+                        b: picker.b,
+                        a: picker.a,
+                    });
+                }
+
+                if let Some(ev) = changed_event {
+                    world.resource::<UiEventQueue>().push_typed(anchor, ev);
+                }
+            }
+
+            OverlayUiAction::SetColorChannel { channel, text } => {
+                let Some(anchor) = world
+                    .get::<UiColorPickerPanel>(event.entity)
+                    .map(|p| p.anchor)
+                else {
+                    continue;
+                };
+
+                let mut changed_event = None;
+                if let Some(mut picker) = world.get_mut::<UiColorPicker>(anchor) {
+                    use crate::ColorPickerChannel;
+                    match channel {
+                        ColorPickerChannel::Red => {
+                            let Some(value) = crate::parse_channel_u8(&text) else {
+                                continue;
+                            };
+                            picker.r = value;
+                        }
+                        ColorPickerChannel::Green => {
+                            let Some(value) = crate::parse_channel_u8(&text) else {
+                                continue;
+                            };
+                            picker.g = value;
+                        }
+                        ColorPickerChannel::Blue => {
+                            let Some(value) = crate::parse_channel_u8(&text) else {
+                                continue;
+                            };
+                            picker.b = value;
+                        }
+                        ColorPickerChannel::Alpha => {
+                            if !picker.alpha_enabled {
+                                continue;
+                            }
+                            let Some(value) = crate::parse_opacity_text(&text) else {
+                                continue;
+                            };
+                            picker.a = value;
+                        }
+                    }
+                    changed_event = Some(UiColorPickerChanged {
+                        picker: anchor,
+                        r: picker.r,
+                        g: picker.g,
+                        b: picker.b,
+                        a: picker.a,
                     });
                 }
 
@@ -2927,10 +2970,8 @@ mod tests {
 
         world.resource::<UiEventQueue>().push_typed(
             panel,
-            crate::OverlayUiAction::SelectColorSwatch {
-                r: 200,
-                g: 100,
-                b: 50,
+            crate::OverlayUiAction::SetHexColor {
+                hex: "#C86432".to_string(),
             },
         );
 
@@ -2940,11 +2981,16 @@ mod tests {
             .get::<crate::UiColorPicker>(picker)
             .expect("color picker should exist");
         assert_eq!(
-            (picker_after.r, picker_after.g, picker_after.b),
-            (200, 100, 50)
+            (
+                picker_after.r,
+                picker_after.g,
+                picker_after.b,
+                picker_after.a
+            ),
+            (200, 100, 50, 255)
         );
-        assert!(!picker_after.is_open);
-        assert!(world.get_entity(panel).is_err());
+        assert!(picker_after.is_open);
+        assert!(world.get_entity(panel).is_ok());
 
         let changed = world
             .resource_mut::<UiEventQueue>()
@@ -2955,10 +3001,38 @@ mod tests {
             (
                 changed[0].action.r,
                 changed[0].action.g,
-                changed[0].action.b
+                changed[0].action.b,
+                changed[0].action.a
             ),
-            (200, 100, 50)
+            (200, 100, 50, 255)
         );
+
+        // Alpha editing: enable, set via slider, then channel text.
+        if let Some(mut p) = world.get_mut::<crate::UiColorPicker>(picker) {
+            p.alpha_enabled = true;
+        }
+        world.resource::<UiEventQueue>().push_typed(
+            panel,
+            crate::OverlayUiAction::SelectColorAlpha { a: 0.5 },
+        );
+        handle_overlay_actions(&mut world);
+        let picker_alpha = world
+            .get::<crate::UiColorPicker>(picker)
+            .expect("color picker should exist");
+        assert_eq!(picker_alpha.a, 128);
+
+        world.resource::<UiEventQueue>().push_typed(
+            panel,
+            crate::OverlayUiAction::SetColorChannel {
+                channel: crate::ColorPickerChannel::Red,
+                text: "10".to_string(),
+            },
+        );
+        handle_overlay_actions(&mut world);
+        let picker_ch = world
+            .get::<crate::UiColorPicker>(picker)
+            .expect("color picker should exist");
+        assert_eq!((picker_ch.r, picker_ch.g, picker_ch.b, picker_ch.a), (10, 100, 50, 128));
     }
 
     #[test]
