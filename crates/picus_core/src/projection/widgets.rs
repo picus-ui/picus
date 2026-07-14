@@ -29,7 +29,8 @@ use crate::{
         PartScrollViewport, ScrollAxis, SplitDirection, ToastKind, UiBreadcrumbItem, UiCanvas,
         UiCanvasCommand, UiCanvasPathCommand, UiCanvasPosition, UiColorPicker, UiColorPickerPanel,
         UiContextMenu, UiDataTable, UiDatePicker, UiDatePickerPanel, UiDivider, UiExpander,
-        UiGradientStop, UiGroupBox, UiListSelectionMode, UiListView, UiMenuBar, UiMenuBarItem,
+        UiContentShell, UiFormRow, UiGradientStop, UiGroupBox, UiListSelectionMode, UiListView,
+        UiMenuBar, UiMenuBarItem,
         UiMenuItemPanel, UiMessageBar, UiNavigationItem, UiNavigationView, UiRadioGroup,
         UiScrollView, UiSearch, UiSortDirection, UiSpinner, UiSplitPane, UiTabBar, UiTable,
         UiTimePicker, UiTimePickerPanel, UiToast, UiTooltip, UiTreeNode,
@@ -2042,6 +2043,60 @@ pub(crate) fn project_card(ctx: ProjectionCtx<'_>) -> UiView {
         .collect();
     Arc::new(apply_widget_style(
         apply_flex_alignment(flex_col(children), &style),
+        &style,
+    ))
+}
+
+// ---------------------------------------------------------------------------
+// Form row + content shell (composite layout helpers)
+// ---------------------------------------------------------------------------
+
+/// Project a form row: label column + trailing children (the control).
+pub(crate) fn project_form_row(row: &UiFormRow, ctx: ProjectionCtx<'_>) -> UiView {
+    let style = resolve_style(ctx.world, ctx.entity);
+    let mut label_style = resolve_style_for_classes(ctx.world, ["form.row.label"]);
+    if label_style.colors.text.is_none() {
+        label_style.colors.text = style.colors.text;
+    }
+
+    let mut label_view: UiView = Arc::new(apply_label_style(label(row.label.clone()), &label_style));
+    if let Some(width) = row.label_width {
+        label_view = Arc::new(
+            sized_box(label_view).dims(
+                Dimensions::AUTO.with_width(Dim::Fixed(Length::px(width))),
+            ),
+        );
+    }
+
+    let mut items = vec![label_view.into_any_flex()];
+    items.extend(ctx.children.into_iter().map(|c| c.into_any_flex()));
+
+    Arc::new(apply_widget_style(
+        apply_flex_alignment(
+            flex_row(items).cross_axis_alignment(CrossAxisAlignment::Center),
+            &style,
+        )
+        .gap(Length::px(style.layout.gap)),
+        &style,
+    ))
+}
+
+/// Project a content shell: optional title + vertical children.
+pub(crate) fn project_content_shell(shell: &UiContentShell, ctx: ProjectionCtx<'_>) -> UiView {
+    let style = resolve_style(ctx.world, ctx.entity);
+    let mut items = Vec::new();
+
+    if let Some(title) = shell.title.as_ref() {
+        let mut title_style = resolve_style_for_classes(ctx.world, ["content.shell.title"]);
+        if title_style.colors.text.is_none() {
+            title_style.colors.text = style.colors.text;
+        }
+        items.push(apply_label_style(label(title.clone()), &title_style).into_any_flex());
+    }
+    items.extend(ctx.children.into_iter().map(|c| c.into_any_flex()));
+
+    Arc::new(apply_widget_style(
+        apply_flex_alignment(flex_col(items), &style).gap(Length::px(style.layout.gap)),
         &style,
     ))
 }

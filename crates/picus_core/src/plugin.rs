@@ -58,7 +58,7 @@ use crate::{
         sync_ui_interaction_markers,
     },
     synthesize::{
-        SynthesizedUiViews, UiProjectionInvalidation, UiSynthesisStats,
+        SynthesizedUiViews, UiProjectionDirtyDebug, UiProjectionInvalidation, UiSynthesisStats,
         register_projection_invalidation_dependencies, sync_focus_state, synthesize_ui,
     },
     track_window_size,
@@ -127,6 +127,7 @@ impl Plugin for PicusPlugin {
             .init_resource::<UiProjectorRegistry>()
             .init_resource::<SynthesizedUiViews>()
             .init_resource::<UiProjectionInvalidation>()
+            .init_resource::<UiProjectionDirtyDebug>()
             .init_resource::<UiSynthesisStats>()
             .init_resource::<InternalUiEventQueue>()
             .init_resource::<UiActionRegistry>()
@@ -499,6 +500,8 @@ mod tests {
         assert_component::<crate::UiDropdownMenu>();
         assert_component::<crate::UiDropdownItem>();
         assert_component::<crate::UiExpander>();
+        assert_component::<crate::UiFormRow>();
+        assert_component::<crate::UiContentShell>();
         assert_component::<crate::UiGrid>();
         assert_component::<crate::UiGridCell>();
         assert_component::<crate::UiGroupBox>();

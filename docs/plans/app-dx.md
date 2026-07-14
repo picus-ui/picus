@@ -1,8 +1,8 @@
 # Picus 应用层 DX 完整计划
 
-> **状态**：DX 主路径与后续收敛基本完成（2026-07-14）
+> **状态**：完成（2026-07-14）
 >
-> **进度摘要**：§5.0 主路径 1–6 完成。widget/overlay 已并入 dispatcher；资源 dirty、UiEmit/未注册 payload、headless Message 路径、facade trybuild、嵌套 AGENTS、细粒度 vs map 文档与 i18n/multi-window/overlays guides 已落地。仍 open：`UiFormRow` 等组合控件、`#[ui_view]`、dirty 原因 debug。脚手架（`picus new`）已从范围移除。
+> **进度摘要**：§5.0 主路径与计划内剩余项均已落地（组合控件 `UiFormRow`/`UiContentShell`、`#[ui_view]`、dirty 原因 debug）。脚手架（`picus new`）已移出范围。
 
 ---
 
@@ -434,9 +434,9 @@ impl picus::__macro_support::UiComponentRegistration for CountLabel {
 - [x] `ProjectionCtx` 提供 action-aware button/sender helper，自动携带 source entity 并验证 payload 已注册  
 - [x] 文档：何时不要拆 Component（`guide/app.md`）  
 - [x] 细粒度 vs 容器内 map 对照（todo 模式）  
-- [ ] 组合控件（按 gallery 缺口）：`UiFormRow`、内容壳等（可选便利，非主路径阻塞）  
+- [x] 组合控件（按 gallery 缺口）：`UiFormRow`、`UiContentShell`  
 - [x] 不做闭包 Component  
-- [ ] **（远期）** 函数组件宏 `#[ui_view]` — 非 §5.4 必做核心  
+- [x] 函数组件宏 `#[ui_view]`  
 
 ---
 
@@ -675,7 +675,7 @@ docs/
 - [x] 扩展 headless helpers：click → `UiAction` → resource，作为 `timer` 纵向验收  
   - `enqueue_ui_action_and_update` + MessageReader→Resource 集成测试  
 - [x] facade compile test：应用只依赖 `picus`；根级 core 重导出、公开 queue/drain 和旧 runner 不可用  
-- [ ] **（可选）** dirty 原因 debug 输出  
+- [x] dirty 原因 debug 输出（`UiProjectionDirtyDebug` / `UiDirtyReason` + debug tracing）  
 - [x] 全 examples：逐个运行 `cargo check -p <example-package>`；关键例保留主题 parse 与交互测试  
 
 ---
@@ -716,3 +716,5 @@ docs/
 | 2026-07-14 | 收敛公共面：删除 facade `core`/`emit_ui_action`/自由 `button` 导出；examples 迁 `ctx.button`+`UiActionSender`；`WindowRuntime` 持有 app sink；`styled`/InlineStyle builder/flex helper；主题与 FIFO/sink 隔离测试；trybuild 挂 `picus` |
 | 2026-07-14 | 后续收敛：widget/overlay 并入 dispatcher；资源 dirty / UiEmit / 未注册 payload / headless Message 路径测试；facade 负向 trybuild；嵌套 AGENTS；guide 补全与 rustdoc 交叉链接 |
 | 2026-07-14 | 明确移出范围：`picus new` / cargo-generate 脚手架；入门以 timer/calculator 复制骨架为准 |
+| 2026-07-14 | 完成剩余三项：`UiFormRow`/`UiContentShell`、`#[ui_view]`、`UiProjectionDirtyDebug`；计划标为完成 |
+| 2026-07-14 | 收尾：builtin projector 注册、task-proxy 测试迁 `UiAction`/`MessageReader`、trybuild/`ui_view` 与文档交叉链接 |

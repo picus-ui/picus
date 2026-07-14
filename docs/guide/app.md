@@ -101,9 +101,17 @@ Helpers that reduce dual writing without new components:
 - `ctx.flex_col` / `ctx.flex_row`
 - `ctx.button` / `ctx.button_with_child` / `ctx.styled`
 - `classes!("…")` + RON rules instead of one-off styled wrappers
+- `#[ui_view]` for zero-state projected regions (see [macros.md](macros.md))
 
-Composite layout components (e.g. form rows) remain optional convenience; they are
-not required for the default app path.
+Composite layout components for common gallery patterns:
+
+| Component | Role |
+|-----------|------|
+| `UiFormRow` | Label column + child control(s) in a horizontal row |
+| `UiContentShell` | Optional title + vertical content stack (page/section shell) |
+
+Style via RON selectors on the type name or classes such as `form.row` /
+`content.shell` — missing rules stay transparent.
 
 ## When to use exclusive systems
 
@@ -120,5 +128,12 @@ Prefer ordinary `MessageReader` systems. For world-exclusive mutation, use
 | i18n / fonts | [i18n-fonts-icons.md](i18n-fonts-icons.md) |
 | Multi-window | [multi-window.md](multi-window.md) |
 | Overlays / scroll | [overlays-scroll.md](overlays-scroll.md) |
+
+### Projection dirty diagnostics
+
+When synthesis rebuilds a window, reasons are stored on `UiProjectionDirtyDebug`
+(`last_reasons`, `last_dirty_windows`) and logged at `debug` under
+`picus_core`. Idle frames clear the debug resource. Useful for verifying
+resource dependencies and invalidation in headless tests.
 
 Rustdoc on the `picus` crate points at these guide names; long tutorials live only here.

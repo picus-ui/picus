@@ -15,13 +15,13 @@ pub use markdown::StreamingMarkdownParseCache;
 
 use crate::ecs::{
     UiBadge, UiButton, UiCanvas, UiCheckbox, UiColorPicker, UiColorPickerPanel, UiComboBox,
-    UiContextMenu, UiDataTable, UiDatePicker, UiDatePickerPanel, UiDialog, UiDropdownMenu,
-    UiExpander, UiFlexColumn, UiFlexRow, UiGrid, UiGroupBox, UiImage, UiLabel, UiListView,
-    UiMenuBar, UiMenuBarItem, UiMenuItemPanel, UiMultilineTextInput, UiNavigationView,
-    UiOverlayRoot, UiPasswordInput, UiPopover, UiProgressBar, UiRadioGroup, UiResponsiveGrid,
-    UiResponsiveRow, UiRoot, UiScrollView, UiSlider, UiSpinner, UiSplitPane, UiSwitch, UiTabBar,
-    UiTable, UiTextInput, UiThemePicker, UiThemePickerMenu, UiTimePicker, UiTimePickerPanel,
-    UiToast, UiTooltip, UiTreeNode, UiVisibleResponsive,
+    UiContentShell, UiContextMenu, UiDataTable, UiDatePicker, UiDatePickerPanel, UiDialog,
+    UiDropdownMenu, UiExpander, UiFlexColumn, UiFlexRow, UiFormRow, UiGrid, UiGroupBox, UiImage,
+    UiLabel, UiListView, UiMenuBar, UiMenuBarItem, UiMenuItemPanel, UiMultilineTextInput,
+    UiNavigationView, UiOverlayRoot, UiPasswordInput, UiPopover, UiProgressBar, UiRadioGroup,
+    UiResponsiveGrid, UiResponsiveRow, UiRoot, UiScrollView, UiSlider, UiSpinner, UiSplitPane,
+    UiSwitch, UiTabBar, UiTable, UiTextInput, UiThemePicker, UiThemePickerMenu, UiTimePicker,
+    UiTimePickerPanel, UiToast, UiTooltip, UiTreeNode, UiVisibleResponsive,
 };
 
 /// Register non-UI-component foundational projectors.
@@ -76,6 +76,8 @@ pub fn register_builtin_projectors(registry: &mut UiProjectorRegistry) {
         .register_component::<UiColorPicker>(widgets::project_color_picker)
         .register_component::<UiColorPickerPanel>(widgets::project_color_picker_panel)
         .register_component::<UiGroupBox>(widgets::project_group_box)
+        .register_component::<UiFormRow>(widgets::project_form_row)
+        .register_component::<UiContentShell>(widgets::project_content_shell)
         .register_component::<UiSplitPane>(widgets::project_split_pane)
         .register_component::<UiToast>(widgets::project_toast)
         .register_component::<UiDatePicker>(widgets::project_date_picker)

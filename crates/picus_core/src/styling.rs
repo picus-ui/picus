@@ -970,6 +970,8 @@ pub fn register_builtin_style_type_aliases(world: &mut World) {
     registry.register_type_aliases::<UiColorPicker>();
     registry.register_type_aliases::<UiColorPickerPanel>();
     registry.register_type_aliases::<UiGroupBox>();
+    registry.register_type_aliases::<UiFormRow>();
+    registry.register_type_aliases::<UiContentShell>();
     registry.register_type_aliases::<UiSplitPane>();
     registry.register_type_aliases::<UiToast>();
     registry.register_type_aliases::<UiDatePicker>();

@@ -63,6 +63,43 @@ pub struct UiSynthesisStats {
     pub unhandled_count: usize,
 }
 
+/// Why projection synthesis rebuilt windows on the last non-idle pass.
+///
+/// Populated for diagnostics and tests. Idle frames clear
+/// [`UiProjectionDirtyDebug::last_reasons`]. Enable `picus_core=debug` tracing
+/// to also log the same reasons when a rebuild runs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UiDirtyReason {
+    /// First synthesis generation after app start / runtime attach.
+    FirstGeneration,
+    /// [`UiProjectionInvalidation::request_all`].
+    ExplicitInvalidationAll,
+    /// Built-in projection resources changed (style, i18n, window size, …).
+    BuiltInProjectionResource,
+    /// App-registered projection resource dependency changed.
+    TrackedProjectionResource,
+    /// Raw/untracked projectors force full rebuild.
+    UntrackedProjectors,
+    /// Set of UI roots for a window changed.
+    RootSetChanged { window: Entity },
+    /// Explicit invalidation of a window.
+    ExplicitInvalidationWindow { window: Entity },
+    /// Explicit invalidation of a root entity.
+    ExplicitInvalidationRoot { root: Entity },
+    /// Component dirty set mapped to a window.
+    DirtyEntity { entity: Entity },
+}
+
+/// Last dirty reasons observed by synthesis (debug aid).
+#[derive(Resource, Debug, Clone, Default)]
+pub struct UiProjectionDirtyDebug {
+    /// Reasons from the most recent pass that rebuilt at least one window.
+    /// Empty when the last pass was idle.
+    pub last_reasons: Vec<UiDirtyReason>,
+    /// Windows rebuilt on the last non-idle pass.
+    pub last_dirty_windows: Vec<Entity>,
+}
+
 impl UiSynthesisStats {
     fn add_assign(&mut self, rhs: &Self) {
         self.root_count += rhs.root_count;
@@ -346,6 +383,8 @@ pub fn synthesize_ui(world: &mut World) {
         return;
     }
 
+    world.init_resource::<UiProjectionDirtyDebug>();
+
     let mut roots_by_window = gather_ui_roots_by_window(world);
     if let Some(runtime) = world.get_non_send::<MasonryRuntime>() {
         for window in runtime.window_entities() {
@@ -368,6 +407,7 @@ pub fn synthesize_ui(world: &mut World) {
     let invalidation = world.resource_mut::<UiProjectionInvalidation>().take();
 
     let mut dirty_windows = HashSet::new();
+    let mut reasons: Vec<UiDirtyReason> = Vec::new();
     let all_windows = {
         let views = world.resource::<SynthesizedUiViews>();
         roots_by_window
@@ -379,12 +419,28 @@ pub fn synthesize_ui(world: &mut World) {
 
     {
         let views = world.resource::<SynthesizedUiViews>();
-        if views.generation == 0
-            || invalidation.all
-            || projection_resources_changed
-            || tracked_resources_changed
-            || has_untracked_projectors
-        {
+        let mut force_all = false;
+        if views.generation == 0 {
+            reasons.push(UiDirtyReason::FirstGeneration);
+            force_all = true;
+        }
+        if invalidation.all {
+            reasons.push(UiDirtyReason::ExplicitInvalidationAll);
+            force_all = true;
+        }
+        if projection_resources_changed {
+            reasons.push(UiDirtyReason::BuiltInProjectionResource);
+            force_all = true;
+        }
+        if tracked_resources_changed {
+            reasons.push(UiDirtyReason::TrackedProjectionResource);
+            force_all = true;
+        }
+        if has_untracked_projectors {
+            reasons.push(UiDirtyReason::UntrackedProjectors);
+            force_all = true;
+        }
+        if force_all {
             dirty_windows.extend(all_windows.iter().copied());
         }
 
@@ -393,11 +449,13 @@ pub fn synthesize_ui(world: &mut World) {
             let current = roots_by_window.get(window);
             if previous != current {
                 dirty_windows.insert(*window);
+                reasons.push(UiDirtyReason::RootSetChanged { window: *window });
             }
         }
 
         for window in invalidation.windows {
             dirty_windows.insert(window);
+            reasons.push(UiDirtyReason::ExplicitInvalidationWindow { window });
         }
 
         for root in invalidation.roots {
@@ -412,6 +470,7 @@ pub fn synthesize_ui(world: &mut World) {
                 })
             {
                 dirty_windows.insert(*window);
+                reasons.push(UiDirtyReason::ExplicitInvalidationRoot { root });
             }
         }
 
@@ -420,12 +479,31 @@ pub fn synthesize_ui(world: &mut World) {
         for entity in dirty_entities {
             if let Some(window) = views.entity_windows.get(&entity) {
                 dirty_windows.insert(*window);
+                reasons.push(UiDirtyReason::DirtyEntity { entity });
             }
         }
     }
 
     if dirty_windows.is_empty() {
+        if let Some(mut debug) = world.get_resource_mut::<UiProjectionDirtyDebug>() {
+            debug.last_reasons.clear();
+            debug.last_dirty_windows.clear();
+        }
         return;
+    }
+
+    {
+        let mut windows_sorted: Vec<_> = dirty_windows.iter().copied().collect();
+        windows_sorted.sort_by_key(|e| e.to_bits());
+        tracing::debug!(
+            ?reasons,
+            dirty_windows = ?windows_sorted,
+            "projection synthesis rebuild"
+        );
+        if let Some(mut debug) = world.get_resource_mut::<UiProjectionDirtyDebug>() {
+            debug.last_reasons = reasons;
+            debug.last_dirty_windows = windows_sorted;
+        }
     }
 
     let dirty_windows = dirty_windows.into_iter().collect::<Vec<_>>();
@@ -618,6 +696,21 @@ mod tests {
                 .with_selected_row(0),
             ChildOf(root),
         ));
+
+        let form_row = world
+            .spawn((crate::UiFormRow::new("Name").with_label_width(96.0), ChildOf(root)))
+            .id();
+        world.spawn((
+            crate::UiTextInput::new("").with_placeholder("value"),
+            ChildOf(form_row),
+        ));
+        let shell = world
+            .spawn((
+                crate::UiContentShell::new().with_title("Section"),
+                ChildOf(root),
+            ))
+            .id();
+        world.spawn((crate::UiLabel::new("body"), ChildOf(shell)));
 
         let (_roots, stats) = synthesize_roots_with_stats(&world, &registry, [root]);
 

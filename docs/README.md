@@ -12,7 +12,7 @@ repository `AGENTS.md` files (root and nested where needed).
 | [architecture/crates.md](architecture/crates.md) | Crate boundaries |
 | [guide/app.md](guide/app.md) | How to write a Picus app (`AppPicusExt`, theme, `UiAction`, BSN) |
 | [guide/events-messages.md](guide/events-messages.md) | `UiAction`, `UiActionSender`, `UiEmit`, scheduling |
-| [guide/macros.md](guide/macros.md) | `#[derive(UiComponent)]`, `register_ui_components!`, `classes!` |
+| [guide/macros.md](guide/macros.md) | `#[derive(UiComponent)]`, `#[ui_view]`, `register_ui_components!`, `classes!` |
 | [guide/styling-themes.md](guide/styling-themes.md) | No-theme contract, RON, variants, backdrop |
 | [guide/overlays-scroll.md](guide/overlays-scroll.md) | Overlay hit path, scroll wheel routing |
 | [guide/i18n-fonts-icons.md](guide/i18n-fonts-icons.md) | Localization, fonts, icons |

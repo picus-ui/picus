@@ -50,12 +50,13 @@ pub mod components {
         UiBreadcrumb, UiBreadcrumbItem, UiButton, UiCanvas, UiCanvasCommand, UiCanvasPathCommand,
         UiCanvasPosition, UiCard, UiCheckbox, UiCheckboxChanged, ColorPickerChannel, UiColorPicker,
         UiColorPickerChanged, UiColorPickerPanel, UiComboBox, UiComboBoxChanged, UiComboOption,
-        UiComponentTemplate, UiContextMenu, UiContextMenuItem, UiContextMenuItemSelected,
+        UiComponentTemplate, UiContentShell, UiContextMenu, UiContextMenuItem,
+        UiContextMenuItemSelected,
         UiContextMenuTrigger, UiDataCell, UiDataColumn, UiDataRow, UiDataTable,
         UiDataTableSelectionChanged, UiDataTableSort, UiDataTableSortChanged, UiDatePicker,
         UiDatePickerChanged, UiDatePickerPanel, UiDialog, UiDivider, UiDropdownItem,
         UiDropdownMenu, UiDropdownPlacement, UiEmit, UiExpander, UiExpanderChanged, UiFlexColumn,
-        UiFlexRow, UiGradientStop, UiGrid, UiGridAutoFlow, UiGridCell, UiGridLength,
+        UiFlexRow, UiFormRow, UiGradientStop, UiGrid, UiGridAutoFlow, UiGridCell, UiGridLength,
         UiGridLengthParseError, UiGroupBox, UiImage, UiImageAlignmentX, UiImageAlignmentY,
         UiImageViewBox, UiImageViewBoxUnits, UiInteractionEvent, UiLabel, UiLink, UiLinkAction,
         UiListSelectionMode, UiListView, UiListViewSelectionChanged, UiMarkdown, UiMenuBar,
@@ -138,9 +139,10 @@ pub mod overlay {
 /// Runtime synthesis and rendering integration.
 pub mod runtime {
     pub use picus_core::{
-        MasonryRuntime, ProjectionCtx, SynthesizedUiViews, UiProjectionInvalidation, UiView,
-        WindowRuntime, XilemFontBridge, collect_bevy_font_assets, inject_bevy_input_into_masonry,
-        rebuild_masonry_runtime, synthesize_ui, track_window_size,
+        MasonryRuntime, ProjectionCtx, SynthesizedUiViews, UiDirtyReason, UiProjectionDirtyDebug,
+        UiProjectionInvalidation, UiView, WindowRuntime, XilemFontBridge,
+        collect_bevy_font_assets, inject_bevy_input_into_masonry, rebuild_masonry_runtime,
+        synthesize_ui, track_window_size,
     };
 
     /// Low-level registration and projector APIs for advanced / framework use.
@@ -180,7 +182,7 @@ pub mod prelude {
         app::*, components::*, events::*, i18n::*, icons::*, overlay::*, projection::*,
         runtime::*, scene::*, styling::*,
     };
-    pub use crate::{UiComponent, classes, register_ui_components};
+    pub use crate::{UiComponent, classes, register_ui_components, ui_view};
     pub use picus_core::bevy_ecs::hierarchy::{ChildOf, Children};
     pub use picus_core::bevy_ecs::message::MessageReader;
 }
@@ -189,7 +191,7 @@ pub mod prelude {
 // Root-level macros and selected re-exports (no `picus_core::*` dump).
 // ---------------------------------------------------------------------------
 
-pub use picus_macros::UiComponent;
+pub use picus_macros::{UiComponent, ui_view};
 
 /// Construct a [`StyleClass`] from string literals or expressions.
 #[macro_export]

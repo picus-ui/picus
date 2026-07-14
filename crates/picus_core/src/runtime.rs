@@ -1788,12 +1788,13 @@ mod tests {
     use super::*;
     use crate::test_helpers::*;
     use crate::{
-        AppPicusExt, InteractionState, NavigationViewItem, PicusPlugin, ProjectionCtx,
+        AppPicusExt, InteractionState, NavigationViewItem, PicusPlugin, ProjectionCtx, UiAction,
         UiComponentTemplate, UiNavigationItem, UiNavigationView, UiProjectorRegistry, UiRoot,
         UiView, emit_ui_action,
     };
     use bevy_app::{App, Update};
     use bevy_ecs::hierarchy::ChildOf;
+    use bevy_ecs::message::MessageReader;
     use bevy_ecs::prelude::{Component, Resource};
     use bevy_input::touch::TouchPhase;
     use picus_view::picus_widget::widgets::TextAction;
@@ -2147,6 +2148,20 @@ mod tests {
             initial + 1,
             "register_projection_resource (macro resources attr path) must dirty synthesis"
         );
+
+        let debug = app.world().resource::<crate::UiProjectionDirtyDebug>();
+        assert!(
+            debug
+                .last_reasons
+                .iter()
+                .any(|r| matches!(r, crate::UiDirtyReason::TrackedProjectionResource)),
+            "dirty debug should record tracked resource reason: {:?}",
+            debug.last_reasons
+        );
+        assert!(
+            !debug.last_dirty_windows.is_empty(),
+            "dirty debug should list rebuilt windows"
+        );
     }
 
     #[test]
@@ -2212,9 +2227,29 @@ mod tests {
 
     #[test]
     fn xilem_task_proxy_messages_are_routed_back_to_view_handler() {
+        #[derive(Resource, Default)]
+        struct Routed(bool);
+
+        #[derive(Resource)]
+        struct ExpectedRoot(Entity);
+
         let mut app = App::new();
         app.add_plugins(PicusPlugin)
-            .register_ui_component::<ProxyTaskRoot>();
+            .register_ui_component::<ProxyTaskRoot>()
+            .add_ui_action::<ProxyTaskAction>()
+            .insert_resource(Routed(false))
+            .add_systems(
+                Update,
+                |mut reader: MessageReader<UiAction<ProxyTaskAction>>,
+                 expected: Res<ExpectedRoot>,
+                 mut routed: ResMut<Routed>| {
+                    for UiAction { source, action } in reader.read() {
+                        if *source == expected.0 && *action == ProxyTaskAction {
+                            routed.0 = true;
+                        }
+                    }
+                },
+            );
 
         let mut window = Window {
             visible: false,
@@ -2223,6 +2258,7 @@ mod tests {
         window.resolution.set(480.0, 320.0);
         app.world_mut().spawn((window, PrimaryWindow));
         let task_root = app.world_mut().spawn((UiRoot, ProxyTaskRoot)).id();
+        app.insert_resource(ExpectedRoot(task_root));
 
         app.update();
 
@@ -2230,14 +2266,7 @@ mod tests {
         for _ in 0..10 {
             std::thread::sleep(std::time::Duration::from_millis(10));
             app.update();
-            let actions = app
-                .world_mut()
-                .resource_mut::<crate::events::InternalUiEventQueue>()
-                .drain_actions::<ProxyTaskAction>();
-            if actions
-                .iter()
-                .any(|event| event.entity == task_root && event.action == ProxyTaskAction)
-            {
+            if app.world().resource::<Routed>().0 {
                 routed = true;
                 break;
             }
@@ -2245,7 +2274,7 @@ mod tests {
 
         assert!(
             routed,
-            "task proxy message should be queued and routed through route_masonry_view_messages"
+            "task proxy message should be queued, dispatched as UiAction, and visible to MessageReader"
         );
     }
 

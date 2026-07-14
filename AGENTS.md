@@ -29,8 +29,9 @@ Applications must:
 1. Install `PicusPlugin` on a Bevy `App`.
 2. Load theme RON and/or select a variant **explicitly** (`AppPicusExt`).
 3. Register business payloads with `add_ui_action::<T>()`.
-4. Derive `UiComponent` and register custom components via one
-   `register_ui_components!(app, ...)` list (not ad-hoc hidden APIs).
+4. Derive `UiComponent` (or `#[ui_view]` for zero-state projected regions)
+   and register custom components via one `register_ui_components!(app, ...)`
+   list (not ad-hoc hidden APIs).
 5. Consume interactions with `MessageReader<UiAction<T>>` (or
    `drain_ui_actions` in exclusive systems).
 6. Start with `AppPicusExt::run_picus` (not removed runners).

@@ -19,7 +19,9 @@ mod data_table;
 mod date_picker;
 mod dialog;
 mod divider;
+mod content_shell;
 mod expander;
+mod form_row;
 mod grid;
 mod group_box;
 mod image;
@@ -68,8 +70,10 @@ pub use context_menu::*;
 pub use data_table::*;
 pub use date_picker::*;
 pub use dialog::*;
+pub use content_shell::*;
 pub use divider::*;
 pub use expander::*;
+pub use form_row::*;
 pub use grid::*;
 pub use group_box::*;
 pub use image::*;
@@ -210,6 +214,8 @@ pub fn register_builtin_ui_components(app: &mut App) {
         .register_ui_component::<tree_node::UiTreeNode>()
         .register_ui_component::<split_pane::UiSplitPane>()
         .register_ui_component::<group_box::UiGroupBox>()
+        .register_ui_component::<form_row::UiFormRow>()
+        .register_ui_component::<content_shell::UiContentShell>()
         .register_ui_component::<spinner::UiSpinner>()
         .register_ui_component::<streaming_markdown::UiStreamingMarkdown>()
         .register_ui_component::<table::UiTable>()
