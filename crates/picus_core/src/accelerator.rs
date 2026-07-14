@@ -3,7 +3,7 @@
 //! Provides an ECS component-based system for binding keyboard shortcuts
 //! (e.g. Ctrl+S, Ctrl+Shift+Z, Alt+F4) to entities. The system tracks
 //! modifier key state and dispatches [`AcceleratorActivated`] events through
-//! the global [`UiEventQueue`] when a matching accelerator is pressed.
+//! the app-owned internal action queue when a matching accelerator is pressed.
 
 use bevy_ecs::message::MessageReader;
 use bevy_ecs::prelude::*;
@@ -24,7 +24,7 @@ pub struct AcceleratorModifiers {
 ///
 /// Attach this to any entity to register a keyboard shortcut.
 /// When the key+modifier combination is pressed, an [`AcceleratorActivated`]
-/// event is pushed to the global [`UiEventQueue`] with this entity as the target.
+/// event is pushed to the internal action queue with this entity as the target.
 #[derive(Component, Debug, Clone)]
 pub struct KeyboardAccelerator {
     /// The key that triggers this accelerator.
@@ -111,7 +111,7 @@ pub enum AcceleratorScope {
 #[derive(Component, Debug, Clone, Default)]
 pub struct AcceleratorTextOverride(pub String);
 
-/// Event pushed to [`UiEventQueue`] when an accelerator is activated.
+/// Event published as `UiAction<AcceleratorActivated>` when an accelerator is activated.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AcceleratorActivated {
     /// The physical key that triggered the accelerator.

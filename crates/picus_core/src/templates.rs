@@ -60,7 +60,7 @@ pub fn expand_builtin_ui_component_templates(world: &mut World) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app_ext::AppPicusExt;
+    use crate::app_ext::AdvancedAppPicusExt;
     use crate::{PicusPlugin, UiEventQueue, UiRoot};
     use bevy_app::App;
     use std::sync::Arc;

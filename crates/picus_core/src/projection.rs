@@ -40,8 +40,7 @@ pub fn register_core_projectors(registry: &mut UiProjectorRegistry) {
 
 /// Register built-in projectors for built-in ECS demo components.
 ///
-/// Compatibility helper: UI components are now expected to be registered through
-/// `AppPicusExt::register_ui_component::<T>()`.
+/// Compatibility helper for advanced/framework registration paths.
 pub fn register_builtin_projectors(registry: &mut UiProjectorRegistry) {
     register_core_projectors(registry);
 

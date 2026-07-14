@@ -22,13 +22,13 @@ use std::collections::BTreeMap;
 
 use bevy_ecs::prelude::*;
 use bevy_window::{Window, WindowClosed};
-use picus::{BevyWindowOptions, 
-    AppPicusExt, PicusPlugin, StyleClass, UiMarkdown, UiRoot, UiScrollView,
-    UiStreamingMarkdown, UiWindow, WorldSceneExt,
-    bevy_app::{App, PostStartup, PreUpdate, Startup},
-    bevy_math::Vec2,
-    scene::{CommandsSceneExt, bsn, template_value},
-    xilem::winit::error::EventLoopError,
+use picus::prelude::*;
+use picus::{
+    app::{
+        bevy_app::{App, PostStartup, PreUpdate, Startup},
+        bevy_math::Vec2,
+    },
+    projection::xilem::winit::error::EventLoopError,
 };
 use shared_utils::init_logging;
 
@@ -500,8 +500,18 @@ fn message_body_style_class(role: &str) -> StyleClass {
 
 /// System: drain UI actions and dispatch them to the bridge or window
 /// lifecycle.
+#[derive(Resource, Default)]
+struct PendingPicusCodeActions(Vec<UiAction<PicusCodeAction>>);
+
+fn collect_picuscode_actions(
+    mut reader: MessageReader<UiAction<PicusCodeAction>>,
+    mut pending: ResMut<PendingPicusCodeActions>,
+) {
+    pending.0.extend(reader.read().cloned());
+}
+
 fn handle_picuscode_actions(world: &mut World) {
-    let actions = picus::drain_ui_actions::<PicusCodeAction>(world);
+    let actions = std::mem::take(&mut world.resource_mut::<PendingPicusCodeActions>().0);
 
     let mut to_send = false;
     let mut to_cancel = false;
@@ -812,37 +822,41 @@ fn build_picuscode_app() -> App {
 
     let mut app = App::new();
     app.add_plugins(PicusPlugin)
-        .add_ui_action::<PicusCodeAction>();
+        .add_ui_action::<PicusCodeAction>()
+        .init_resource::<PendingPicusCodeActions>();
 
     app.load_style_sheet_ron(include_str!("../assets/themes/picuscode.ron"))
-        .register_projection_resource::<PicusState>()
-        .register_ui_component::<ChatRootView>()
-        .register_ui_component::<ChatTitleBarView>()
-        .register_ui_component::<ChatBodyView>()
-        .register_ui_component::<SidebarColumnView>()
-        .register_ui_component::<TranscriptColumnView>()
-        .register_ui_component::<MessageRowView>()
-        .register_ui_component::<ComposerView>()
-        .register_ui_component::<StatusLineView>()
-        .register_ui_component::<AboutRootView>()
-        .register_ui_component::<SettingsRootView>()
-        .register_ui_component::<SettingsFormView>()
         .add_systems(Startup, setup_chat_world)
         .add_systems(PostStartup, seed_picus_state)
         .add_systems(
             PreUpdate,
             (
                 handle_secondary_window_closed,
+                collect_picuscode_actions,
                 handle_picuscode_actions,
                 poll_bridge_events,
             )
                 .chain()
-                .after(picus::runtime::advanced::route_masonry_view_messages),
+                .after(PicusUiSet::DispatchActions),
         )
         .add_systems(
             PreUpdate,
             refresh_thread_list(std::time::Duration::from_secs(3)),
         );
+    register_ui_components!(
+        &mut app,
+        ChatRootView,
+        ChatTitleBarView,
+        ChatBodyView,
+        SidebarColumnView,
+        TranscriptColumnView,
+        MessageRowView,
+        ComposerView,
+        StatusLineView,
+        AboutRootView,
+        SettingsRootView,
+        SettingsFormView,
+    );
 
     app
 }
@@ -850,8 +864,8 @@ fn build_picuscode_app() -> App {
 fn main() -> Result<(), EventLoopError> {
     build_picuscode_app().run_picus(
         "picuscode",
-        picus::BevyWindowOptions::default().with_initial_inner_size(
-            picus::xilem::winit::dpi::LogicalSize::new(960.0, 720.0),
+        BevyWindowOptions::default().with_initial_inner_size(
+            picus::projection::xilem::winit::dpi::LogicalSize::new(960.0, 720.0),
         ),
     )
 }
@@ -859,6 +873,7 @@ fn main() -> Result<(), EventLoopError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ::picus::prelude as picus;
     use picus::bevy_window::{PrimaryWindow, Window, WindowClosed};
 
     #[test]
@@ -890,9 +905,6 @@ mod tests {
 
         let active = app.world().resource::<picus::ActiveStyleVariant>();
         assert_eq!(active.0.as_deref(), Some("dark"));
-
-        let applied = app.world().resource::<picus::AppliedStyleVariant>();
-        assert_eq!(applied.0.as_deref(), Some("dark"));
 
         let sheet = app.world().resource::<picus::StyleSheet>();
         assert!(
@@ -941,10 +953,7 @@ mod tests {
         );
     }
 
-    fn widget_rect_for_entity(
-        app: &mut App,
-        entity: Entity,
-    ) -> picus::masonry_core::kurbo::Rect {
+    fn widget_rect_for_entity(app: &mut App, entity: Entity) -> picus::masonry_core::kurbo::Rect {
         let mut runtime = app.world_mut().non_send_mut::<picus::MasonryRuntime>();
         let window_runtime = runtime
             .primary_mut()

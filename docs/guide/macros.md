@@ -24,6 +24,11 @@ Attributes:
 Only regular collection entry. Expands to `UiComponentRegistration::register`
 per type. Idempotent if a type is listed twice.
 
+The lower-level registration methods live under `picus::runtime::advanced` for
+framework integrations and custom projectors. They are not part of the normal
+application path; application code should use this one macro list so resource
+dependencies and style metadata stay beside the component derive.
+
 ## `classes!("a", "b")`
 
 Builds `StyleClass(vec![...])` for BSN/inline use.

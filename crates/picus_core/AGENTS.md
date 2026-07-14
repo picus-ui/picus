@@ -12,6 +12,8 @@ not this crate. See root [`AGENTS.md`](../../AGENTS.md) and
 - **Single consumer**: only `dispatch_ui_actions` drains the queue in production
   schedules. Built-in `WidgetUiAction` / `OverlayUiAction` mutate ECS via
   registry handlers (`apply_widget_ui_action` / `apply_overlay_ui_action`).
+- Applications consume the resulting `UiAction<T>` messages with
+  `MessageReader`; they do not access a queue or typed-drain helper.
 - Do not re-export queue/drain/`emit_ui_action` on the `picus` facade.
 - Unregistered payloads: panic in debug/test; log-once and drop in release.
 - FIFO: handler-enqueued actions process after already-queued entries; respect
@@ -43,4 +45,4 @@ not this crate. See root [`AGENTS.md`](../../AGENTS.md) and
 
 - Keep docs under `docs/guide/` and root AGENTS in sync for any public-contract
   change that surfaces through the facade.
-- Prefer extending dispatcher handlers over new typed-drain systems.
+- Prefer extending dispatcher handlers over new application-side drain systems.

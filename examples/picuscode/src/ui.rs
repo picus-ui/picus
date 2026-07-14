@@ -3,17 +3,16 @@
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
-use picus::{
-    ProjectionCtx, UiComponentTemplate, UiView, apply_direct_text_input_style, apply_label_style,
-    apply_widget_style,
+use picus::prelude::{
+    FluentIcon, IconGlyph, ProjectionCtx, StyleClass, UiComponentTemplate, UiView,
+    apply_direct_text_input_style, apply_label_style, apply_widget_style,
     bevy_ecs::hierarchy::Children,
     icon,
-    icons::{FluentIcon, IconGlyph},
     masonry_core::{
         layout::{Dim, Length},
         properties::Dimensions,
     },
-    resolve_style, resolve_style_for_classes, text_input, StyleClass,
+    resolve_style, resolve_style_for_classes, text_input,
     xilem::{
         Color, InsertNewline,
         style::Style as _,
@@ -90,8 +89,7 @@ impl UiComponentTemplate for ChatTitleBarView {
             "Settings",
             FluentIcon::Settings,
         );
-        let about_btn =
-            toolbar_button(&ctx, PicusCodeAction::OpenAbout, "About", FluentIcon::Info);
+        let about_btn = toolbar_button(&ctx, PicusCodeAction::OpenAbout, "About", FluentIcon::Info);
         Arc::new(apply_widget_style(
             flex_row(vec![
                 sized_box(brand).flex(1.0).into_any_flex(),
@@ -137,8 +135,8 @@ impl UiComponentTemplate for ChatBodyView {
 }
 
 fn has_style_class(
-    world: &picus::bevy_ecs::world::World,
-    entity: picus::bevy_ecs::entity::Entity,
+    world: &picus::app::bevy_ecs::world::World,
+    entity: picus::app::bevy_ecs::entity::Entity,
     class: &str,
 ) -> bool {
     world
@@ -275,12 +273,7 @@ impl UiComponentTemplate for ComposerView {
             &input_style,
         );
         let action_btn = if streaming {
-            toolbar_button(
-                &ctx,
-                PicusCodeAction::CancelTurn,
-                "Stop",
-                FluentIcon::Stop,
-            )
+            toolbar_button(&ctx, PicusCodeAction::CancelTurn, "Stop", FluentIcon::Stop)
         } else {
             primary_button(&ctx, PicusCodeAction::Send, "Send", FluentIcon::Send)
         };
@@ -381,8 +374,12 @@ impl UiComponentTemplate for StatusLineView {
 impl UiComponentTemplate for AboutRootView {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         let style = resolve_style(ctx.world, ctx.entity);
-        let close_btn =
-            toolbar_button(&ctx, PicusCodeAction::CloseAbout, "Close", FluentIcon::Cancel);
+        let close_btn = toolbar_button(
+            &ctx,
+            PicusCodeAction::CloseAbout,
+            "Close",
+            FluentIcon::Cancel,
+        );
         let children = ctx
             .children
             .into_iter()
@@ -524,7 +521,7 @@ impl UiComponentTemplate for SettingsFormView {
     }
 }
 
-fn child_entities(ctx: &ProjectionCtx<'_>) -> Vec<picus::bevy_ecs::entity::Entity> {
+fn child_entities(ctx: &ProjectionCtx<'_>) -> Vec<picus::app::bevy_ecs::entity::Entity> {
     ctx.world
         .get::<Children>(ctx.entity)
         .map(|children| children.iter().copied().collect::<Vec<_>>())

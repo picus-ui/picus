@@ -32,8 +32,8 @@ Applications must:
 4. Derive `UiComponent` (or `#[ui_view]` for zero-state projected regions)
    and register custom components via one `register_ui_components!(app, ...)`
    list (not ad-hoc hidden APIs).
-5. Consume interactions with `MessageReader<UiAction<T>>` (or
-   `drain_ui_actions` in exclusive systems).
+5. Consume interactions with `MessageReader<UiAction<T>>`; exclusive systems
+   should receive app-owned pending state collected by a normal message reader.
 6. Start with `AppPicusExt::run_picus` (not removed runners).
 
 Guide: [`docs/guide/app.md`](docs/guide/app.md). Entry examples: `timer`,
@@ -118,6 +118,14 @@ See [`docs/guide/styling-themes.md`](docs/guide/styling-themes.md).
 | i18n / fonts | [`docs/guide/i18n-fonts-icons.md`](docs/guide/i18n-fonts-icons.md) |
 | Multi-window | [`docs/guide/multi-window.md`](docs/guide/multi-window.md) |
 | Architecture | [`docs/architecture/overview.md`](docs/architecture/overview.md) |
+| Runtime | [`docs/architecture/runtime.md`](docs/architecture/runtime.md) |
+| Input / IME / hit testing | [`docs/architecture/input-ime-hit.md`](docs/architecture/input-ime-hit.md) |
+| Projection | [`docs/architecture/projection.md`](docs/architecture/projection.md) |
+| Components / BSN | [`docs/guide/components-bsn.md`](docs/guide/components-bsn.md) |
+| Markdown streaming | [`docs/guide/markdown-streaming.md`](docs/guide/markdown-streaming.md) |
+| Testing | [`docs/guide/testing.md`](docs/guide/testing.md) |
+| Public modules | [`docs/reference/public-modules.md`](docs/reference/public-modules.md) |
+| Style tokens | [`docs/reference/style-tokens.md`](docs/reference/style-tokens.md) |
 | Examples | [`docs/examples/index.md`](docs/examples/index.md) |
 | DX plan | [`docs/plans/app-dx.md`](docs/plans/app-dx.md) |
 | Nested rules | `crates/picus_core/AGENTS.md`, `crates/picus_surface/AGENTS.md`, `examples/picuscode/AGENTS.md`, `thirdparty/AGENTS.md` |

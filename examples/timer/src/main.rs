@@ -5,7 +5,7 @@ use std::{
 };
 use tokio::time;
 
-use picus::{
+use picus::prelude::{
     AppPicusExt, BevyWindowOptions, PicusPlugin, ProjectionCtx, StyleClass, UiAction, UiComponent,
     UiComponentTemplate, UiRoot, UiThemePicker, UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, Startup, Update},
@@ -17,9 +17,7 @@ use picus::{
         properties::Padding,
     },
     register_ui_components, resolve_style, resolve_style_for_classes,
-    resolve_style_for_entity_classes,
-    scene::{CommandsSceneExt, bsn},
-    slider,
+    resolve_style_for_entity_classes, slider,
     xilem::{
         Color,
         core::fork,
@@ -31,6 +29,7 @@ use picus::{
         winit::{dpi::LogicalSize, error::EventLoopError},
     },
 };
+use picus::scene::{CommandsSceneExt, bsn};
 use shared_utils::init_logging;
 
 const DIAL_SIZE: f64 = 188.0;
@@ -449,8 +448,9 @@ mod tests {
 
     #[test]
     fn embedded_timer_theme_ron_parses() {
-        let sheet = picus::parse_stylesheet_ron(include_str!("../assets/themes/timer.ron"))
-            .expect("embedded timer stylesheet should parse");
+        let sheet =
+            picus::styling::parse_stylesheet_ron(include_str!("../assets/themes/timer.ron"))
+                .expect("embedded timer stylesheet should parse");
         assert_eq!(sheet.default_variant.as_deref(), Some("dark"));
     }
 

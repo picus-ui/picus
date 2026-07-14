@@ -5,17 +5,14 @@ use std::{
     time::{Duration, Instant},
 };
 
-use picus::{BevyWindowOptions, 
-    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiActionSender, UiComponentTemplate,
-    UiDialog, UiRoot, UiThemePicker, UiView, apply_label_style, apply_widget_style,
-    bevy_app::{App, PreUpdate, Startup},
-    bevy_ecs::prelude::*,
-    bevy_tasks::{IoTaskPool, TaskPoolBuilder},
-    resolve_style, resolve_style_for_classes, rfd,
-
-    scene::{CommandsSceneExt, bsn},
-    spawn_in_overlay_root, switch, text_input,
-    xilem::{
+use picus::prelude::*;
+use picus::{
+    app::{
+        bevy_app::{App, Startup, Update},
+        bevy_ecs::{message::MessageReader, prelude::*, schedule::IntoScheduleConfigs},
+        bevy_tasks::{IoTaskPool, TaskPoolBuilder},
+    },
+    projection::xilem::{
         core::fork,
         view::{
             CrossAxisAlignment, FlexExt as _, MainAxisAlignment, flex_col, flex_row, label,
@@ -79,22 +76,26 @@ enum DownloadEvent {
     WorkerFailed(String),
 }
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
 struct DownloadRootView;
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
 struct DownloadTitle;
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
+#[ui_component(resources(DownloadState))]
 struct DownloadUrlRow;
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
+#[ui_component(resources(DownloadState))]
 struct DownloadActionRow;
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
+#[ui_component(resources(DownloadState))]
 struct DownloadDialogModeRow;
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
+#[ui_component(resources(DownloadState))]
 struct DownloadProgressPanel;
 
 #[derive(Component, Debug, Clone, Copy)]
@@ -453,8 +454,18 @@ fn setup_download_world(mut commands: Commands) {
     });
 }
 
-fn drain_download_events(world: &mut World) {
-    let events = picus::drain_ui_actions::<DownloadEvent>(world);
+#[derive(Resource, Default)]
+struct PendingDownloadActions(Vec<UiAction<DownloadEvent>>);
+
+fn collect_download_actions(
+    mut reader: MessageReader<UiAction<DownloadEvent>>,
+    mut pending: ResMut<PendingDownloadActions>,
+) {
+    pending.0.extend(reader.read().cloned());
+}
+
+fn apply_download_actions(world: &mut World) {
+    let events = std::mem::take(&mut world.resource_mut::<PendingDownloadActions>().0);
 
     if events.is_empty() {
         return;
@@ -544,15 +555,13 @@ fn drain_download_events(world: &mut World) {
                 };
 
                 if use_system_dialog {
-                    world
-                        .resource::<UiActionSender<DownloadEvent>>()
-                        .send(
-                            event.source,
-                            DownloadEvent::ShowSystemDialog {
-                                title: "Download finished".to_string(),
-                                description: message,
-                            },
-                        );
+                    world.resource::<UiActionSender<DownloadEvent>>().send(
+                        event.source,
+                        DownloadEvent::ShowSystemDialog {
+                            title: "Download finished".to_string(),
+                            description: message,
+                        },
+                    );
                 } else {
                     spawn_download_modal(world, message);
                 }
@@ -574,15 +583,21 @@ fn build_async_downloader_app() -> App {
         .add_ui_action::<DownloadEvent>()
         .load_style_sheet_ron(include_str!("../assets/themes/async_downloader.ron"))
         .insert_resource(DownloadState::default())
-        .register_projection_resource::<DownloadState>()
-        .register_ui_component::<DownloadRootView>()
-        .register_ui_component::<DownloadTitle>()
-        .register_ui_component::<DownloadUrlRow>()
-        .register_ui_component::<DownloadActionRow>()
-        .register_ui_component::<DownloadDialogModeRow>()
-        .register_ui_component::<DownloadProgressPanel>()
+        .init_resource::<PendingDownloadActions>()
         .add_systems(Startup, setup_download_world)
-        .add_systems(PreUpdate, drain_download_events);
+        .add_systems(
+            Update,
+            (collect_download_actions, apply_download_actions).chain(),
+        );
+    register_ui_components!(
+        &mut app,
+        DownloadRootView,
+        DownloadTitle,
+        DownloadUrlRow,
+        DownloadActionRow,
+        DownloadDialogModeRow,
+        DownloadProgressPanel,
+    );
 
     app
 }
@@ -598,9 +613,10 @@ fn main() -> Result<(), EventLoopError> {
 mod tests {
     #[test]
     fn embedded_async_downloader_theme_ron_parses() {
-        let sheet =
-            picus::parse_stylesheet_ron(include_str!("../assets/themes/async_downloader.ron"))
-                .expect("embedded async_downloader stylesheet should parse");
+        let sheet = picus::styling::parse_stylesheet_ron(include_str!(
+            "../assets/themes/async_downloader.ron"
+        ))
+        .expect("embedded async_downloader stylesheet should parse");
         assert_eq!(sheet.default_variant.as_deref(), Some("dark"));
     }
 }

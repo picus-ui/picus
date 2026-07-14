@@ -3,10 +3,8 @@
 use crate::helpers::{card, class, grid, note};
 use crate::state::GalleryButtonAction;
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
-use picus::{
-    HasTooltip, UiButton, UiProgressBar, UiSpinner,
-    scene::{CommandsSceneExt, bsn, template_value},
-};
+use picus::prelude::{HasTooltip, UiButton, UiProgressBar, UiSpinner};
+use picus::scene::{CommandsSceneExt, bsn, template_value};
 
 pub fn spawn_progress_bar_page(commands: &mut Commands, parent: Entity) {
     let g = grid(commands, parent, 2);
@@ -22,7 +20,11 @@ pub fn spawn_progress_bar_page(commands: &mut Commands, parent: Entity) {
         template_value(class("gallery.progress"))
         ChildOf(determinate)
     });
-    note(commands, determinate, "Progress values are in the range 0.0–1.0.");
+    note(
+        commands,
+        determinate,
+        "Progress values are in the range 0.0–1.0.",
+    );
 
     let indeterminate = card(commands, g, "Indeterminate");
     commands.spawn_scene(bsn! {

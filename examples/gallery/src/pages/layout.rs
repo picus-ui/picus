@@ -3,12 +3,12 @@
 use crate::helpers::{card, class, grid, note, sample_canvas};
 use crate::state::GalleryButtonAction;
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
-use picus::{
-    UiBadge, UiButton, UiCanvasPosition, UiCheckbox, UiFlexColumn, UiFlexRow, UiGrid, UiGridCell,
-    UiGridLength, UiGroupBox, UiLabel, UiListView, UiMultilineTextInput, UiResponsiveGrid,
-    UiResponsiveRow, UiSplitPane, UiTabBar, UiTextInput, UiVisibleResponsive,
-    scene::{CommandsSceneExt, bsn, template_value},
+use picus::prelude::{
+    ToastKind, UiBadge, UiButton, UiCanvasPosition, UiCheckbox, UiFlexColumn, UiFlexRow, UiGrid,
+    UiGridCell, UiGridLength, UiGroupBox, UiLabel, UiListView, UiMultilineTextInput,
+    UiResponsiveGrid, UiResponsiveRow, UiSplitPane, UiTabBar, UiTextInput, UiVisibleResponsive,
 };
+use picus::scene::{CommandsSceneExt, bsn, template_value};
 
 pub fn spawn_stack_panel_page(commands: &mut Commands, parent: Entity) {
     let g = grid(commands, parent, 1);
@@ -324,11 +324,14 @@ pub fn spawn_canvas_page(commands: &mut Commands, parent: Entity) {
             ChildOf(canvas_panel)
         })
         .id();
-    commands.entity(confetti).insert(GalleryButtonAction::Toast {
-        message: "Confetti placeholder: animated retained canvas is not public yet.".to_string(),
-        kind: picus::ToastKind::Warning,
-        duration: 3.5,
-    });
+    commands
+        .entity(confetti)
+        .insert(GalleryButtonAction::Toast {
+            message: "Confetti placeholder: animated retained canvas is not public yet."
+                .to_string(),
+            kind: ToastKind::Warning,
+            duration: 3.5,
+        });
     note(
         commands,
         canvas_panel,

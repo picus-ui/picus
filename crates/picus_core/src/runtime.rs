@@ -1680,7 +1680,13 @@ pub fn rebuild_masonry_runtime(world: &mut World) {
             let dirty_windows = views.dirty_windows.drain().collect::<Vec<_>>();
             dirty_windows
                 .into_iter()
-                .filter_map(|window| views.windows.get(&window).cloned().map(|view| (window, view)))
+                .filter_map(|window| {
+                    views
+                        .windows
+                        .get(&window)
+                        .cloned()
+                        .map(|view| (window, view))
+                })
                 .collect()
         })
         .unwrap_or_default();
@@ -1788,9 +1794,9 @@ mod tests {
     use super::*;
     use crate::test_helpers::*;
     use crate::{
-        AppPicusExt, InteractionState, NavigationViewItem, PicusPlugin, ProjectionCtx, UiAction,
-        UiComponentTemplate, UiNavigationItem, UiNavigationView, UiProjectorRegistry, UiRoot,
-        UiView, emit_ui_action,
+        AdvancedAppPicusExt, AppPicusExt, InteractionState, NavigationViewItem, PicusPlugin,
+        ProjectionCtx, UiAction, UiComponentTemplate, UiNavigationItem, UiNavigationView,
+        UiProjectorRegistry, UiRoot, UiView, emit_ui_action,
     };
     use bevy_app::{App, Update};
     use bevy_ecs::hierarchy::ChildOf;
@@ -2597,8 +2603,7 @@ mod tests {
         );
         let inactive_hover =
             crate::resolve_style_for_entity_classes(app.world(), inactive_item, ["nav.item"]);
-        let indicator =
-            crate::resolve_style_for_classes(app.world(), ["nav.item.indicator"]);
+        let indicator = crate::resolve_style_for_classes(app.world(), ["nav.item.indicator"]);
 
         // Selected: WinUI SubtleFill secondary; hover steps to tertiary.
         // Accent lives on the left indicator.

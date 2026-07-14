@@ -1,18 +1,18 @@
 use std::sync::Arc;
 
-use picus::{
-    AppPicusExt, BevyWindowOptions, BuiltinUiAction, PicusPlugin, ProjectionCtx, UiAction, UiButton,
-    UiComboBox, UiComboOption, UiComponent, UiComponentTemplate, UiFlexColumn, UiLabel, UiRoot,
-    UiThemePicker, UiView, bevy_app::{App, Startup, Update},
+use picus::prelude::{
+    AppPicusExt, BevyWindowOptions, BuiltinUiAction, PicusPlugin, ProjectionCtx, UiAction,
+    UiButton, UiComboBox, UiComboOption, UiComponent, UiComponentTemplate, UiFlexColumn, UiLabel,
+    UiRoot, UiThemePicker, UiView,
+    bevy_app::{App, Startup, Update},
     bevy_ecs::{message::MessageReader, prelude::*},
-    register_ui_components,
-    scene::{CommandsSceneExt, bsn},
-    spawn_in_overlay_root,
+    register_ui_components, spawn_in_overlay_root,
     xilem::{
         view::{label, transformed},
         winit::{dpi::LogicalSize, error::EventLoopError},
     },
 };
+use picus::scene::{CommandsSceneExt, bsn};
 use shared_utils::init_logging;
 
 #[derive(Component, Debug, Clone, UiComponent)]
@@ -126,9 +126,10 @@ fn main() -> Result<(), EventLoopError> {
 mod tests {
     #[test]
     fn embedded_overlay_hit_routing_theme_ron_parses() {
-        let sheet =
-            picus::parse_stylesheet_ron(include_str!("../assets/themes/overlay_hit_routing.ron"))
-                .expect("embedded overlay_hit_routing stylesheet should parse");
+        let sheet = picus::styling::parse_stylesheet_ron(include_str!(
+            "../assets/themes/overlay_hit_routing.ron"
+        ))
+        .expect("embedded overlay_hit_routing stylesheet should parse");
         assert_eq!(sheet.default_variant.as_deref(), None);
     }
 }

@@ -5,12 +5,12 @@ use crate::helpers::{
 };
 use crate::state::{GalleryButtonAction, GalleryLocaleCombo};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
-use picus::{
-    FluentIcon, LocalizeText, UiButton, UiCanvas, UiCanvasCommand, UiFlexColumn, UiFlexRow,
-    UiGradientStop, UiImage, UiLabel, UiMarkdown, UiMultilineTextInput, UiSwitch, UiThemePicker,
-    scene::{CommandsSceneExt, bsn, template_value},
-    xilem::Color,
+use picus::prelude::{
+    FluentIcon, LocalizeText, UiButton, UiCanvas, UiCanvasCommand, UiComboBox, UiComboOption,
+    UiFlexColumn, UiFlexRow, UiGradientStop, UiImage, UiLabel, UiMarkdown, UiMultilineTextInput,
+    UiSwitch, UiThemePicker, xilem::Color,
 };
+use picus::scene::{CommandsSceneExt, bsn, template_value};
 
 const MARKDOWN_SAMPLE: &str = r#"# Markdown
 
@@ -296,10 +296,10 @@ pub fn spawn_i18n_page(commands: &mut Commands, parent: Entity) {
 
     commands.spawn_scene(bsn! {
         template_value(
-            picus::UiComboBox::new(vec![
-                picus::UiComboOption::new("en-US", "English (en-US)"),
-                picus::UiComboOption::new("zh-CN", "中文 (zh-CN)"),
-                picus::UiComboOption::new("ja-JP", "日本語 (ja-JP)"),
+            UiComboBox::new(vec![
+                UiComboOption::new("en-US", "English (en-US)"),
+                UiComboOption::new("zh-CN", "中文 (zh-CN)"),
+                UiComboOption::new("ja-JP", "日本語 (ja-JP)"),
             ])
             .with_placeholder("Choose locale")
         )

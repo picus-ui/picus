@@ -1,20 +1,17 @@
 use std::sync::Arc;
 
+use picus::prelude::*;
 use picus::{
-    AppPicusExt, BevyWindowOptions, PicusPlugin, ProjectionCtx, StyleClass, UiAction,
-    UiComponentTemplate, UiRoot, UiThemePicker, UiView, apply_label_style, apply_text_input_style,
-    apply_widget_style,
-    bevy_app::{App, Startup, Update},
-    bevy_ecs::{
-        hierarchy::{ChildOf, Children},
-        prelude::*,
+    app::{
+        bevy_app::{App, Startup, Update},
+        bevy_ecs::{
+            hierarchy::{ChildOf, Children},
+            message::MessageReader,
+            prelude::*,
+            schedule::IntoScheduleConfigs,
+        },
     },
-    checkbox,
-    masonry_core::layout::Length,
-    resolve_style, resolve_style_for_classes, resolve_style_for_entity_classes,
-    scene::{Scene, WorldSceneExt, bsn, template_value},
-    text_input,
-    xilem::{
+    projection::xilem::{
         InsertNewline,
         view::{
             FlexExt as _, FlexSpacer, MainAxisAlignment, flex_col, flex_row, label, sized_box,
@@ -22,6 +19,7 @@ use picus::{
         },
         winit::error::EventLoopError,
     },
+    runtime::masonry_core::layout::Length,
 };
 use shared_utils::init_logging;
 
@@ -65,28 +63,32 @@ struct TodoRuntime {
     list_container: Entity,
 }
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
 struct TodoRootView;
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
 struct TodoHeader;
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
+#[ui_component(resources(DraftTodo))]
 struct TodoInputArea;
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
+#[ui_component(resources(ActiveFilter))]
 struct TodoListContainer;
 
-#[derive(Component, Debug, Clone, Default)]
+#[derive(Component, Debug, Clone, Default, UiComponent)]
 struct TodoItem {
     text: String,
     completed: bool,
 }
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
+#[ui_component(resources(TodoRuntime))]
 struct TodoFilterBar;
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
+#[ui_component(resources(ActiveFilter))]
 struct FilterToggle(FilterType);
 
 impl UiComponentTemplate for TodoRootView {
@@ -364,20 +366,19 @@ fn todo_item_scene(item: TodoItem) -> impl Scene {
 }
 
 #[derive(Resource, Default)]
-struct TodoActionCursor(bevy_ecs::message::MessageCursor<UiAction<TodoEvent>>);
+struct PendingTodoActions(Vec<TodoEvent>);
+
+fn collect_todo_actions(
+    mut reader: MessageReader<UiAction<TodoEvent>>,
+    mut pending: ResMut<PendingTodoActions>,
+) {
+    pending
+        .0
+        .extend(reader.read().map(|event| event.action.clone()));
+}
 
 fn on_todo_actions(world: &mut World) {
-    world.init_resource::<TodoActionCursor>();
-    let events: Vec<TodoEvent> = {
-        let mut cursor = std::mem::take(&mut world.resource_mut::<TodoActionCursor>().0);
-        let messages = world.resource::<bevy_ecs::message::Messages<UiAction<TodoEvent>>>();
-        let events = cursor
-            .read(messages)
-            .map(|UiAction { action, .. }| action.clone())
-            .collect::<Vec<_>>();
-        world.resource_mut::<TodoActionCursor>().0 = cursor;
-        events
-    };
+    let events = std::mem::take(&mut world.resource_mut::<PendingTodoActions>().0);
 
     if events.is_empty() {
         return;
@@ -427,19 +428,20 @@ fn build_bevy_todo_app() -> App {
         .load_style_sheet_ron(include_str!("../assets/themes/todo_list.ron"))
         .insert_resource(ActiveFilter(FilterType::All))
         .insert_resource(DraftTodo("My Next Task".to_string()))
-        .register_projection_resource::<ActiveFilter>()
-        .register_projection_resource::<DraftTodo>()
-        .register_projection_resource::<TodoRuntime>()
-        .register_ui_component::<TodoRootView>()
-        .register_ui_component::<TodoHeader>()
-        .register_ui_component::<TodoInputArea>()
-        .register_ui_component::<TodoListContainer>()
-        .register_ui_component::<TodoItem>()
-        .register_ui_component::<TodoFilterBar>()
-        .register_ui_component::<FilterToggle>()
+        .init_resource::<PendingTodoActions>()
         .add_ui_action::<TodoEvent>()
         .add_systems(Startup, setup_todo_world)
-        .add_systems(Update, on_todo_actions);
+        .add_systems(Update, (collect_todo_actions, on_todo_actions).chain());
+    register_ui_components!(
+        &mut app,
+        TodoRootView,
+        TodoHeader,
+        TodoInputArea,
+        TodoListContainer,
+        TodoItem,
+        TodoFilterBar,
+        FilterToggle,
+    );
 
     app
 }
@@ -452,8 +454,9 @@ fn main() -> Result<(), EventLoopError> {
 mod tests {
     #[test]
     fn embedded_todo_theme_ron_parses() {
-        let sheet = picus::parse_stylesheet_ron(include_str!("../assets/themes/todo_list.ron"))
-            .expect("embedded todo_list stylesheet should parse");
+        let sheet =
+            picus::styling::parse_stylesheet_ron(include_str!("../assets/themes/todo_list.ron"))
+                .expect("embedded todo_list stylesheet should parse");
         assert_eq!(sheet.default_variant.as_deref(), Some("dark"));
     }
 }

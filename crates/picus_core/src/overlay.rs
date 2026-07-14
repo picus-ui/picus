@@ -2717,7 +2717,8 @@ mod tests {
     };
     use crate::test_helpers::*;
     use crate::{
-        AppPicusExt, PicusPlugin, UiDialog, UiEventQueue, UiRoot, ensure_overlay_defaults,
+        AdvancedAppPicusExt, AppPicusExt, PicusPlugin, UiDialog, UiEventQueue, UiRoot,
+        ensure_overlay_defaults,
         ensure_overlay_root, ensure_overlay_root_entity, handle_overlay_actions,
         reparent_overlay_entities, spawn_in_overlay_root,
     };

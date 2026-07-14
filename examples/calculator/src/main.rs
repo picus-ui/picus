@@ -1,13 +1,12 @@
 use std::sync::Arc;
 
+use picus::prelude::*;
 use picus::{
-    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiComponentTemplate, UiRoot,
-    UiThemePicker, UiView, apply_label_style, apply_widget_style,
-    bevy_app::{App, Startup, Update},
-    bevy_ecs::{message::MessageReader, prelude::*},
-    resolve_style, resolve_style_for_classes, BevyWindowOptions, UiAction, 
-    scene::{CommandsSceneExt, Scene, SceneList, bsn, bsn_list, template_value},
-    xilem::{
+    app::{
+        bevy_app::{App, Startup, Update},
+        bevy_ecs::{message::MessageReader, prelude::*},
+    },
+    projection::xilem::{
         view::{FlexExt as _, flex_col, flex_row, label},
         winit::{dpi::LogicalSize, error::EventLoopError},
     },
@@ -252,16 +251,17 @@ fn format_number(value: f64) -> String {
     }
 }
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
 struct CalcRoot;
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
+#[ui_component(resources(CalculatorEngine))]
 struct CalcDisplayPanel;
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
 struct CalcKeypad;
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
 struct CalcButtonRow;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -272,7 +272,7 @@ enum CalcButtonKind {
     Operator,
 }
 
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, UiComponent)]
 struct CalcButtonSpec {
     label: &'static str,
     event: CalcEvent,
@@ -542,18 +542,24 @@ fn build_bevy_calculator_app() -> App {
     app.add_plugins(PicusPlugin)
         .load_style_sheet_ron(include_str!("../assets/themes/calculator.ron"))
         .insert_resource(CalculatorEngine::default())
-        .register_projection_resource::<CalculatorEngine>()
-        .register_ui_component::<CalcRoot>()
-        .register_ui_component::<CalcDisplayPanel>()
-        .register_ui_component::<CalcKeypad>()
-        .register_ui_component::<CalcButtonRow>()
-        .register_ui_component::<CalcButtonSpec>()
         .add_systems(Startup, setup_calculator_world);
+    register_calculator_components(&mut app);
 
     app.add_ui_action::<CalcEvent>()
         .add_systems(Update, on_calc_actions);
 
     app
+}
+
+fn register_calculator_components(app: &mut App) {
+    register_ui_components!(
+        app,
+        CalcRoot,
+        CalcDisplayPanel,
+        CalcKeypad,
+        CalcButtonRow,
+        CalcButtonSpec,
+    );
 }
 
 fn main() -> Result<(), EventLoopError> {
@@ -568,8 +574,9 @@ mod tests {
     use super::*;
     #[test]
     fn embedded_calculator_theme_ron_parses() {
-        let sheet = picus::parse_stylesheet_ron(include_str!("../assets/themes/calculator.ron"))
-            .expect("embedded calculator stylesheet should parse");
+        let sheet =
+            picus::styling::parse_stylesheet_ron(include_str!("../assets/themes/calculator.ron"))
+                .expect("embedded calculator stylesheet should parse");
         assert_eq!(sheet.default_variant.as_deref(), Some("dark"));
     }
 
@@ -577,14 +584,10 @@ mod tests {
     fn setup_spawns_componentized_keypad_entities() {
         let mut app = App::new();
         app.add_plugins(PicusPlugin)
+            .add_ui_action::<CalcEvent>()
             .insert_resource(CalculatorEngine::default())
-            .register_projection_resource::<CalculatorEngine>()
-            .register_ui_component::<CalcRoot>()
-            .register_ui_component::<CalcDisplayPanel>()
-            .register_ui_component::<CalcKeypad>()
-            .register_ui_component::<CalcButtonRow>()
-            .register_ui_component::<CalcButtonSpec>()
             .add_systems(Startup, setup_calculator_world);
+        register_calculator_components(&mut app);
 
         app.update();
 

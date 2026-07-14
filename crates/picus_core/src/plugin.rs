@@ -2,15 +2,15 @@ use crate::accelerator::{CurrentAcceleratorModifiers, process_keyboard_accelerat
 use crate::accessibility::{
     AccessibilityTree, handle_accessibility_actions, sync_accessibility_tree,
 };
+use crate::backdrop::{apply_window_backdrop_materials, sync_theme_window_backdrops};
 use crate::bevy_tween::{
     BevyTweenRegisterSystems, DefaultTweenPlugins, TweenCorePlugin, TweenSystemSet,
     component_tween_system,
 };
-use crate::backdrop::{apply_window_backdrop_materials, sync_theme_window_backdrops};
 use crate::clipboard::{Clipboard, handle_clipboard_events};
 use crate::composition::{CompositionState, apply_composition_effects, sync_composition_visuals};
 use crate::drag_drop::{DragState, dispatch_drag_events, track_drag_state};
-use crate::titlebar_system::{handle_titlebar_actions, sync_titlebar_state};
+use crate::titlebar_system::{apply_titlebar_action, sync_titlebar_state};
 use crate::validation::{ValidationRegistry, run_validation};
 use bevy_app::{App, Last, Plugin, PostUpdate, PreUpdate, TaskPoolPlugin, Update};
 use bevy_asset::{AssetApp, AssetEvent, AssetPlugin};
@@ -28,14 +28,16 @@ use bevy_window::{
 use crate::{
     AppBreakpoints, BuiltinUiAction, OverlayStack, WindowSize,
     components::register_builtin_ui_components,
-    events::{InternalUiEventQueue, UiActionRegistry, dispatch_ui_actions, register_ui_action_type},
+    events::{
+        InternalUiEventQueue, UiActionRegistry, dispatch_ui_actions, register_ui_action_type,
+    },
     fonts::{XilemFontBridge, collect_bevy_font_assets, sync_fonts_to_xilem},
     i18n::AppI18n,
     overlay::{
         OverlayPointerRoutingState, OverlayUiAction, apply_overlay_ui_action,
         bubble_ui_pointer_events, ensure_overlay_defaults, ensure_overlay_root,
-        handle_context_menu_right_clicks, handle_global_overlay_clicks,
-        reparent_overlay_entities, sync_overlay_positions, sync_overlay_stack_lifecycle,
+        handle_context_menu_right_clicks, handle_global_overlay_clicks, reparent_overlay_entities,
+        sync_overlay_positions, sync_overlay_stack_lifecycle,
     },
     projection::markdown::{
         StreamingMarkdownParseCache, evict_streaming_markdown_cache,
@@ -51,8 +53,8 @@ use crate::{
         ActiveStyleSheet, ActiveStyleSheetAsset, ActiveStyleSheetSelectors,
         ActiveStyleSheetTokenNames, ActiveStyleVariant, AppliedStyleVariant, BaseStyleSheet,
         ReducedMotion, RegisteredStyleVariants, StyleAssetEventCursor, StyleSheet,
-        StyleSheetRonLoader, ThemeBackdropOverride, activate_debounced_hovers, animate_style_transitions,
-        ensure_active_stylesheet_asset_handle, mark_style_dirty,
+        StyleSheetRonLoader, ThemeBackdropOverride, activate_debounced_hovers,
+        animate_style_transitions, ensure_active_stylesheet_asset_handle, mark_style_dirty,
         register_builtin_style_type_aliases, register_embedded_fluent_theme_variants,
         sync_active_style_variant, sync_style_targets, sync_stylesheet_asset_events,
         sync_ui_interaction_markers,
@@ -121,7 +123,6 @@ impl Plugin for PicusPlugin {
                 Update,
                 component_tween_system::<crate::styling::ColorStyleLens>(),
             )
-
             .init_asset::<StyleSheet>()
             .init_asset_loader::<StyleSheetRonLoader>()
             .init_resource::<UiProjectorRegistry>()
@@ -225,8 +226,6 @@ impl Plugin for PicusPlugin {
                     ensure_overlay_root,
                     reparent_overlay_entities,
                     ensure_overlay_defaults,
-                    // Convert any actions re-queued during Update into Messages.
-                    dispatch_ui_actions,
                     activate_debounced_hovers,
                     handle_tooltip_hovers,
                     tick_auto_dismiss,
@@ -245,7 +244,6 @@ impl Plugin for PicusPlugin {
                 Update,
                 sync_focus_state.after(inject_bevy_input_into_masonry),
             )
-            .add_systems(Update, handle_titlebar_actions)
             .add_systems(
                 Update,
                 animate_style_transitions.after(TweenSystemSet::ApplyTween),
@@ -302,18 +300,21 @@ impl Plugin for PicusPlugin {
 /// [`OverlayUiAction`] so the sole queue consumer is [`dispatch_ui_actions`].
 fn register_builtin_ui_action_messages(app: &mut App) {
     use crate::{
-        TitleBarAction, UiCheckboxChanged, UiColorPickerChanged, UiComboBoxChanged,
-        UiContextMenuItemSelected, UiDataTableSelectionChanged, UiDataTableSortChanged,
-        UiDatePickerChanged, UiExpanderChanged, UiLinkAction, UiListViewSelectionChanged,
-        UiMenuItemSelected, UiMultilineTextInputChanged, UiNavigationBackRequested,
-        UiNavigationDisplayModeChanged, UiNavigationItemExpandedChanged, UiNavigationItemInvoked,
-        UiNavigationPaneChanged, UiNavigationSelectionChanged, UiNumericUpDownChanged,
-        UiPasswordInputChanged, UiRadioGroupChanged, UiRatingChanged, UiScrollViewChanged,
-        UiSearchChanged, UiSliderChanged, UiSwitchChanged, UiTabChanged, UiTextInputChanged,
-        UiThemePickerChanged, UiTimePickerChanged, UiTreeNodeToggled,
+        AcceleratorActivated, AccessibleAction, TitleBarAction, UiCheckboxChanged,
+        UiColorPickerChanged, UiComboBoxChanged, UiContextMenuItemSelected,
+        UiDataTableSelectionChanged, UiDataTableSortChanged, UiDatePickerChanged,
+        UiExpanderChanged, UiLinkAction, UiListViewSelectionChanged, UiMenuItemSelected,
+        UiMultilineTextInputChanged, UiNavigationBackRequested, UiNavigationDisplayModeChanged,
+        UiNavigationItemExpandedChanged, UiNavigationItemInvoked, UiNavigationPaneChanged,
+        UiNavigationSelectionChanged, UiNumericUpDownChanged, UiPasswordInputChanged,
+        UiRadioGroupChanged, UiRatingChanged, UiScrollViewChanged, UiSearchChanged,
+        UiSliderChanged, UiSwitchChanged, UiTabChanged, UiTextInputChanged, UiThemePickerChanged,
+        UiTimePickerChanged, UiTreeNodeToggled,
     };
 
     register_ui_action_type::<BuiltinUiAction>(app);
+    register_ui_action_type::<AcceleratorActivated>(app);
+    register_ui_action_type::<AccessibleAction>(app);
     register_ui_action_type::<TitleBarAction>(app);
     register_ui_action_type::<UiCheckboxChanged>(app);
     register_ui_action_type::<UiColorPickerChanged>(app);
@@ -350,6 +351,9 @@ fn register_builtin_ui_action_messages(app: &mut App) {
     // Built-in retained interactions: mutate ECS from the single dispatcher.
     app.world_mut()
         .resource_mut::<UiActionRegistry>()
+        .register_handler::<TitleBarAction, _>(apply_titlebar_action);
+    app.world_mut()
+        .resource_mut::<UiActionRegistry>()
         .register_handler::<WidgetUiAction, _>(|world, entity, action| {
             apply_widget_ui_action(world, entity, action);
         });
@@ -364,7 +368,7 @@ fn register_builtin_ui_action_messages(app: &mut App) {
 mod tests {
     use super::*;
     use crate::test_helpers::*;
-    use crate::{AppI18n, AppPicusExt, UiRoot};
+    use crate::{AdvancedAppPicusExt, AppI18n, UiRoot};
     use bevy_app::App;
     use bevy_ecs::{
         hierarchy::{ChildOf, Children},

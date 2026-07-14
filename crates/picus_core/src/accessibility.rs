@@ -187,15 +187,16 @@ pub fn sync_accessibility_tree(
     }
 }
 
-/// Dispatch incoming AccessKit action requests to the ECS event queue.
+/// Dispatch incoming AccessKit action requests to the internal ECS action queue.
 ///
 /// This system should be scheduled in `Update` and reads action requests
 /// from the bevy_a11y accessibility resource, converting them into
-/// [`AccessibleAction`] events pushed through [`UiEventQueue`].
+/// [`AccessibleAction`] events that the dispatcher publishes as
+/// `UiAction<AccessibleAction>` messages.
 ///
 /// This is a framework-level dispatch; concrete components (buttons,
-/// sliders, text inputs) should drain [`AccessibleAction`] from
-/// [`UiEventQueue`] and perform the appropriate mutation.
+/// sliders, text inputs) should read `MessageReader<UiAction<AccessibleAction>>`
+/// and perform the appropriate mutation.
 pub fn handle_accessibility_actions(queue: Res<UiEventQueue>) {
     // AccessKit action requests arrive through the bevy_a11y
     // `AccessibilityRequested` resource.  In the current bevy 0.19

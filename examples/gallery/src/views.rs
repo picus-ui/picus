@@ -6,8 +6,8 @@
 
 use std::sync::Arc;
 
-use picus::{
-    ProjectionCtx, StyleClass, UiComponentTemplate, UiSearch, UiThemePicker, UiView,
+use picus::prelude::{
+    ProjectionCtx, StyleClass, UiComponent, UiComponentTemplate, UiSearch, UiThemePicker, UiView,
     apply_widget_style,
     bevy_ecs::prelude::*,
     masonry_core::{
@@ -22,11 +22,11 @@ use picus::{
 };
 
 /// Root gallery component: renders a full-viewport flex column layout.
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
 pub struct GalleryRoot;
 
 /// Fixed top bar shell: brand at start, search near the end, tools at the edge.
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
 pub struct GalleryTopBar;
 
 fn child_entity_views(ctx: &ProjectionCtx<'_>) -> Vec<(Entity, UiView)> {
@@ -36,7 +36,10 @@ fn child_entity_views(ctx: &ProjectionCtx<'_>) -> Vec<(Entity, UiView)> {
         .map(|children| children.iter().collect::<Vec<_>>())
         .unwrap_or_default();
 
-    child_entities.into_iter().zip(ctx.children.clone()).collect()
+    child_entities
+        .into_iter()
+        .zip(ctx.children.clone())
+        .collect()
 }
 
 fn has_style_class(world: &World, entity: Entity, class: &str) -> bool {
@@ -123,10 +126,7 @@ impl UiComponentTemplate for GalleryTopBar {
                 flex_row(children).gap(Length::px(style.layout.gap)),
                 &style,
             ))
-            .dims(
-                Dimensions::AUTO.with_width(Dim::Stretch),
-            ),
+            .dims(Dimensions::AUTO.with_width(Dim::Stretch)),
         )
     }
 }
-

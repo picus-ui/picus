@@ -3,7 +3,8 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use picus::masonry_core::{
+use picus::prelude::*;
+use picus::runtime::masonry_core::{
     accesskit::{Node, Role},
     core::{
         AccessCtx, AccessEvent, ChildrenIds, EventCtx, FromDynWidget, LayoutCtx, MeasureCtx,
@@ -16,21 +17,18 @@ use picus::masonry_core::{
     layout::{LenReq, Length},
     properties::Padding,
 };
-use picus::{BevyWindowOptions, 
-    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiComponentTemplate, UiRoot,
-    UiThemePicker, UiView, apply_label_style, apply_widget_style,
-    bevy_app::{App, PreUpdate, Startup},
-    bevy_ecs::prelude::*,
-    bevy_input::{ButtonInput, keyboard::KeyCode},
-    bevy_window::WindowResized,
-    UiActionSender,
-    picus_view::{
+use picus::{
+    app::{
+        bevy_app::{App, PreUpdate, Startup, Update},
+        bevy_ecs::{message::MessageReader, prelude::*, schedule::IntoScheduleConfigs},
+        bevy_input::{ButtonInput, keyboard::KeyCode},
+        bevy_window::WindowResized,
+    },
+    projection::picus_view::{
         Pod, ViewCtx, WidgetView,
         core::{MessageCtx, MessageResult, Mut, View, ViewId, ViewMarker, ViewPathTracker},
     },
-    resolve_style, resolve_style_for_classes, 
-    scene::{CommandsSceneExt, Scene, SceneList, bsn, bsn_list, template_value},
-    xilem::{
+    projection::xilem::{
         Color,
         style::Style as _,
         view::{
@@ -461,13 +459,13 @@ impl Default for Game2048State {
     }
 }
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
 struct GameRoot;
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
 struct HeaderBlock;
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
 struct ScoreStrip;
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -499,44 +497,49 @@ impl ScoreKind {
     }
 }
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
+#[ui_component(resources(Game2048State))]
 struct ScoreCard {
     kind: ScoreKind,
 }
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
+#[ui_component(resources(Game2048State))]
 struct StatusLine;
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
 struct GameFlowRow;
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
 struct BoardContainer;
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
 struct BoardRow;
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
+#[ui_component(resources(GameViewport, Game2048State))]
 struct TileCell {
     index: usize,
 }
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
 struct UiComponentsPad;
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
+#[ui_component(resources(GameViewport))]
 struct SidePanel;
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
 struct UiComponentsRow;
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
+#[ui_component(resources(GameViewport))]
 struct UiComponentButton {
     action: GameEvent,
     label: &'static str,
 }
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
 struct HintLine;
 
 struct HotkeyCaptureWidget<W: Widget + FromDynWidget + ?Sized> {
@@ -1220,8 +1223,28 @@ fn ui_component_button_scene(
     }
 }
 
-fn drain_game_events(world: &mut World) {
-    let events = picus::drain_ui_actions::<GameEvent>(world);
+#[derive(Resource, Default)]
+struct PendingGameActions(Vec<UiAction<GameEvent>>);
+
+#[derive(Resource, Default)]
+struct PendingKeyboardActions(Vec<KeyboardAction>);
+
+fn collect_game_events(
+    mut reader: MessageReader<UiAction<GameEvent>>,
+    mut pending: ResMut<PendingGameActions>,
+) {
+    pending.0.extend(reader.read().cloned());
+}
+
+fn collect_keyboard_events(
+    mut reader: MessageReader<UiAction<KeyboardAction>>,
+    mut pending: ResMut<PendingKeyboardActions>,
+) {
+    pending.0.extend(reader.read().map(|event| event.action));
+}
+
+fn apply_game_actions(world: &mut World) {
+    let events = std::mem::take(&mut world.resource_mut::<PendingGameActions>().0);
 
     if events.is_empty() {
         return;
@@ -1264,7 +1287,7 @@ fn sync_keyboard_input(world: &mut World) {
         world.insert_resource(ButtonInput::<KeyCode>::default());
     }
 
-    let events = picus::drain_ui_actions::<KeyboardAction>(world);
+    let events = std::mem::take(&mut world.resource_mut::<PendingKeyboardActions>().0);
 
     if events.is_empty() {
         world.resource_mut::<ButtonInput<KeyCode>>().clear();
@@ -1274,10 +1297,10 @@ fn sync_keyboard_input(world: &mut World) {
     let mut input = world.resource_mut::<ButtonInput<KeyCode>>();
     input.clear();
     for event in events {
-        if event.action.pressed {
-            input.press(event.action.key);
+        if event.pressed {
+            input.press(event.key);
         } else {
-            input.release(event.action.key);
+            input.release(event.key);
         }
     }
 }
@@ -1328,33 +1351,38 @@ fn build_2048_app() -> App {
         .insert_resource(ButtonInput::<KeyCode>::default())
         .insert_resource(GameViewport::default())
         .insert_resource(Game2048State::default())
-        .register_projection_resource::<GameViewport>()
-        .register_projection_resource::<Game2048State>()
-        .register_ui_component::<GameRoot>()
-        .register_ui_component::<HeaderBlock>()
-        .register_ui_component::<ScoreStrip>()
-        .register_ui_component::<ScoreCard>()
-        .register_ui_component::<StatusLine>()
-        .register_ui_component::<GameFlowRow>()
-        .register_ui_component::<BoardContainer>()
-        .register_ui_component::<BoardRow>()
-        .register_ui_component::<TileCell>()
-        .register_ui_component::<SidePanel>()
-        .register_ui_component::<UiComponentsPad>()
-        .register_ui_component::<UiComponentsRow>()
-        .register_ui_component::<UiComponentButton>()
-        .register_ui_component::<HintLine>()
+        .init_resource::<PendingGameActions>()
+        .init_resource::<PendingKeyboardActions>()
         .add_systems(Startup, setup_game_world)
         .add_systems(PreUpdate, track_game_viewport)
         .add_systems(
-            PreUpdate,
+            Update,
             (
+                collect_keyboard_events,
                 sync_keyboard_input,
                 apply_keyboard_game_input,
-                drain_game_events,
+                collect_game_events,
+                apply_game_actions,
             )
                 .chain(),
         );
+    register_ui_components!(
+        &mut app,
+        GameRoot,
+        HeaderBlock,
+        ScoreStrip,
+        ScoreCard,
+        StatusLine,
+        GameFlowRow,
+        BoardContainer,
+        BoardRow,
+        TileCell,
+        SidePanel,
+        UiComponentsPad,
+        UiComponentsRow,
+        UiComponentButton,
+        HintLine,
+    );
     app
 }
 
@@ -1461,12 +1489,22 @@ mod tests {
 
     #[test]
     fn keyboard_action_pipeline_applies_move_immediately() {
-        use picus::{AppPicusExt, PicusPlugin, UiAction};
+        use picus::prelude::{AppPicusExt, PicusPlugin, UiAction};
 
         let mut app = App::new();
         app.add_plugins(PicusPlugin)
             .add_ui_action::<KeyboardAction>()
-            .insert_resource(ButtonInput::<KeyCode>::default());
+            .insert_resource(ButtonInput::<KeyCode>::default())
+            .init_resource::<PendingKeyboardActions>()
+            .add_systems(
+                Update,
+                (
+                    collect_keyboard_events,
+                    sync_keyboard_input,
+                    apply_keyboard_game_input,
+                )
+                    .chain(),
+            );
 
         let sender = app.world_mut().spawn_empty().id();
         let mut state = Game2048State {
@@ -1486,11 +1524,9 @@ mod tests {
             },
         });
 
-        let world = app.world_mut();
-        sync_keyboard_input(world);
-        apply_keyboard_game_input(world);
+        app.update();
 
-        let state = world.resource::<Game2048State>();
+        let state = app.world().resource::<Game2048State>();
         assert_eq!(state.game.tiles[0], 4);
         assert_eq!(state.game.score, 4);
         assert_eq!(state.game.moves, 1);
@@ -1526,8 +1562,9 @@ mod tests {
 
     #[test]
     fn embedded_theme_ron_parses() {
-        let sheet = picus::parse_stylesheet_ron(include_str!("../assets/themes/game_2048.ron"))
-            .expect("embedded game_2048 stylesheet should parse");
+        let sheet =
+            picus::styling::parse_stylesheet_ron(include_str!("../assets/themes/game_2048.ron"))
+                .expect("embedded game_2048 stylesheet should parse");
         assert_eq!(sheet.default_variant.as_deref(), Some("dark"));
     }
 }

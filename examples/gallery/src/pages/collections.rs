@@ -2,10 +2,8 @@
 
 use crate::helpers::{card, class, generated_image, grid, note};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
-use picus::{
-    UiDataColumn, UiDataRow, UiDataTable, UiListView, UiTable, UiTreeNode,
-    scene::{CommandsSceneExt, bsn, template_value},
-};
+use picus::prelude::{UiDataColumn, UiDataRow, UiDataTable, UiListView, UiTable, UiTreeNode};
+use picus::scene::{CommandsSceneExt, bsn, template_value};
 
 pub fn spawn_list_view_page(commands: &mut Commands, parent: Entity) {
     let g = grid(commands, parent, 2);

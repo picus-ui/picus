@@ -5,6 +5,7 @@ use fluent::{FluentResource, concurrent::FluentBundle};
 use std::{fs, io, path::Path};
 use unic_langid::LanguageIdentifier;
 
+use crate::xilem::winit::error::EventLoopError;
 use crate::{
     ActiveStyleSheetAsset, AppI18n, BevyWindowOptions, MasonryRuntime, ProjectionCtx, StyleSheet,
     StyleTypeRegistry, UiProjector, UiProjectorRegistry, UiView, WindowBackdropMaterial,
@@ -13,10 +14,9 @@ use crate::{
         RegisteredUiComponentTypes, UiComponentTemplate, expand_added_ui_component_templates,
     },
     events::{InternalUiEventQueue, register_ui_action_type},
-    run_app_with_window_options, set_active_style_variant_by_name, set_active_stylesheet_asset_path,
-    set_theme_backdrop_material,
+    run_app_with_window_options, set_active_style_variant_by_name,
+    set_active_stylesheet_asset_path, set_theme_backdrop_material,
 };
-use crate::xilem::winit::error::EventLoopError;
 
 /// Synchronous source for binary assets (fonts).
 pub enum SyncAssetSource<'a> {
@@ -56,7 +56,35 @@ fn flush_pending_font_registrations(app: &mut App) {
     }
 }
 
-/// Fluent extension methods for registering Picus projectors on a Bevy [`App`].
+/// Low-level registration APIs for framework integrations.
+///
+/// Application components should use `#[derive(UiComponent)]` plus
+/// `register_ui_components!`; this trait is exposed only from
+/// `picus::runtime::advanced` by the public facade.
+pub trait AdvancedAppPicusExt {
+    /// Register a typed projector for a specific component.
+    fn register_projector<C: Component>(
+        &mut self,
+        projector: fn(&C, ProjectionCtx<'_>) -> UiView,
+    ) -> &mut Self;
+
+    /// Register an ECS-native UI component template.
+    fn register_ui_component<T: UiComponentTemplate>(&mut self) -> &mut Self;
+
+    /// Register a Bevy resource as an input to UI projection.
+    fn register_projection_resource<R: Resource>(&mut self) -> &mut Self;
+
+    /// Register a raw projector implementation.
+    fn register_raw_projector<P: UiProjector>(&mut self, projector: P) -> &mut Self;
+
+    /// Register a selector type alias usable by `Selector::Type("...")`.
+    fn register_style_selector_type<T: Component>(
+        &mut self,
+        selector_name: impl Into<String>,
+    ) -> &mut Self;
+}
+
+/// Fluent application setup methods for a Bevy [`App`].
 ///
 /// # Example
 ///
@@ -64,7 +92,8 @@ fn flush_pending_font_registrations(app: &mut App) {
 /// use std::sync::Arc;
 ///
 /// use picus_core::{
-///     AppPicusExt, PicusPlugin, ProjectionCtx, UiComponentTemplate, UiRoot, UiView,
+///     AdvancedAppPicusExt, AppPicusExt, PicusPlugin, ProjectionCtx, UiComponentTemplate,
+///     UiRoot, UiView,
 ///     bevy_app::{App, Startup},
 ///     bevy_ecs::prelude::*,
 /// };
@@ -94,43 +123,6 @@ fn flush_pending_font_registrations(app: &mut App) {
 ///     .add_systems(Startup, setup);
 /// ```
 pub trait AppPicusExt {
-    /// Register a typed projector for a specific component.
-    ///
-    /// Last registered projector has precedence during projection.
-    ///
-    /// Low-level API; prefer [`Self::register_ui_component`] or
-    /// `register_ui_components!` for application code.
-    #[doc(hidden)]
-    fn register_projector<C: Component>(
-        &mut self,
-        projector: fn(&C, ProjectionCtx<'_>) -> UiView,
-    ) -> &mut Self;
-
-    /// Register an ECS-native UI component template.
-    ///
-    /// This single call wires projector registration, one-time expansion for `Added<T>`,
-    /// and selector type aliases.
-    ///
-    /// Prefer `register_ui_components!(app, ...)` with `#[derive(UiComponent)]` for
-    /// application components.
-    fn register_ui_component<T: UiComponentTemplate>(&mut self) -> &mut Self;
-
-    /// Register a Bevy resource as an input to UI projection.
-    ///
-    /// Use this for resources read from [`ProjectionCtx::world`] by application
-    /// projectors. Registered resources invalidate synthesis only when Bevy
-    /// change detection says they changed.
-    ///
-    /// Prefer declaring resources on `#[ui_component(resources(...))]` so
-    /// `register_ui_components!` installs them automatically.
-    fn register_projection_resource<R: Resource>(&mut self) -> &mut Self;
-
-    /// Register a raw projector implementation.
-    ///
-    /// Low-level API; prefer [`Self::register_ui_component`] for application code.
-    #[doc(hidden)]
-    fn register_raw_projector<P: UiProjector>(&mut self, projector: P) -> &mut Self;
-
     /// Register payload type `T` for application UI actions.
     ///
     /// Installs `Messages<UiAction<T>>`, a [`crate::UiActionSender<T>`] resource,
@@ -170,12 +162,6 @@ pub trait AppPicusExt {
     /// Clear an application theme backdrop override.
     fn clear_theme_backdrop_override(&mut self) -> &mut Self;
 
-    /// Register a selector type alias usable by `Selector::Type("...")` in stylesheet RON.
-    fn register_style_selector_type<T: Component>(
-        &mut self,
-        selector_name: impl Into<String>,
-    ) -> &mut Self;
-
     /// Register a font synchronously from bytes or filesystem path.
     ///
     /// Font registration is fail-fast and writes into the active Masonry Core runtime font
@@ -213,7 +199,7 @@ pub trait AppPicusExt {
     ) -> Result<(), EventLoopError>;
 }
 
-impl AppPicusExt for App {
+impl AdvancedAppPicusExt for App {
     fn register_projector<C: Component>(
         &mut self,
         projector: fn(&C, ProjectionCtx<'_>) -> UiView,
@@ -267,6 +253,19 @@ impl AppPicusExt for App {
         self
     }
 
+    fn register_style_selector_type<T: Component>(
+        &mut self,
+        selector_name: impl Into<String>,
+    ) -> &mut Self {
+        self.init_resource::<StyleTypeRegistry>();
+        let mut registry = self.world_mut().resource_mut::<StyleTypeRegistry>();
+        registry.register_type_aliases::<T>();
+        registry.register_type_name::<T>(selector_name);
+        self
+    }
+}
+
+impl AppPicusExt for App {
     fn add_ui_action<T: Clone + Send + Sync + 'static>(&mut self) -> &mut Self {
         register_ui_action_type::<T>(self);
         self
@@ -309,17 +308,6 @@ impl AppPicusExt for App {
 
     fn clear_theme_backdrop_override(&mut self) -> &mut Self {
         clear_theme_backdrop_material_override(self.world_mut());
-        self
-    }
-
-    fn register_style_selector_type<T: Component>(
-        &mut self,
-        selector_name: impl Into<String>,
-    ) -> &mut Self {
-        self.init_resource::<StyleTypeRegistry>();
-        let mut registry = self.world_mut().resource_mut::<StyleTypeRegistry>();
-        registry.register_type_aliases::<T>();
-        registry.register_type_name::<T>(selector_name);
         self
     }
 

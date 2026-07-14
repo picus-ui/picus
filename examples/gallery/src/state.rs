@@ -6,7 +6,7 @@
 //! control showcase page.
 
 use bevy_ecs::prelude::*;
-use picus::{FluentIcon, ToastKind};
+use picus::prelude::{FluentIcon, ToastKind};
 
 /// Marks the Window Backdrop page's theme-backed native material picker.
 #[derive(Component, Debug, Clone, Copy, Default)]
@@ -219,18 +219,12 @@ impl GalleryPage {
             Self::ListView => {
                 "A list view presents a scrollable collection of items with single or multi selection."
             }
-            Self::TreeView => {
-                "A tree view displays hierarchical data with expandable nodes."
-            }
-            Self::Table => {
-                "A table presents structured rows and columns for compact tabular data."
-            }
+            Self::TreeView => "A tree view displays hierarchical data with expandable nodes.",
+            Self::Table => "A table presents structured rows and columns for compact tabular data.",
             Self::DataTable => {
                 "A data table supports typed columns, selection, and image cell templates."
             }
-            Self::MenuBar => {
-                "A menu bar hosts top-level menus that open dropdown command panels."
-            }
+            Self::MenuBar => "A menu bar hosts top-level menus that open dropdown command panels.",
             Self::TitleBar => {
                 "A custom title bar draws window chrome with minimize, maximize, and close actions."
             }
@@ -246,9 +240,7 @@ impl GalleryPage {
             Self::ToolTip => {
                 "A tooltip shows a short description when the pointer hovers a control."
             }
-            Self::Dialog => {
-                "A dialog is a modal overlay with a title, body, and dismiss action."
-            }
+            Self::Dialog => "A dialog is a modal overlay with a title, body, and dismiss action.",
             Self::Toast => {
                 "A toast is a transient or persistent notification on an overlay surface."
             }
@@ -273,9 +265,7 @@ impl GalleryPage {
             Self::SplitPane => {
                 "A split pane divides content into resizable primary and secondary regions."
             }
-            Self::TabBar => {
-                "A tab bar switches between sibling content panels by selected tab."
-            }
+            Self::TabBar => "A tab bar switches between sibling content panels by selected tab.",
             Self::Canvas => {
                 "A canvas draws vector commands and supports absolute child positioning."
             }
@@ -297,12 +287,8 @@ impl GalleryPage {
             Self::Markdown => {
                 "Markdown rendering for headings, lists, tables, emphasis, and fenced code."
             }
-            Self::Theme => {
-                "Theme variant switching and interactive color transition samples."
-            }
-            Self::I18n => {
-                "Locale switching, Fluent bundle keys, and CJK font fallback samples."
-            }
+            Self::Theme => "Theme variant switching and interactive color transition samples.",
+            Self::I18n => "Locale switching, Fluent bundle keys, and CJK font fallback samples.",
         }
     }
 

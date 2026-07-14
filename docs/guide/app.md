@@ -115,8 +115,11 @@ Style via RON selectors on the type name or classes such as `form.row` /
 
 ## When to use exclusive systems
 
-Prefer ordinary `MessageReader` systems. For world-exclusive mutation, use
-`picus::drain_ui_actions::<T>(world)` which reads only newly arrived messages.
+Prefer ordinary `MessageReader` systems. When a mutation must run in an
+exclusive system, collect messages into an app-owned pending resource in a
+normal system, then pass that resource to the exclusive system. The internal
+Picus action queue is never exposed to applications and has no public typed
+drain API.
 
 ## Related guides
 
@@ -128,6 +131,8 @@ Prefer ordinary `MessageReader` systems. For world-exclusive mutation, use
 | i18n / fonts | [i18n-fonts-icons.md](i18n-fonts-icons.md) |
 | Multi-window | [multi-window.md](multi-window.md) |
 | Overlays / scroll | [overlays-scroll.md](overlays-scroll.md) |
+| Components / BSN | [components-bsn.md](components-bsn.md) |
+| Testing | [testing.md](testing.md) |
 
 ### Projection dirty diagnostics
 

@@ -3,11 +3,11 @@
 use crate::helpers::{card, class, grid, info_button, note, placeholder};
 use crate::state::GalleryButtonAction;
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
-use picus::{
+use picus::prelude::{
     UiButton, UiCheckbox, UiColorPicker, UiComboBox, UiComboOption, UiDatePicker, UiNumericUpDown,
     UiRadioGroup, UiSlider, UiSwitch,
-    scene::{CommandsSceneExt, bsn, template_value},
 };
+use picus::scene::{CommandsSceneExt, bsn, template_value};
 
 pub fn spawn_button_page(commands: &mut Commands, parent: Entity) {
     let g = grid(commands, parent, 2);

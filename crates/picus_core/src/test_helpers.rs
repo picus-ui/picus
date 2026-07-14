@@ -22,8 +22,8 @@ use masonry_core::{
 };
 
 use crate::{
-    AppPicusExt, UiEventQueue, UiProjectorRegistry, UiRoot, UiView, register_builtin_projectors,
-    synthesize_roots_with_stats,
+    AdvancedAppPicusExt, UiEventQueue, UiProjectorRegistry, UiRoot, UiView,
+    register_builtin_projectors, synthesize_roots_with_stats,
 };
 
 // ---------------------------------------------------------------------------

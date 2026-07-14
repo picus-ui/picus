@@ -1,9 +1,7 @@
 use std::sync::Arc;
 
-use picus::{
-    ProjectionCtx, UiComponent, UiComponentTemplate, UiView, bevy_ecs::prelude::Component,
-    xilem::view::label,
-};
+use picus::prelude::{ProjectionCtx, UiComponent, UiComponentTemplate, UiView};
+use picus::{app::bevy_ecs::prelude::Component, projection::xilem::view::label};
 
 // runtime_only skips Default + Clone authoring assertions.
 #[derive(Component, UiComponent)]

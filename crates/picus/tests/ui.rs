@@ -14,4 +14,6 @@ fn facade_rejects_removed_public_apis() {
     t.compile_fail("tests/ui/no_emit_ui_action.rs");
     t.compile_fail("tests/ui/no_run_app_runner.rs");
     t.compile_fail("tests/ui/no_core_alias.rs");
+    t.compile_fail("tests/ui/no_root_application_types.rs");
+    t.compile_fail("tests/ui/no_internal_action_handlers.rs");
 }

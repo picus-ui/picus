@@ -4,21 +4,13 @@ use std::{
     time::{Duration, Instant},
 };
 
+use picus::prelude::*;
 use picus::{
-    AppPicusExt, BevyWindowOptions, PicusPlugin, ProjectionCtx, StyleClass, UiAction,
-    UiComponentTemplate, UiRoot, UiThemePicker, UiView, apply_label_style, apply_widget_style,
-    bevy_app::{App, PreUpdate, Startup},
-    bevy_ecs::{message::MessageCursor, prelude::*},
-    checkbox,
-    masonry_core::{
-        dpi::LogicalSize,
-        layout::{AsUnit, Length},
-        properties::Padding,
+    app::{
+        bevy_app::{App, Startup, Update},
+        bevy_ecs::{message::MessageReader, prelude::*, schedule::IntoScheduleConfigs},
     },
-    resolve_style, resolve_style_for_classes, take_ui_actions,
-    scene::{CommandsSceneExt, bsn},
-    slider,
-    xilem::{
+    projection::xilem::{
         Color,
         style::Style as _,
         view::{
@@ -26,6 +18,11 @@ use picus::{
             sized_box,
         },
         winit::error::EventLoopError,
+    },
+    runtime::masonry_core::{
+        dpi::LogicalSize,
+        layout::{AsUnit, Length},
+        properties::Padding,
     },
 };
 use shared_utils::init_logging;
@@ -438,13 +435,15 @@ fn tick_once(
     }
 }
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
 struct ChessRootView;
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
+#[ui_component(resources(ChessGameResource, ChessUiResource, ChessFlowResource))]
 struct ChessUiComponentsPanel;
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
+#[ui_component(resources(ChessUiResource))]
 struct ChessBoardPanel;
 
 fn build_chess_board_view(ctx: &ProjectionCtx<'_>, ui: &ChessUiResource) -> UiView {
@@ -657,16 +656,19 @@ fn setup_chess_world(mut commands: Commands) {
 }
 
 #[derive(Resource, Default)]
-struct ChessActionCursor(MessageCursor<UiAction<ChessEvent>>);
+struct PendingChessActions(Vec<ChessEvent>);
 
-fn drain_events_and_tick(world: &mut World) {
-    world.init_resource::<ChessActionCursor>();
-    let events = {
-        let mut cursor = std::mem::take(&mut world.resource_mut::<ChessActionCursor>().0);
-        let events = take_ui_actions::<ChessEvent>(world, &mut cursor);
-        world.resource_mut::<ChessActionCursor>().0 = cursor;
-        events
-    };
+fn collect_chess_actions(
+    mut reader: MessageReader<UiAction<ChessEvent>>,
+    mut pending: ResMut<PendingChessActions>,
+) {
+    pending
+        .0
+        .extend(reader.read().map(|event| event.action.clone()));
+}
+
+fn apply_actions_and_tick(world: &mut World) {
+    let events = std::mem::take(&mut world.resource_mut::<PendingChessActions>().0);
 
     if events.is_empty() && !chess_should_tick(world) {
         return;
@@ -674,7 +676,7 @@ fn drain_events_and_tick(world: &mut World) {
 
     with_chess_resources(world, |game_res, ui, flow| {
         for event in events {
-            apply_event(event.action, game_res, ui, flow);
+            apply_event(event, game_res, ui, flow);
         }
         tick_game(game_res, ui, flow);
     });
@@ -692,16 +694,19 @@ fn build_bevy_chess_app() -> App {
         .insert_resource(ChessGameResource::new(game))
         .insert_resource(ui)
         .insert_resource(ChessFlowResource::default())
-        .register_projection_resource::<ChessGameResource>()
-        .register_projection_resource::<ChessUiResource>()
-        .register_projection_resource::<ChessFlowResource>()
-        .register_ui_component::<ChessRootView>()
-        .register_ui_component::<ChessUiComponentsPanel>()
-        .register_ui_component::<ChessBoardPanel>()
+        .init_resource::<PendingChessActions>()
         .add_systems(Startup, setup_chess_world)
         .add_ui_action::<ChessEvent>();
-
-    app.add_systems(PreUpdate, drain_events_and_tick);
+    register_ui_components!(
+        &mut app,
+        ChessRootView,
+        ChessUiComponentsPanel,
+        ChessBoardPanel,
+    );
+    app.add_systems(
+        Update,
+        (collect_chess_actions, apply_actions_and_tick).chain(),
+    );
 
     app
 }
@@ -788,8 +793,9 @@ fn main() -> Result<(), EventLoopError> {
 mod tests {
     #[test]
     fn embedded_chess_theme_ron_parses() {
-        let sheet = picus::parse_stylesheet_ron(include_str!("../assets/themes/chess_game.ron"))
-            .expect("embedded chess stylesheet should parse");
+        let sheet =
+            picus::styling::parse_stylesheet_ron(include_str!("../assets/themes/chess_game.ron"))
+                .expect("embedded chess stylesheet should parse");
         assert_eq!(sheet.default_variant.as_deref(), Some("dark"));
     }
 }

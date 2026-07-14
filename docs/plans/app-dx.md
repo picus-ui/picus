@@ -718,3 +718,4 @@ docs/
 | 2026-07-14 | 明确移出范围：`picus new` / cargo-generate 脚手架；入门以 timer/calculator 复制骨架为准 |
 | 2026-07-14 | 完成剩余三项：`UiFormRow`/`UiContentShell`、`#[ui_view]`、`UiProjectionDirtyDebug`；计划标为完成 |
 | 2026-07-14 | 收尾：builtin projector 注册、task-proxy 测试迁 `UiAction`/`MessageReader`、trybuild/`ui_view` 与文档交叉链接 |
+| 2026-07-14 | 实现审查收敛：修复 dispatcher 尾部丢失、titlebar/accelerator 注册与 Update 二次 dispatch；全量 examples 迁 derive + 批量注册 + MessageReader；常规/advanced 公共面拆分；补齐目标 docs 目录与 facade 负向测试 |

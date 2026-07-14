@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 
 use bevy_ecs::prelude::*;
+use picus::UiComponent;
 
 use crate::bridge::{BridgeHandle, ChatMessage, ThreadSummary};
 
@@ -59,27 +60,33 @@ pub struct PicusState {
 pub const PICUSCODE_SIDEBAR_WIDTH: f32 = 244.0;
 
 /// Marker for the root of the primary chat window.
-#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq, UiComponent)]
+#[ui_component(resources(PicusState))]
 pub struct ChatRootView;
 
 /// Marker for the body row (sidebar + transcript).
-#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq, UiComponent)]
+#[ui_component(resources(PicusState))]
 pub struct ChatBodyView;
 
 /// Marker for the sidebar column (thread list).
-#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq, UiComponent)]
+#[ui_component(resources(PicusState))]
 pub struct SidebarColumnView;
 
 /// Marker for the title bar row.
-#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq, UiComponent)]
+#[ui_component(resources(PicusState))]
 pub struct ChatTitleBarView;
 
 /// Marker for the transcript column (messages stack here).
-#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq, UiComponent)]
+#[ui_component(resources(PicusState))]
 pub struct TranscriptColumnView;
 
 /// Wrapper around a rendered chat message.
-#[derive(Component, Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Default, PartialEq, Eq, UiComponent)]
+#[ui_component(resources(PicusState))]
 pub struct MessageRowView {
     pub role: String,
     pub created_at: i64,
@@ -107,21 +114,26 @@ impl MessageRowView {
 }
 
 /// Marker for the composer row.
-#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq, UiComponent)]
+#[ui_component(resources(PicusState))]
 pub struct ComposerView;
 
 /// Marker for the status line.
-#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq, UiComponent)]
+#[ui_component(resources(PicusState))]
 pub struct StatusLineView;
 
 /// Marker for the secondary About window root.
-#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq, UiComponent)]
+#[ui_component(resources(PicusState))]
 pub struct AboutRootView;
 
 /// Marker for the Settings window root.
-#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq, UiComponent)]
+#[ui_component(resources(PicusState))]
 pub struct SettingsRootView;
 
 /// Marker for the settings form column.
-#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq, UiComponent)]
+#[ui_component(resources(PicusState))]
 pub struct SettingsFormView;

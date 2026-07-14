@@ -77,9 +77,8 @@ impl UiComponentTemplate for UiTitleBar {
         // Spacer to push control buttons to the right
         children.push(FlexSpacer::Flex(1.0).into_any_flex());
 
-        // Window control buttons — TitleBarAction is consumed by the internal
-        // titlebar system (not application UiAction messages), so use the
-        // retained bridge helper rather than ProjectionCtx::button.
+        // Window control buttons use the internal retained bridge; the dispatcher
+        // applies the window mutation and also publishes UiAction<TitleBarAction>.
         if component.show_minimize {
             children.push(
                 crate::retained_bridge::button(ctx.entity, TitleBarAction::Minimize, "─")

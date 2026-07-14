@@ -2,10 +2,8 @@
 
 use crate::helpers::{card, dialog_button, grid, note, toast_button};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
-use picus::{
-    ToastKind, UiButton, UiContextMenuItem, UiContextMenuTrigger,
-    scene::{CommandsSceneExt, bsn, template_value},
-};
+use picus::prelude::{ToastKind, UiButton, UiContextMenuItem, UiContextMenuTrigger};
+use picus::scene::{CommandsSceneExt, bsn, template_value};
 
 /// Marker: clicking this entity opens a manually-positioned popover overlay.
 #[derive(Component, Debug, Clone, Copy, Default)]

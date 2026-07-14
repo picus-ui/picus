@@ -48,17 +48,11 @@ real **`timer`** or **`calculator`** examples over inventing a separate minimal 
 ```rust,ignore
 use std::sync::Arc;
 
+use picus::prelude::*;
 use picus::{
-    AppPicusExt, BevyWindowOptions, PicusPlugin, ProjectionCtx, UiAction, UiComponent,
-    UiComponentTemplate, UiRoot, UiView, bevy_app::{App, Startup, Update},
-    bevy_ecs::{message::MessageReader, prelude::*},
-    register_ui_components,
+    app::{bevy_app::{App, Startup, Update}, bevy_ecs::{message::MessageReader, prelude::*}},
+    projection::xilem::{view::label, winit::{dpi::LogicalSize, error::EventLoopError}},
     scene::{CommandsSceneExt, bsn, template_value},
-    xilem::{
-        view::label,
-        winit::{dpi::LogicalSize, error::EventLoopError},
-    },
-    UiButton, UiEmit,
 };
 
 #[derive(Clone, Debug)]
@@ -131,6 +125,8 @@ fn main() -> Result<(), EventLoopError> {
 | [`docs/guide/styling-themes.md`](docs/guide/styling-themes.md) | Theme / “no theme” contract |
 | [`docs/guide/events-messages.md`](docs/guide/events-messages.md) | `UiAction` / scheduling |
 | [`docs/examples/index.md`](docs/examples/index.md) | Example index |
+| [`docs/reference/public-modules.md`](docs/reference/public-modules.md) | Public facade module map |
+| [`docs/guide/testing.md`](docs/guide/testing.md) | Headless and integration testing |
 | [`AGENTS.md`](AGENTS.md) | Hard rules for agents (not a tutorial) |
 
 ---
@@ -146,10 +142,8 @@ Use BSN when the shape of a UI tree is mostly static and you want to avoid
 manual `commands.spawn((..., ChildOf(parent)))` wiring:
 
 ```rust,no_run
-use picus::{
-    bevy_ecs::prelude::*,
-    prelude::*,
-};
+use picus::app::bevy_ecs::prelude::*;
+use picus::prelude::*;
 
 fn setup(mut commands: Commands) {
     commands.spawn_scene(bsn! {
@@ -227,7 +221,10 @@ The main application-facing crate. It provides grouped modules for clearer impor
 - `picus::events` for `UiAction`, `UiActionSender`, and related action APIs
 - `picus::overlay`, `picus::runtime`, `picus::i18n`, and `picus::scene` for focused subsystems
 
-The root also re-exports the established `picus_core` API during migration, but new code should prefer the grouped modules or `picus::prelude::*`.
+The root is intentionally limited to the proc macros and macro support boundary.
+Application types are imported from the grouped modules or `picus::prelude::*`;
+low-level registration and projector APIs are isolated under
+`picus::runtime::advanced`.
 
 ### picus_core
 
@@ -286,7 +283,8 @@ Picus includes a complete styling pipeline inspired by CSS:
 - Resolve styles in projectors using helper functions
 - Support for hover/pressed states and smooth color transitions
 
-See [AGENTS.md](./AGENTS.md#8-styling-contract) for the full guide on selectors, cascade rules, and transition configuration.
+See [styling and themes](docs/guide/styling-themes.md) for selectors, cascade
+rules, variants, and transition configuration.
 
 ---
 
@@ -295,15 +293,13 @@ See [AGENTS.md](./AGENTS.md#8-styling-contract) for the full guide on selectors,
 Application code depends on `picus`, not `picus_core`. Prefer grouped imports when you only need part of the framework:
 
 ```rust
-use picus::{
-    app::{AppPicusExt, PicusPlugin},
-    components::{UiComponentTemplate, UiRoot, UiView, button},
-    events::{UiAction, UiActionSender},
-    runtime::ProjectionCtx,
-};
+use picus::prelude::*;
+use picus::app::bevy_app::App;
 ```
 
-Helper views such as `button`, `checkbox`, `slider`, `switch`, and `text_input` are Picus-native helpers that enqueue typed payloads for conversion into `UiAction` messages. Import them from `picus::components` or `picus::prelude` with the rest of the authoring surface. Raw retained widgets are internal implementation details imported from `picus_view::view` by projectors when needed.
+Use `ProjectionCtx::button` and the other projection helpers for action-aware
+controls. The grouped modules expose the application surface; raw retained
+widgets are implementation details of custom projectors.
 
 ---
 
@@ -311,8 +307,8 @@ Helper views such as `button`, `checkbox`, `slider`, `switch`, and `text_input` 
 
 The framework follows a clear pipeline each frame:
 
-1. UI components enqueue typed actions that become `UiAction<T>` messages
-2. Your systems drain those actions in `PreUpdate`
+1. UI components enqueue typed retained actions
+2. `DispatchActions` publishes them as Bevy messages before `Update`
 3. You mutate ECS state/resources based on events
 4. Picus synthesizes the widget tree in `PostUpdate`
 5. The retained Masonry scene is painted and presented in `Last`

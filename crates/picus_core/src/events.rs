@@ -200,7 +200,8 @@ pub(crate) struct InternalUiActionSink {
 
 impl fmt::Debug for InternalUiActionSink {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("InternalUiActionSink").finish_non_exhaustive()
+        f.debug_struct("InternalUiActionSink")
+            .finish_non_exhaustive()
     }
 }
 
@@ -273,6 +274,7 @@ impl InternalUiEventQueue {
 
     /// Drain every queued event (single-consumer path only).
     #[must_use]
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn drain_all(&mut self) -> Vec<InternalUiEvent> {
         let mut drained = Vec::new();
         while let Some(event) = self.sink.queue.pop() {
@@ -280,11 +282,20 @@ impl InternalUiEventQueue {
         }
         drained
     }
+
+    #[must_use]
+    pub(crate) fn pop(&self) -> Option<InternalUiEvent> {
+        self.sink.queue.pop()
+    }
+
+    #[must_use]
+    pub(crate) fn is_empty(&self) -> bool {
+        self.sink.queue.is_empty()
+    }
 }
 
 /// Handler invoked by the dispatcher for a registered payload type.
-pub(crate) type UiActionHandler =
-    Arc<dyn Fn(&mut World, Entity, &dyn Any) + Send + Sync + 'static>;
+pub(crate) type UiActionHandler = Arc<dyn Fn(&mut World, Entity, &dyn Any) + Send + Sync + 'static>;
 
 /// Registry mapping payload `TypeId` values to dispatcher handlers.
 #[derive(Resource, Default)]
@@ -401,37 +412,34 @@ where
 /// Drains the queue and dispatches until empty (or until
 /// [`UI_ACTION_DISPATCH_LIMIT`] is hit). Handlers may enqueue additional
 /// actions; those are processed after already-queued entries (FIFO).
-pub fn dispatch_ui_actions(world: &mut World) {
+pub(crate) fn dispatch_ui_actions(world: &mut World) {
     world.init_resource::<InternalUiEventQueue>();
     world.init_resource::<UiActionRegistry>();
 
     let mut processed = 0usize;
     loop {
-        let batch = world.resource_mut::<InternalUiEventQueue>().drain_all();
-        if batch.is_empty() {
-            break;
-        }
-
-        for event in batch {
-            if processed >= UI_ACTION_DISPATCH_LIMIT {
+        if processed >= UI_ACTION_DISPATCH_LIMIT {
+            if !world.resource::<InternalUiEventQueue>().is_empty() {
                 error!(
                     limit = UI_ACTION_DISPATCH_LIMIT,
                     "UI action dispatch limit reached; remaining queue entries deferred to next frame"
                 );
-                // Re-queue the current event and stop so the frame can proceed.
-                world.resource::<InternalUiEventQueue>().push(event);
-                return;
             }
-            processed += 1;
-
-            // Take registry by value-like access: dispatch needs &mut registry
-            // and &mut world for handlers. Split via resource removal.
-            let mut registry = world
-                .remove_resource::<UiActionRegistry>()
-                .unwrap_or_default();
-            registry.dispatch_one(world, &event);
-            world.insert_resource(registry);
+            return;
         }
+
+        let Some(event) = world.resource::<InternalUiEventQueue>().pop() else {
+            break;
+        };
+        processed += 1;
+
+        // Take registry by value-like access: dispatch needs &mut registry
+        // and &mut world for handlers. Split via resource removal.
+        let mut registry = world
+            .remove_resource::<UiActionRegistry>()
+            .unwrap_or_default();
+        registry.dispatch_one(world, &event);
+        world.insert_resource(registry);
     }
 
     if processed > 0 {
@@ -543,8 +551,7 @@ mod tests {
     #[test]
     fn dispatcher_writes_ui_action_messages() {
         let mut app = App::new();
-        app.add_plugins(PicusPlugin)
-            .add_ui_action::<TestAction>();
+        app.add_plugins(PicusPlugin).add_ui_action::<TestAction>();
 
         let entity = app.world_mut().spawn(UiRoot).id();
         app.world()
@@ -555,7 +562,9 @@ mod tests {
             .run_system_once(dispatch_ui_actions)
             .expect("dispatch");
 
-        let messages = app.world().resource::<bevy_ecs::message::Messages<UiAction<TestAction>>>();
+        let messages = app
+            .world()
+            .resource::<bevy_ecs::message::Messages<UiAction<TestAction>>>();
         let mut cursor = messages.get_cursor();
         let collected: Vec<_> = cursor.read(messages).cloned().collect();
         assert_eq!(collected.len(), 1);
@@ -570,10 +579,7 @@ mod tests {
             .add_ui_action::<TestAction>()
             .insert_resource(CountA(0))
             .insert_resource(CountB(0))
-            .add_systems(
-                bevy_app::Update,
-                (reader_a, reader_b),
-            );
+            .add_systems(bevy_app::Update, (reader_a, reader_b));
 
         #[derive(Resource)]
         struct CountA(u32);
@@ -617,7 +623,9 @@ mod tests {
             .run_system_once(dispatch_ui_actions)
             .expect("dispatch");
 
-        let messages = app.world().resource::<bevy_ecs::message::Messages<UiAction<TestAction>>>();
+        let messages = app
+            .world()
+            .resource::<bevy_ecs::message::Messages<UiAction<TestAction>>>();
         let mut cursor = messages.get_cursor();
         assert_eq!(cursor.read(messages).count(), 1);
     }
@@ -648,6 +656,54 @@ mod tests {
             .resource::<bevy_ecs::message::Messages<UiAction<BuiltinUiAction>>>();
         let mut cursor = messages.get_cursor();
         assert_eq!(cursor.read(messages).count(), 1);
+    }
+
+    #[test]
+    fn accelerator_action_is_registered_by_plugin() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let entity = app.world_mut().spawn_empty().id();
+        app.world().resource::<InternalUiEventQueue>().push_typed(
+            entity,
+            crate::AcceleratorActivated {
+                accelerator_key: bevy_input::keyboard::KeyCode::KeyS,
+                modifiers: crate::AcceleratorModifiers::default(),
+            },
+        );
+
+        app.world_mut()
+            .run_system_once(dispatch_ui_actions)
+            .expect("dispatch");
+        let messages = app
+            .world()
+            .resource::<bevy_ecs::message::Messages<UiAction<crate::AcceleratorActivated>>>();
+        let mut cursor = messages.get_cursor();
+        assert_eq!(cursor.read(messages).count(), 1);
+    }
+
+    #[test]
+    fn titlebar_action_mutates_the_primary_window_in_dispatch() {
+        use bevy_window::{MonitorSelection, PrimaryWindow, Window, WindowMode};
+
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+        let window = app
+            .world_mut()
+            .spawn((Window::default(), PrimaryWindow))
+            .id();
+
+        app.world()
+            .resource::<InternalUiEventQueue>()
+            .push_typed(window, crate::TitleBarAction::FullScreen);
+        app.world_mut()
+            .run_system_once(dispatch_ui_actions)
+            .expect("dispatch");
+
+        assert!(matches!(
+            app.world().get::<Window>(window).expect("window").mode,
+            WindowMode::BorderlessFullscreen(MonitorSelection::Current)
+        ));
     }
 
     #[test]
@@ -768,6 +824,65 @@ mod tests {
     }
 
     #[test]
+    fn dispatch_limit_preserves_every_queued_tail_action() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin).add_ui_action::<TestAction>();
+
+        let entity = app.world_mut().spawn_empty().id();
+        for _ in 0..(UI_ACTION_DISPATCH_LIMIT + 3) {
+            app.world()
+                .resource::<InternalUiEventQueue>()
+                .push_typed(entity, TestAction::Inc);
+        }
+
+        app.world_mut()
+            .run_system_once(dispatch_ui_actions)
+            .expect("first dispatch");
+        assert_eq!(
+            app.world()
+                .resource::<InternalUiEventQueue>()
+                .shared_queue()
+                .len(),
+            3,
+            "the complete FIFO tail must remain queued"
+        );
+
+        app.world_mut()
+            .run_system_once(dispatch_ui_actions)
+            .expect("second dispatch");
+        let messages = app
+            .world()
+            .resource::<bevy_ecs::message::Messages<UiAction<TestAction>>>();
+        let mut cursor = messages.get_cursor();
+        assert_eq!(cursor.read(messages).count(), UI_ACTION_DISPATCH_LIMIT + 3);
+    }
+
+    #[test]
+    fn update_sender_emissions_are_visible_on_the_next_frame() {
+        #[derive(Resource, Default)]
+        struct Seen(usize);
+
+        fn emit(sender: Res<UiActionSender<TestAction>>) {
+            sender.send(Entity::PLACEHOLDER, TestAction::Inc);
+        }
+
+        fn read(mut reader: MessageReader<UiAction<TestAction>>, mut seen: ResMut<Seen>) {
+            seen.0 += reader.read().count();
+        }
+
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin)
+            .add_ui_action::<TestAction>()
+            .init_resource::<Seen>()
+            .add_systems(bevy_app::Update, (emit, read).chain());
+
+        app.update();
+        assert_eq!(app.world().resource::<Seen>().0, 0);
+        app.update();
+        assert_eq!(app.world().resource::<Seen>().0, 1);
+    }
+
+    #[test]
     #[should_panic(expected = "unregistered UI action payload")]
     fn unregistered_payload_panics_in_debug() {
         #[derive(Clone, Debug)]
@@ -828,10 +943,7 @@ mod tests {
 
         app.world()
             .resource::<InternalUiEventQueue>()
-            .push_typed(
-                checkbox,
-                crate::WidgetUiAction::ToggleCheckbox { checkbox },
-            );
+            .push_typed(checkbox, crate::WidgetUiAction::ToggleCheckbox { checkbox });
 
         app.world_mut()
             .run_system_once(dispatch_ui_actions)
@@ -862,9 +974,11 @@ mod tests {
         let entity = app.world_mut().spawn_empty().id();
         // Simulate retained button with UiEmit payload (type-erased).
         let emit = UiEmit::new(TestAction::Inc);
-        app.world()
-            .resource::<InternalUiEventQueue>()
-            .push_erased(entity, emit.type_id(), emit.payload());
+        app.world().resource::<InternalUiEventQueue>().push_erased(
+            entity,
+            emit.type_id(),
+            emit.payload(),
+        );
 
         app.world_mut()
             .run_system_once(dispatch_ui_actions)
@@ -896,13 +1010,16 @@ mod tests {
         app.add_plugins(PicusPlugin)
             .add_ui_action::<TestAction>()
             .insert_resource(Count(0))
-            .add_systems(bevy_app::Update, |mut reader: MessageReader<UiAction<TestAction>>, mut count: ResMut<Count>| {
-                for UiAction { action, .. } in reader.read() {
-                    if *action == TestAction::Inc {
-                        count.0 += 1;
+            .add_systems(
+                bevy_app::Update,
+                |mut reader: MessageReader<UiAction<TestAction>>, mut count: ResMut<Count>| {
+                    for UiAction { action, .. } in reader.read() {
+                        if *action == TestAction::Inc {
+                            count.0 += 1;
+                        }
                     }
-                }
-            });
+                },
+            );
 
         let source = app.world_mut().spawn_empty().id();
         // Retained click equivalent: enqueue + full frame (PreUpdate dispatch + Update readers).

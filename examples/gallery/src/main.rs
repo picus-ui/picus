@@ -13,15 +13,13 @@
 //! - [`events`] — Event dispatch for all component interactions
 //! - [`pages`] — one showcase page per component, grouped into category modules
 
+use picus::prelude::*;
 use picus::{
-    AppI18n, AppPicusExt, InlineStyle, LayoutStyle, NavigationViewItem, PicusPlugin,
-    SyncTextSource, UiAvatar, UiFlexColumn, UiFlexRow, UiLabel, UiNavigationView, UiRoot,
-    UiScrollView, UiSearch, UiThemePicker, avatar_sizes,
-    bevy_app::{App, Startup, Update},
-    bevy_ecs::{hierarchy::ChildOf, prelude::*},
-    BevyWindowOptions,
-    scene::{CommandsSceneExt, bsn, template_value},
-    xilem::winit::{dpi::LogicalSize, error::EventLoopError},
+    app::{
+        bevy_app::{App, Startup, Update},
+        bevy_ecs::{hierarchy::ChildOf, prelude::*, schedule::IntoScheduleConfigs},
+    },
+    projection::xilem::winit::{dpi::LogicalSize, error::EventLoopError},
 };
 use shared_utils::init_logging;
 
@@ -31,7 +29,7 @@ mod pages;
 mod state;
 mod views;
 
-use events::drain_gallery_events;
+use events::{PendingGalleryActions, apply_gallery_actions, collect_gallery_actions};
 use helpers::{PAGE_CONTENT, PAGE_VIEWPORT, class};
 use state::{GalleryPage, GalleryRuntime};
 use views::{GalleryRoot, GalleryTopBar};
@@ -213,15 +211,15 @@ fn build_gallery_app() -> App {
             SyncTextSource::String(include_str!("../assets/locales/ja-JP/main.ftl")),
             vec!["Inter", "sans-serif"],
         )
-        .register_ui_component::<GalleryRoot>()
-        .register_ui_component::<GalleryTopBar>()
+        .init_resource::<PendingGalleryActions>()
         .add_systems(Startup, setup_gallery)
         .add_systems(
             Update,
-            drain_gallery_events.after(picus::dispatch_ui_actions),
+            (collect_gallery_actions, apply_gallery_actions).chain(),
         );
+    register_ui_components!(&mut app, GalleryRoot, GalleryTopBar);
 
-    picus::set_theme_backdrop_material(app.world_mut(), picus::WindowBackdropMaterial::Mica);
+    set_theme_backdrop_material(app.world_mut(), WindowBackdropMaterial::Mica);
 
     app
 }
@@ -239,7 +237,8 @@ fn main() -> Result<(), EventLoopError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use picus::bevy_window::{PrimaryWindow, Window, WindowResized};
+    use ::picus::app::bevy_window::{PrimaryWindow, Window, WindowResized};
+    use ::picus::prelude as picus;
 
     #[test]
     fn embedded_gallery_theme_ron_parses() {
@@ -478,7 +477,10 @@ mod tests {
         assert_eq!(leaf_count, GalleryPage::ALL.len());
         for (item, category) in items.iter().zip(GalleryPage::CATEGORIES.iter()) {
             assert_eq!(item.label, category.label);
-            assert!(!item.is_leaf(), "category parents must have MenuItems children");
+            assert!(
+                !item.is_leaf(),
+                "category parents must have MenuItems children"
+            );
             assert!(item.is_expanded, "gallery categories start expanded");
             assert_eq!(item.children.len(), category.page_count);
             assert!(

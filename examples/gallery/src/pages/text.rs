@@ -2,10 +2,8 @@
 
 use crate::helpers::{card, grid, note};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
-use picus::{
-    UiMultilineTextInput, UiPasswordInput, UiTextInput,
-    scene::{CommandsSceneExt, bsn, template_value},
-};
+use picus::prelude::{UiMultilineTextInput, UiPasswordInput, UiTextInput};
+use picus::scene::{CommandsSceneExt, bsn, template_value};
 
 pub fn spawn_text_box_page(commands: &mut Commands, parent: Entity) {
     let g = grid(commands, parent, 2);

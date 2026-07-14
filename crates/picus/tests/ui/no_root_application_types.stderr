@@ -1,0 +1,7 @@
+error[E0432]: unresolved imports `picus::AppPicusExt`, `picus::UiButton`
+ --> tests/ui/no_root_application_types.rs:2:13
+  |
+2 | use picus::{AppPicusExt, UiButton};
+  |             ^^^^^^^^^^^  ^^^^^^^^ no `UiButton` in the root
+  |             |
+  |             no `AppPicusExt` in the root

@@ -35,14 +35,21 @@ by the **same** PreUpdate dispatcher via registry handlers; applications never d
 those types. High-level `*Changed` payloads are already registered as `UiAction`
 messages by `PicusPlugin`.
 
+`AcceleratorActivated` and `AccessibleAction` are registered by `PicusPlugin` as
+built-in message types. `TitleBarAction` is dispatched through its registry
+handler so close, minimize, maximize, and fullscreen changes update the target
+window before the corresponding message is observed.
+
 There is **no** public global `emit_ui_action`. Prefer capturing `UiActionSender<T>` from
 `ProjectionCtx` or `Res<UiActionSender<T>>` in systems.
 
 ## Scheduling
 
 - Input-driven actions become `UiAction` messages **before** ordinary `Update`
-  systems in the same frame.
-- Emissions from `Update` (or later) via `UiActionSender` are **next-frame** visible.
+  systems in the same frame. The fixed `PreUpdate` order is
+  `Input → RetainedRouting → DispatchActions`.
+- Emissions from `Update` (or later) via `UiActionSender` are **next-frame** visible;
+  there is no second application dispatcher in `Update`.
 - Unregistered payloads: panic in debug/test; log-once and drop in release.
 
 ## What is not a Message

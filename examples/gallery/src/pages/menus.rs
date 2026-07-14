@@ -3,10 +3,8 @@
 use crate::helpers::{card, grid, note};
 use crate::state::GalleryBackdropPicker;
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
-use picus::{
-    UiMenuBar, UiMenuBarItem, UiMenuItem, UiRadioGroup, UiTitleBar,
-    scene::{CommandsSceneExt, bsn, template_value},
-};
+use picus::prelude::{UiMenuBar, UiMenuBarItem, UiMenuItem, UiRadioGroup, UiTitleBar};
+use picus::scene::{CommandsSceneExt, bsn, template_value};
 
 pub fn spawn_menu_bar_page(commands: &mut Commands, parent: Entity) {
     let g = grid(commands, parent, 1);

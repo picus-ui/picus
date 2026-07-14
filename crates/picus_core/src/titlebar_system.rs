@@ -1,44 +1,32 @@
 use bevy_app::AppExit;
-use bevy_ecs::message::MessageWriter;
 use bevy_ecs::prelude::*;
 use bevy_window::{MonitorSelection, PrimaryWindow, Window, WindowMode};
 
-use crate::events::UiEventQueue;
 use crate::{TitleBarAction, TitleBarState};
 
 /// Handle title bar actions emitted by window control buttons
 /// (minimize, maximize, close, fullscreen).
-pub fn handle_titlebar_actions(
-    mut actions: ResMut<UiEventQueue>,
-    mut window_query: Query<&mut Window, With<PrimaryWindow>>,
-    #[allow(unused_variables)] mut app_exit_writer: MessageWriter<AppExit>,
-) {
-    let Some(mut window) = window_query.iter_mut().next() else {
+pub(crate) fn apply_titlebar_action(world: &mut World, _source: Entity, action: &TitleBarAction) {
+    if matches!(action, TitleBarAction::Close) {
+        world.write_message(AppExit::Success);
+        return;
+    }
+
+    let mut window_query = world.query_filtered::<&mut Window, With<PrimaryWindow>>();
+    let Some(mut window) = window_query.iter_mut(world).next() else {
         return;
     };
 
-    for event in actions.drain_actions::<TitleBarAction>() {
-        match event.action {
-            TitleBarAction::Minimize => {
-                window.set_minimized(true);
-            }
-            TitleBarAction::Maximize => {
-                window.set_maximized(true);
-            }
-            TitleBarAction::Restore => {
-                window.set_maximized(false);
-            }
-            TitleBarAction::Close => {
-                app_exit_writer.write(AppExit::Success);
-            }
-            TitleBarAction::FullScreen => {
-                window.mode = match window.mode {
-                    WindowMode::Windowed => {
-                        WindowMode::BorderlessFullscreen(MonitorSelection::Current)
-                    }
-                    _ => WindowMode::Windowed,
-                };
-            }
+    match action {
+        TitleBarAction::Minimize => window.set_minimized(true),
+        TitleBarAction::Maximize => window.set_maximized(true),
+        TitleBarAction::Restore => window.set_maximized(false),
+        TitleBarAction::Close => unreachable!("close is handled before borrowing the window"),
+        TitleBarAction::FullScreen => {
+            window.mode = match window.mode {
+                WindowMode::Windowed => WindowMode::BorderlessFullscreen(MonitorSelection::Current),
+                _ => WindowMode::Windowed,
+            };
         }
     }
 }

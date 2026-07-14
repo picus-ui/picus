@@ -1,27 +1,47 @@
 //! Gallery event handling for interactive showcase controls.
 
-use bevy_ecs::prelude::*;
-use picus::{
-    AppI18n, BuiltinUiAction, OverlayPlacement, ToastKind, UiCheckboxChanged,
-    UiColorPickerChanged, UiComboBoxChanged, UiDataTableSelectionChanged,
-    UiDataTableSortChanged, UiDatePickerChanged, UiDialog, UiListViewSelectionChanged, UiMenuItemSelected, UiMultilineTextInputChanged,
-    UiNavigationSelectionChanged, UiNavigationView, UiNumericUpDownChanged,
-    UiPasswordInputChanged, UiRadioGroupChanged, UiScrollViewChanged, UiSliderChanged,
-    UiSwitchChanged, UiTabChanged, UiTextInputChanged, UiThemePickerChanged, UiToast,
-    UiTreeNodeToggled, WindowBackdropMaterial, set_theme_backdrop_material,
-    spawn_in_overlay_root,
+use picus::app::bevy_ecs::{message::MessageReader, prelude::*};
+use picus::prelude::{
+    AppI18n, BuiltinUiAction, OverlayPlacement, ToastKind, UiAction, UiComboBoxChanged, UiDialog,
+    UiNavigationSelectionChanged, UiNavigationView, UiRadioGroupChanged, UiToast,
+    WindowBackdropMaterial, set_theme_backdrop_material, spawn_in_overlay_root,
+    spawn_manual_overlay_at,
 };
 
-use crate::state::{GalleryBackdropPicker, GalleryButtonAction, GalleryLocaleCombo, GalleryRuntime};
+use crate::state::{
+    GalleryBackdropPicker, GalleryButtonAction, GalleryLocaleCombo, GalleryRuntime,
+};
 
-/// Drain UI actions and execute the gallery interactions that have visible effects.
-pub fn drain_gallery_events(world: &mut World) {
+#[derive(Resource, Default)]
+pub struct PendingGalleryActions {
+    navigation: Vec<UiAction<UiNavigationSelectionChanged>>,
+    builtin: Vec<UiAction<BuiltinUiAction>>,
+    radio: Vec<UiAction<UiRadioGroupChanged>>,
+    combo: Vec<UiAction<UiComboBoxChanged>>,
+}
+
+pub fn collect_gallery_actions(
+    mut navigation: MessageReader<UiAction<UiNavigationSelectionChanged>>,
+    mut builtin: MessageReader<UiAction<BuiltinUiAction>>,
+    mut radio: MessageReader<UiAction<UiRadioGroupChanged>>,
+    mut combo: MessageReader<UiAction<UiComboBoxChanged>>,
+    mut pending: ResMut<PendingGalleryActions>,
+) {
+    pending.navigation.extend(navigation.read().cloned());
+    pending.builtin.extend(builtin.read().cloned());
+    pending.radio.extend(radio.read().cloned());
+    pending.combo.extend(combo.read().cloned());
+}
+
+/// Execute the gallery interactions that have visible effects.
+pub fn apply_gallery_actions(world: &mut World) {
     let Some(rt) = world.get_resource::<GalleryRuntime>().cloned() else {
         return;
     };
 
-    for event in picus::drain_ui_actions::<UiNavigationSelectionChanged>(world)
-    {
+    let pending = std::mem::take(&mut *world.resource_mut::<PendingGalleryActions>());
+
+    for event in pending.navigation {
         if event.action.is_settings_selected {
             // Settings is a framework leaf after menu pages; keep selection without
             // remapping into GalleryPage content slots.
@@ -30,8 +50,7 @@ pub fn drain_gallery_events(world: &mut World) {
         set_gallery_page(world, &rt, event.action.selected);
     }
 
-    let builtin_events = picus::drain_ui_actions::<BuiltinUiAction>(world);
-    for event in builtin_events {
+    for event in pending.builtin {
         if !matches!(event.action, BuiltinUiAction::Clicked) {
             continue;
         }
@@ -54,9 +73,9 @@ pub fn drain_gallery_events(world: &mut World) {
             .get::<crate::pages::ManualOverlayMarker>(event.source)
             .is_some()
         {
-            picus::spawn_manual_overlay_at(
+            spawn_manual_overlay_at(
                 world,
-                picus::UiDialog::new(
+                UiDialog::new(
                     "Manual overlay",
                     "This popover was positioned at a fixed (x, y) pixel coordinate via spawn_manual_overlay_at.",
                 )
@@ -67,9 +86,11 @@ pub fn drain_gallery_events(world: &mut World) {
         }
     }
 
-    for event in picus::drain_ui_actions::<UiRadioGroupChanged>(world)
-    {
-        if world.get::<GalleryBackdropPicker>(event.action.group).is_some() {
+    for event in pending.radio {
+        if world
+            .get::<GalleryBackdropPicker>(event.action.group)
+            .is_some()
+        {
             let material = match event.action.selected {
                 0 => WindowBackdropMaterial::None,
                 2 => WindowBackdropMaterial::Acrylic,
@@ -79,8 +100,7 @@ pub fn drain_gallery_events(world: &mut World) {
         }
     }
 
-    for event in picus::drain_ui_actions::<UiComboBoxChanged>(world)
-    {
+    for event in pending.combo {
         if world.get::<GalleryLocaleCombo>(event.source).is_some()
             && let Ok(locale) = event
                 .action
@@ -90,41 +110,6 @@ pub fn drain_gallery_events(world: &mut World) {
             world.resource_mut::<AppI18n>().set_active_locale(locale);
         }
     }
-
-    discard_logged_actions(world);
-}
-
-fn discard_logged_actions(world: &mut World) {
-    macro_rules! discard {
-        ($($action:ty),+ $(,)?) => {
-            $(let _ = picus::drain_ui_actions::<$action>(world);)+
-        };
-    }
-
-    discard!(
-        UiThemePickerChanged,
-        UiCheckboxChanged,
-        UiSwitchChanged,
-        UiSliderChanged,
-        UiNumericUpDownChanged,
-        UiTextInputChanged,
-        UiPasswordInputChanged,
-        UiMultilineTextInputChanged,
-        UiColorPickerChanged,
-        UiDatePickerChanged,
-        UiListViewSelectionChanged,
-        UiDataTableSelectionChanged,
-        UiDataTableSortChanged,
-        UiTreeNodeToggled,
-        UiMenuItemSelected,
-        UiTabChanged,
-        UiScrollViewChanged,
-        picus::UiNavigationPaneChanged,
-        picus::UiNavigationItemExpandedChanged,
-        picus::UiNavigationItemInvoked,
-        picus::UiNavigationDisplayModeChanged,
-        picus::UiNavigationBackRequested,
-    );
 }
 
 fn set_gallery_page(world: &mut World, rt: &GalleryRuntime, page: usize) {

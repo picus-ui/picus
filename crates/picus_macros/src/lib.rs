@@ -128,7 +128,7 @@ fn expand_ui_component(input: &DeriveInput) -> Result<proc_macro2::TokenStream> 
         impl #impl_generics #picus::__macro_support::UiComponentRegistration for #name #ty_generics
         #where_clause
         {
-            fn register(app: &mut #picus::bevy_app::App) {
+            fn register(app: &mut #picus::app::bevy_app::App) {
                 #picus::__macro_support::register_ui_component::<Self>(app);
                 #(#resource_regs)*
                 #style_reg
@@ -272,7 +272,7 @@ fn expand_ui_view(attr: TokenStream, item: TokenStream) -> Result<proc_macro2::T
         #authoring_asserts
 
         #[derive(
-            #picus::bevy_ecs::prelude::Component,
+            #picus::app::bevy_ecs::prelude::Component,
             ::core::clone::Clone,
             ::core::default::Default,
             ::core::fmt::Debug,
@@ -280,13 +280,16 @@ fn expand_ui_view(attr: TokenStream, item: TokenStream) -> Result<proc_macro2::T
         #vis struct #name;
 
         impl #picus::components::UiComponentTemplate for #name {
-            fn project(_component: &Self, #ctx_pat: #picus::ProjectionCtx<'_>) -> #picus::UiView {
+            fn project(
+                _component: &Self,
+                #ctx_pat: #picus::projection::ProjectionCtx<'_>,
+            ) -> #picus::projection::UiView {
                 #body
             }
         }
 
         impl #picus::__macro_support::UiComponentRegistration for #name {
-            fn register(app: &mut #picus::bevy_app::App) {
+            fn register(app: &mut #picus::app::bevy_app::App) {
                 #picus::__macro_support::register_ui_component::<Self>(app);
                 #(#resource_regs)*
                 #style_reg
