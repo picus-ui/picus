@@ -7,3 +7,6 @@ readme = "../../README.md"
 
 [dependencies]
 picus_core.workspace = true
+picus_macros.workspace = true
+bevy_app.workspace = true
+bevy_ecs.workspace = true

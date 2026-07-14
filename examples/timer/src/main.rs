@@ -6,19 +6,18 @@ use std::{
 use tokio::time;
 
 use picus::{
-    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiComponentTemplate, UiEventQueue, UiRoot,
-    UiThemePicker, UiView, apply_label_style, apply_widget_style,
-    bevy_app::{App, PreUpdate, Startup},
-    bevy_ecs::prelude::*,
-    button, emit_ui_action,
+    AppPicusExt, BevyWindowOptions, PicusPlugin, ProjectionCtx, StyleClass, UiAction, UiComponent,
+    UiComponentTemplate, UiRoot, UiThemePicker, UiView, apply_label_style, apply_widget_style,
+    bevy_app::{App, Startup, Update},
+    bevy_ecs::{message::MessageReader, prelude::*},
     masonry_core::{
         imaging::{Painter, record::Scene},
         kurbo::{Cap, Circle, Line, Point, Size, Stroke, Vec2},
         layout::Length,
         properties::Padding,
     },
-    resolve_style, resolve_style_for_classes, resolve_style_for_entity_classes,
-    run_app_with_window_options,
+    register_ui_components, resolve_style, resolve_style_for_classes,
+    resolve_style_for_entity_classes,
     scene::{CommandsSceneExt, bsn},
     slider,
     xilem::{
@@ -69,25 +68,31 @@ enum TimerEvent {
     Tick,
 }
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
+#[ui_component(resources(TimerState))]
 struct TimerRootView;
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
 struct TimerTitle;
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
+#[ui_component(resources(TimerState))]
 struct TimerDialView;
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
+#[ui_component(resources(TimerState))]
 struct TimerElapsedRow;
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
+#[ui_component(resources(TimerState))]
 struct TimerProgressRow;
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
+#[ui_component(resources(TimerState))]
 struct TimerDurationRow;
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, UiComponent)]
+#[ui_component(resources(TimerState))]
 struct TimerUiComponentsRow;
 
 fn clamp01(v: f64) -> f64 {
@@ -218,6 +223,8 @@ fn draw_timer_dial(scene: &mut Scene, size: Size, progress: f64, running: bool) 
 impl UiComponentTemplate for TimerRootView {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         let root_style = resolve_style(ctx.world, ctx.entity);
+        let tick_entity = ctx.entity;
+        let sender = ctx.action_sender::<TimerEvent>();
         let content = apply_widget_style(
             flex_col(
                 ctx.children
@@ -229,7 +236,6 @@ impl UiComponentTemplate for TimerRootView {
             &root_style,
         );
 
-        let tick_entity = ctx.entity;
         let heartbeat = task(
             |proxy, _: &mut ()| async move {
                 let mut interval = time::interval(std::time::Duration::from_millis(50));
@@ -241,7 +247,7 @@ impl UiComponentTemplate for TimerRootView {
                 }
             },
             move |_: &mut (), ()| {
-                emit_ui_action(tick_entity, TimerEvent::Tick);
+                sender.send(tick_entity, TimerEvent::Tick);
             },
         );
 
@@ -358,13 +364,10 @@ impl UiComponentTemplate for TimerUiComponentsRow {
         Arc::new(apply_widget_style(
             flex_row((
                 apply_widget_style(
-                    button(ctx.entity, TimerEvent::ToggleRunning, pause_label),
+                    ctx.button(TimerEvent::ToggleRunning, pause_label),
                     &pause_button_style,
                 ),
-                apply_widget_style(
-                    button(ctx.entity, TimerEvent::Reset, "Reset"),
-                    &reset_button_style,
-                ),
+                apply_widget_style(ctx.button(TimerEvent::Reset, "Reset"), &reset_button_style),
             )),
             &row_style,
         ))
@@ -388,58 +391,55 @@ fn setup_timer_world(mut commands: Commands) {
     });
 }
 
-fn drain_timer_events_and_tick(world: &mut World) {
-    let events = world
-        .resource_mut::<UiEventQueue>()
-        .drain_actions::<TimerEvent>();
-
-    let has_mutating_event = events
-        .iter()
-        .any(|event| !matches!(event.action, TimerEvent::Tick));
-    let has_tick_event = events
-        .iter()
-        .any(|event| matches!(event.action, TimerEvent::Tick));
-    let should_tick = has_tick_event
-        && world
-            .get_resource::<TimerState>()
-            .is_some_and(timer_can_tick);
-    if !has_mutating_event && !should_tick {
-        return;
+fn on_timer_actions(
+    mut reader: MessageReader<UiAction<TimerEvent>>,
+    mut state: ResMut<TimerState>,
+) {
+    let mut saw_tick = false;
+    let mut saw_mutating = false;
+    for UiAction { action, .. } in reader.read() {
+        match action {
+            TimerEvent::Tick => saw_tick = true,
+            other => {
+                saw_mutating = true;
+                apply_timer_event(&mut state, other.clone());
+            }
+        }
     }
 
-    let mut state = world.resource_mut::<TimerState>();
-    for event in events {
-        apply_timer_event(&mut state, event.action);
+    if saw_tick && timer_can_tick(&state) {
+        tick_timer(&mut state);
+    } else if !saw_mutating && !saw_tick {
+        // nothing
     }
-    tick_timer(&mut state);
 }
 
-fn build_bevy_timer_app() -> App {
+fn main() -> Result<(), EventLoopError> {
     init_logging();
 
     let mut app = App::new();
     app.add_plugins(PicusPlugin)
         .load_style_sheet_ron(include_str!("../assets/themes/timer.ron"))
         .insert_resource(TimerState::default())
-        .register_projection_resource::<TimerState>()
-        .register_ui_component::<TimerRootView>()
-        .register_ui_component::<TimerTitle>()
-        .register_ui_component::<TimerDialView>()
-        .register_ui_component::<TimerElapsedRow>()
-        .register_ui_component::<TimerProgressRow>()
-        .register_ui_component::<TimerDurationRow>()
-        .register_ui_component::<TimerUiComponentsRow>()
-        .add_systems(Startup, setup_timer_world);
+        .add_ui_action::<TimerEvent>()
+        .add_systems(Startup, setup_timer_world)
+        .add_systems(Update, on_timer_actions);
 
-    app.add_systems(PreUpdate, drain_timer_events_and_tick);
+    register_ui_components!(
+        &mut app,
+        TimerRootView,
+        TimerTitle,
+        TimerDialView,
+        TimerElapsedRow,
+        TimerProgressRow,
+        TimerDurationRow,
+        TimerUiComponentsRow,
+    );
 
-    app
-}
-
-fn main() -> Result<(), EventLoopError> {
-    run_app_with_window_options(build_bevy_timer_app(), "Timer", |options| {
-        options.with_initial_inner_size(LogicalSize::new(520.0, 480.0))
-    })
+    app.run_picus(
+        "Timer",
+        BevyWindowOptions::default().with_initial_inner_size(LogicalSize::new(520.0, 480.0)),
+    )
 }
 
 #[cfg(test)]

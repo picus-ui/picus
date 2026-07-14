@@ -4626,7 +4626,10 @@ dependencies = [
 name = "picus"
 version = "0.1.0"
 dependencies = [
+ "bevy_app",
+ "bevy_ecs",
  "picus_core",
+ "picus_macros",
 ]
 
 [[package]]
@@ -4669,6 +4672,16 @@ dependencies = [
  "unic-langid",
  "wgpu",
  "xilem_core",
+]
+
+[[package]]
+name = "picus_macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro-crate",
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

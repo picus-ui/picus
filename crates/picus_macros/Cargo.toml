@@ -1,0 +1,16 @@
+[package]
+name = "picus_macros"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Proc-macros for Picus UI component registration"
+readme = "../../README.md"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["full"] }
+proc-macro-crate = "3"

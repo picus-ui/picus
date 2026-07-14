@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
 use picus::{
-    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiComponentTemplate, UiEventQueue, UiRoot,
+    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiComponentTemplate, UiRoot,
     UiThemePicker, UiView, apply_label_style, apply_widget_style,
-    bevy_app::{App, PreUpdate, Startup},
-    bevy_ecs::prelude::*,
-    button, resolve_style, resolve_style_for_classes, run_app_with_window_options,
+    bevy_app::{App, Startup, Update},
+    bevy_ecs::{message::MessageReader, prelude::*},
+    button, resolve_style, resolve_style_for_classes, BevyWindowOptions, UiAction, 
     scene::{CommandsSceneExt, Scene, SceneList, bsn, bsn_list, template_value},
     xilem::{
         view::{FlexExt as _, flex_col, flex_row, label},
@@ -526,17 +526,12 @@ fn calc_button_scene(button_spec: CalcButtonSpec) -> impl Scene {
     }
 }
 
-fn drain_calc_events(world: &mut World) {
-    let events = world
-        .resource_mut::<UiEventQueue>()
-        .drain_actions::<CalcEvent>();
-    if events.is_empty() {
-        return;
-    }
-
-    let mut engine = world.resource_mut::<CalculatorEngine>();
-    for event in events {
-        engine.apply_event(event.action);
+fn on_calc_actions(
+    mut reader: MessageReader<UiAction<CalcEvent>>,
+    mut engine: ResMut<CalculatorEngine>,
+) {
+    for UiAction { action, .. } in reader.read() {
+        engine.apply_event(action.clone());
     }
 }
 
@@ -555,15 +550,17 @@ fn build_bevy_calculator_app() -> App {
         .register_ui_component::<CalcButtonSpec>()
         .add_systems(Startup, setup_calculator_world);
 
-    app.add_systems(PreUpdate, drain_calc_events);
+    app.add_ui_action::<CalcEvent>()
+        .add_systems(Update, on_calc_actions);
 
     app
 }
 
 fn main() -> Result<(), EventLoopError> {
-    run_app_with_window_options(build_bevy_calculator_app(), "Calculator", |options| {
-        options.with_initial_inner_size(LogicalSize::new(400.0, 500.0))
-    })
+    build_bevy_calculator_app().run_picus(
+        "Calculator",
+        BevyWindowOptions::default().with_initial_inner_size(LogicalSize::new(400.0, 500.0)),
+    )
 }
 
 #[cfg(test)]

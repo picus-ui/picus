@@ -1,4 +1,5 @@
-use std::any::TypeId;
+use std::any::{Any, TypeId};
+use std::sync::Arc;
 
 use bevy_ecs::entity::Entity;
 use masonry_core::{
@@ -17,19 +18,47 @@ use masonry_core::{
 use picus_view::picus_widget::properties::{BorderBrush, ContentColor, pre_paint_brush};
 
 use crate::{
-    events::{UiEvent, push_global_ui_event},
+    events::{InternalUiEvent, UiEvent, push_global_ui_event},
     styling::UiInteractionEvent,
 };
 
 use super::{ActionButtonWidgetAction, HitTransparentWidget};
 
+#[derive(Clone)]
+struct StoredAction {
+    type_id: TypeId,
+    payload: Arc<dyn Any + Send + Sync>,
+}
+
+impl StoredAction {
+    fn from_typed<A: Clone + Send + Sync + 'static>(action: A) -> Self {
+        Self {
+            type_id: TypeId::of::<A>(),
+            payload: Arc::new(action),
+        }
+    }
+
+    fn from_erased(type_id: TypeId, payload: Arc<dyn Any + Send + Sync>) -> Self {
+        Self { type_id, payload }
+    }
+
+    fn push(&self, entity: Entity) {
+        push_global_ui_event(InternalUiEvent::erased(
+            entity,
+            self.type_id,
+            Arc::clone(&self.payload),
+        ));
+    }
+}
+
 /// Masonry button widget that hosts an arbitrary child while dispatching typed ECS actions.
 pub struct ActionButtonWithChildWidget<A> {
     entity: Entity,
-    action: A,
+    action: StoredAction,
     child: WidgetPod<HitTransparentWidget>,
     hovered: bool,
     pressed: bool,
+    _marker: std::marker::PhantomData<A>,
 }
 
 impl<A> UsesProperty<ContentColor> for ActionButtonWithChildWidget<A> where
@@ -41,15 +70,37 @@ impl<A> UsesProperty<BorderBrush> for ActionButtonWithChildWidget<A> where
 {
 }
 
-impl<A> ActionButtonWithChildWidget<A> {
+impl<A> ActionButtonWithChildWidget<A>
+where
+    A: Clone + Send + Sync + 'static,
+{
     #[must_use]
     pub fn new(entity: Entity, action: A, child: NewWidget<impl Widget + ?Sized>) -> Self {
         Self {
             entity,
-            action,
+            action: StoredAction::from_typed(action),
             child: NewWidget::new(HitTransparentWidget::new(child)).to_pod(),
             hovered: false,
             pressed: false,
+            _marker: std::marker::PhantomData,
+        }
+    }
+
+    /// Create a button that emits a pre-erased [`crate::UiEmit`] payload.
+    #[must_use]
+    pub fn new_erased(
+        entity: Entity,
+        type_id: TypeId,
+        payload: Arc<dyn Any + Send + Sync>,
+        child: NewWidget<impl Widget + ?Sized>,
+    ) -> ActionButtonWithChildWidget<()> {
+        ActionButtonWithChildWidget {
+            entity,
+            action: StoredAction::from_erased(type_id, payload),
+            child: NewWidget::new(HitTransparentWidget::new(child)).to_pod(),
+            hovered: false,
+            pressed: false,
+            _marker: std::marker::PhantomData,
         }
     }
 
@@ -57,18 +108,21 @@ impl<A> ActionButtonWithChildWidget<A> {
     pub const fn entity(&self) -> Entity {
         self.entity
     }
-}
 
-impl<A> ActionButtonWithChildWidget<A>
-where
-    A: Clone + Send + Sync + 'static,
-{
     pub fn set_entity(this: &mut WidgetMut<'_, Self>, entity: Entity) {
         this.widget.entity = entity;
     }
 
     pub fn set_action(this: &mut WidgetMut<'_, Self>, action: A) {
-        this.widget.action = action;
+        this.widget.action = StoredAction::from_typed(action);
+    }
+
+    pub fn set_erased_action(
+        this: &mut WidgetMut<'_, Self>,
+        type_id: TypeId,
+        payload: Arc<dyn Any + Send + Sync>,
+    ) {
+        this.widget.action = StoredAction::from_erased(type_id, payload);
     }
 
     pub fn child_mut<'t>(this: &'t mut WidgetMut<'_, Self>) -> WidgetMut<'t, HitTransparentWidget> {
@@ -76,7 +130,7 @@ where
     }
 
     fn push_action(&self) {
-        push_global_ui_event(UiEvent::typed(self.entity, self.action.clone()));
+        self.action.push(self.entity);
     }
 
     fn push_interaction(&self, event: UiInteractionEvent) {

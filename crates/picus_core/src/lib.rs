@@ -2,51 +2,12 @@
 //!
 //! `picus_core` contains the implementation surface for Picus:
 //! - register ECS UI components through [`UiComponentTemplate`],
-//! - collect typed UI actions through [`UiEventQueue`],
+//! - deliver typed UI actions as Bevy [`UiAction`] messages,
 //! - describe ECS UI trees with Bevy Scene Notation (`bsn!`),
 //! - incrementally synthesize ECS UI changes into a retained Masonry tree.
 //!
-//! # Minimal setup
-//!
-//! ```no_run
-//! use std::sync::Arc;
-//!
-//! use picus_core::{
-//!     AppPicusExt, PicusPlugin, ProjectionCtx, UiComponentTemplate, UiEventQueue, UiRoot,
-//!     UiView,
-//!     bevy_app::{App, PreUpdate, Startup},
-//!     bevy_ecs::prelude::*,
-//!     button,
-//! };
-//!
-//! #[derive(Component, Clone, Copy)]
-//! struct Root;
-//!
-//! #[derive(Debug, Clone, Copy)]
-//! enum Action {
-//!     Clicked,
-//! }
-//!
-//! impl UiComponentTemplate for Root {
-//!     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-//!         Arc::new(button(ctx.entity, Action::Clicked, "Click"))
-//!     }
-//! }
-//!
-//! fn setup(mut commands: Commands) {
-//!     commands.spawn((UiRoot, Root));
-//! }
-//!
-//! fn drain(world: &mut World) {
-//!     let _ = world.resource_mut::<UiEventQueue>().drain_actions::<Action>();
-//! }
-//!
-//! let mut app = App::new();
-//! app.add_plugins(PicusPlugin)
-//!     .register_ui_component::<Root>()
-//!     .add_systems(Startup, setup)
-//!     .add_systems(PreUpdate, drain);
-//! ```
+//! Application code should depend on the `picus` facade crate rather than this
+//! implementation crate.
 #![forbid(unsafe_code)]
 
 pub mod accelerator;
@@ -147,15 +108,15 @@ pub mod prelude {
         StyleSetter, StyleSheet, StyleTransition, SwitchView, SyncAssetSource, SyncTextSource,
         SynthesizedUiViews, TargetColorStyle, TextStyle, ThemeBackdrop, ThemeBackdropOverride,
         TitleBarAction, TitleBarIcon,
-        TitleBarState, ToastKind, TypedUiEvent, UiAnyView, UiAvatar, UiBadge, UiBreadcrumb,
-        UiBreadcrumbItem, UiButton, UiCanvas, UiCanvasCommand, UiCanvasPathCommand,
+        TitleBarState, ToastKind, UiAction, UiActionSender, UiAnyView, UiAvatar, UiBadge,
+        UiBreadcrumb, UiBreadcrumbItem, UiButton, UiCanvas, UiCanvasCommand, UiCanvasPathCommand,
         UiCanvasPosition, UiCard, UiCheckbox, UiCheckboxChanged, ColorPickerChannel, UiColorPicker,
         UiColorPickerChanged, UiColorPickerPanel, UiComboBox, UiComboBoxChanged, UiComboOption,
         UiComponentTemplate, UiContextMenu, UiContextMenuItem, UiContextMenuItemSelected,
         UiContextMenuTrigger, UiDataCell, UiDataColumn, UiDataRow, UiDataTable,
         UiDataTableSelectionChanged, UiDataTableSort, UiDataTableSortChanged, UiDatePicker,
         UiDatePickerChanged, UiDatePickerPanel, UiDialog, UiDivider, UiDropdownItem,
-        UiDropdownMenu, UiDropdownPlacement, UiEvent, UiEventQueue, UiExpander, UiExpanderChanged,
+        UiDropdownMenu, UiDropdownPlacement, UiEmit, UiExpander, UiExpanderChanged,
         UiFlexColumn, UiFlexRow, UiGradientStop, UiGrid, UiGridAutoFlow, UiGridCell, UiGridLength,
         UiGridLengthParseError, UiGroupBox, UiImage, UiImageAlignmentX, UiImageAlignmentY,
         UiImageViewBox, UiImageViewBoxUnits, UiInteractionEvent, UiLabel, UiLink, UiLinkAction,
@@ -182,10 +143,9 @@ pub mod prelude {
         WindowSize, XilemFontBridge, bubble_ui_pointer_events, button, button_with_child, checkbox,
         collect_bevy_font_assets,
         clear_theme_backdrop_material_override, configure_window_for_backdrop,
-        dismiss_overlays_on_click, emit_ui_action,
-        ensure_overlay_root, ensure_overlay_root_entity, ensure_template_part,
-        expand_builtin_ui_component_templates, find_template_part, gather_ui_roots,
-        handle_global_overlay_clicks, handle_overlay_actions, handle_tooltip_hovers,
+        dismiss_overlays_on_click, ensure_overlay_root, ensure_overlay_root_entity,
+        ensure_template_part, expand_builtin_ui_component_templates, find_template_part,
+        gather_ui_roots, handle_global_overlay_clicks, handle_overlay_actions, handle_tooltip_hovers,
         handle_widget_actions, inject_bevy_input_into_masonry, mark_style_dirty,
         rebuild_masonry_runtime, register_builtin_projectors, register_builtin_style_type_aliases,
         register_builtin_ui_components, resolve_localized_text, resolve_style,

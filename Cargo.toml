@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
 	"crates/picus",
+	"crates/picus_macros",
 	"crates/picus_surface",
 	"crates/picus_core",
 	"crates/picus_widget",
@@ -126,6 +127,7 @@ minhook = "0.9"
 rustls = { version = "0.23.36", default-features = false, features = ["ring", "std", "tls12"] }
 
 picus_core = { path = "crates/picus_core" }
+picus_macros = { path = "crates/picus_macros" }
 picus = { path = "crates/picus" }
 picus_surface = { path = "crates/picus_surface" }
 shared_utils = { path = "examples/shared_utils" }

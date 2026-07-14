@@ -4,8 +4,7 @@ use bevy_ecs::prelude::*;
 use picus::{
     AppI18n, BuiltinUiAction, OverlayPlacement, ToastKind, UiCheckboxChanged,
     UiColorPickerChanged, UiComboBoxChanged, UiDataTableSelectionChanged,
-    UiDataTableSortChanged, UiDatePickerChanged, UiDialog, UiEventQueue,
-    UiListViewSelectionChanged, UiMenuItemSelected, UiMultilineTextInputChanged,
+    UiDataTableSortChanged, UiDatePickerChanged, UiDialog, UiListViewSelectionChanged, UiMenuItemSelected, UiMultilineTextInputChanged,
     UiNavigationSelectionChanged, UiNavigationView, UiNumericUpDownChanged,
     UiPasswordInputChanged, UiRadioGroupChanged, UiScrollViewChanged, UiSliderChanged,
     UiSwitchChanged, UiTabChanged, UiTextInputChanged, UiThemePickerChanged, UiToast,
@@ -21,9 +20,7 @@ pub fn drain_gallery_events(world: &mut World) {
         return;
     };
 
-    for event in world
-        .resource_mut::<UiEventQueue>()
-        .drain_actions::<UiNavigationSelectionChanged>()
+    for event in picus::drain_ui_actions::<UiNavigationSelectionChanged>(world)
     {
         if event.action.is_settings_selected {
             // Settings is a framework leaf after menu pages; keep selection without
@@ -33,15 +30,13 @@ pub fn drain_gallery_events(world: &mut World) {
         set_gallery_page(world, &rt, event.action.selected);
     }
 
-    let builtin_events = world
-        .resource_mut::<UiEventQueue>()
-        .drain_actions::<BuiltinUiAction>();
+    let builtin_events = picus::drain_ui_actions::<BuiltinUiAction>(world);
     for event in builtin_events {
         if !matches!(event.action, BuiltinUiAction::Clicked) {
             continue;
         }
 
-        if let Some(action) = world.get::<GalleryButtonAction>(event.entity).cloned() {
+        if let Some(action) = world.get::<GalleryButtonAction>(event.source).cloned() {
             match action {
                 GalleryButtonAction::Toast {
                     message,
@@ -56,7 +51,7 @@ pub fn drain_gallery_events(world: &mut World) {
                 }
             }
         } else if world
-            .get::<crate::pages::ManualOverlayMarker>(event.entity)
+            .get::<crate::pages::ManualOverlayMarker>(event.source)
             .is_some()
         {
             picus::spawn_manual_overlay_at(
@@ -72,9 +67,7 @@ pub fn drain_gallery_events(world: &mut World) {
         }
     }
 
-    for event in world
-        .resource_mut::<UiEventQueue>()
-        .drain_actions::<UiRadioGroupChanged>()
+    for event in picus::drain_ui_actions::<UiRadioGroupChanged>(world)
     {
         if world.get::<GalleryBackdropPicker>(event.action.group).is_some() {
             let material = match event.action.selected {
@@ -86,11 +79,9 @@ pub fn drain_gallery_events(world: &mut World) {
         }
     }
 
-    for event in world
-        .resource_mut::<UiEventQueue>()
-        .drain_actions::<UiComboBoxChanged>()
+    for event in picus::drain_ui_actions::<UiComboBoxChanged>(world)
     {
-        if world.get::<GalleryLocaleCombo>(event.entity).is_some()
+        if world.get::<GalleryLocaleCombo>(event.source).is_some()
             && let Ok(locale) = event
                 .action
                 .value
@@ -106,7 +97,7 @@ pub fn drain_gallery_events(world: &mut World) {
 fn discard_logged_actions(world: &mut World) {
     macro_rules! discard {
         ($($action:ty),+ $(,)?) => {
-            $(let _ = world.resource_mut::<UiEventQueue>().drain_actions::<$action>();)+
+            $(let _ = picus::drain_ui_actions::<$action>(world);)+
         };
     }
 

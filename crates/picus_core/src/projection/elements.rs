@@ -194,6 +194,16 @@ pub(crate) fn project_button(button_component: &UiButton, ctx: ProjectionCtx<'_>
         // Disabled buttons render as a styled non-interactive container so they
         // never emit click actions, accept focus, or respond to hover/press.
         Arc::new(apply_direct_widget_style(content, &style))
+    } else if let Some(emit) = ctx.world.get::<crate::UiEmit>(ctx.entity) {
+        Arc::new(apply_direct_widget_style(
+            crate::retained_bridge::button_with_erased_child(
+                ctx.entity,
+                emit.type_id(),
+                emit.payload(),
+                content,
+            ),
+            &style,
+        ))
     } else {
         Arc::new(apply_direct_widget_style(
             button_with_child_view(ctx.entity, BuiltinUiAction::Clicked, content),

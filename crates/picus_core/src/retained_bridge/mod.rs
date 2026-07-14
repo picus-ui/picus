@@ -15,7 +15,9 @@ mod scroll_portal_view;
 pub use button_view::button_view as button;
 pub use button_view::{ButtonView, button_view};
 pub use button_with_child_view::button_with_child_view as button_with_child;
-pub use button_with_child_view::{ButtonWithChildView, button_with_child_view};
+pub use button_with_child_view::{
+    ButtonWithChildView, button_with_child_view, button_with_erased_child,
+};
 pub use component_views::checkbox_view as checkbox;
 pub use component_views::slider_view as slider;
 pub use component_views::switch_view as switch;

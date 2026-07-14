@@ -6,14 +6,17 @@ use std::{fs, io, path::Path};
 use unic_langid::LanguageIdentifier;
 
 use crate::{
-    ActiveStyleSheetAsset, AppI18n, MasonryRuntime, ProjectionCtx, StyleSheet, StyleTypeRegistry,
-    UiEventQueue, UiProjector, UiProjectorRegistry, UiView, XilemFontBridge,
-    apply_active_stylesheet_ron,
+    ActiveStyleSheetAsset, AppI18n, BevyWindowOptions, MasonryRuntime, ProjectionCtx, StyleSheet,
+    StyleTypeRegistry, UiProjector, UiProjectorRegistry, UiView, WindowBackdropMaterial,
+    XilemFontBridge, apply_active_stylesheet_ron, clear_theme_backdrop_material_override,
     components::{
         RegisteredUiComponentTypes, UiComponentTemplate, expand_added_ui_component_templates,
     },
-    set_active_stylesheet_asset_path,
+    events::{InternalUiEventQueue, register_ui_action_type},
+    run_app_with_window_options, set_active_style_variant_by_name, set_active_stylesheet_asset_path,
+    set_theme_backdrop_material,
 };
+use crate::xilem::winit::error::EventLoopError;
 
 /// Synchronous source for binary assets (fonts).
 pub enum SyncAssetSource<'a> {
@@ -30,7 +33,7 @@ pub enum SyncTextSource<'a> {
 fn flush_pending_font_registrations(app: &mut App) {
     {
         let world = app.world_mut();
-        world.init_resource::<UiEventQueue>();
+        world.init_resource::<InternalUiEventQueue>();
         world.init_non_send::<MasonryRuntime>();
     }
 
@@ -64,7 +67,6 @@ fn flush_pending_font_registrations(app: &mut App) {
 ///     AppPicusExt, PicusPlugin, ProjectionCtx, UiComponentTemplate, UiRoot, UiView,
 ///     bevy_app::{App, Startup},
 ///     bevy_ecs::prelude::*,
-///     button,
 /// };
 ///
 /// #[derive(Component, Clone, Copy)]
@@ -77,7 +79,7 @@ fn flush_pending_font_registrations(app: &mut App) {
 ///
 /// impl UiComponentTemplate for Root {
 ///     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-///         Arc::new(button(ctx.entity, Action::Clicked, "Click"))
+///         Arc::new(ctx.button(Action::Clicked, "Click"))
 ///     }
 /// }
 ///
@@ -87,6 +89,7 @@ fn flush_pending_font_registrations(app: &mut App) {
 ///
 /// let mut app = App::new();
 /// app.add_plugins(PicusPlugin)
+///     .add_ui_action::<Action>()
 ///     .register_ui_component::<Root>()
 ///     .add_systems(Startup, setup);
 /// ```
@@ -95,8 +98,8 @@ pub trait AppPicusExt {
     ///
     /// Last registered projector has precedence during projection.
     ///
-    /// Legacy low-level API kept for compatibility; prefer
-    /// [`Self::register_ui_component`] for application code.
+    /// Low-level API; prefer [`Self::register_ui_component`] or
+    /// `register_ui_components!` for application code.
     #[doc(hidden)]
     fn register_projector<C: Component>(
         &mut self,
@@ -107,6 +110,9 @@ pub trait AppPicusExt {
     ///
     /// This single call wires projector registration, one-time expansion for `Added<T>`,
     /// and selector type aliases.
+    ///
+    /// Prefer `register_ui_components!(app, ...)` with `#[derive(UiComponent)]` for
+    /// application components.
     fn register_ui_component<T: UiComponentTemplate>(&mut self) -> &mut Self;
 
     /// Register a Bevy resource as an input to UI projection.
@@ -114,20 +120,32 @@ pub trait AppPicusExt {
     /// Use this for resources read from [`ProjectionCtx::world`] by application
     /// projectors. Registered resources invalidate synthesis only when Bevy
     /// change detection says they changed.
+    ///
+    /// Prefer declaring resources on `#[ui_component(resources(...))]` so
+    /// `register_ui_components!` installs them automatically.
     fn register_projection_resource<R: Resource>(&mut self) -> &mut Self;
 
     /// Register a raw projector implementation.
     ///
-    /// Legacy low-level API kept for compatibility; prefer
-    /// [`Self::register_ui_component`] for application code.
+    /// Low-level API; prefer [`Self::register_ui_component`] for application code.
     #[doc(hidden)]
     fn register_raw_projector<P: UiProjector>(&mut self, projector: P) -> &mut Self;
+
+    /// Register payload type `T` for application UI actions.
+    ///
+    /// Installs `Messages<UiAction<T>>`, a [`crate::UiActionSender<T>`] resource,
+    /// and a dispatcher handler that writes messages from the internal queue.
+    fn add_ui_action<T: Clone + Send + Sync + 'static>(&mut self) -> &mut Self;
 
     /// Load a RON stylesheet asset and bind it as the active runtime style source.
     ///
     /// The file is hot-reloaded through Bevy's asset pipeline. If it declares
     /// `default_variant` and no active variant is already selected, that
     /// registered variant is applied before the active stylesheet is overlaid.
+    ///
+    /// Picus does **not** auto-select a theme. Without a loaded sheet and/or
+    /// selected variant, controls render with no framework-provided visible
+    /// fill or text colour.
     fn load_style_sheet(&mut self, asset_path: impl Into<String>) -> &mut Self;
 
     /// Parse and load an active stylesheet directly from embedded RON text.
@@ -138,6 +156,19 @@ pub trait AppPicusExt {
     /// that registered variant is applied before the active stylesheet is
     /// overlaid.
     fn load_style_sheet_ron(&mut self, ron_text: &str) -> &mut Self;
+
+    /// Select an active style variant by registered name (for example `"dark"`).
+    ///
+    /// Does nothing permanent if the name is unknown until a matching registered
+    /// variant is available; missing styles remain transparent rather than
+    /// erroring.
+    fn style_variant(&mut self, name: impl Into<String>) -> &mut Self;
+
+    /// Override the theme window backdrop material for this app.
+    fn theme_backdrop(&mut self, material: WindowBackdropMaterial) -> &mut Self;
+
+    /// Clear an application theme backdrop override.
+    fn clear_theme_backdrop_override(&mut self) -> &mut Self;
 
     /// Register a selector type alias usable by `Selector::Type("...")` in stylesheet RON.
     fn register_style_selector_type<T: Component>(
@@ -170,6 +201,16 @@ pub trait AppPicusExt {
     ///
     /// Typical path for Bevy projects: `assets/fonts/<font-file>.ttf|otf`.
     fn register_xilem_font_path(&mut self, path: impl AsRef<Path>) -> io::Result<&mut Self>;
+
+    /// Run this app with Picus window bootstrap.
+    ///
+    /// This is the only recommended desktop runner. It installs Bevy window /
+    /// input / winit plugins as needed and applies [`BevyWindowOptions`].
+    fn run_picus(
+        self,
+        title: impl Into<String>,
+        options: BevyWindowOptions,
+    ) -> Result<(), EventLoopError>;
 }
 
 impl AppPicusExt for App {
@@ -226,6 +267,11 @@ impl AppPicusExt for App {
         self
     }
 
+    fn add_ui_action<T: Clone + Send + Sync + 'static>(&mut self) -> &mut Self {
+        register_ui_action_type::<T>(self);
+        self
+    }
+
     fn load_style_sheet(&mut self, asset_path: impl Into<String>) -> &mut Self {
         let asset_path = asset_path.into();
         set_active_stylesheet_asset_path(self.world_mut(), asset_path);
@@ -248,6 +294,21 @@ impl AppPicusExt for App {
     fn load_style_sheet_ron(&mut self, ron_text: &str) -> &mut Self {
         apply_active_stylesheet_ron(self.world_mut(), ron_text)
             .unwrap_or_else(|error| panic!("failed to parse embedded stylesheet RON: {error}"));
+        self
+    }
+
+    fn style_variant(&mut self, name: impl Into<String>) -> &mut Self {
+        set_active_style_variant_by_name(self.world_mut(), &name.into());
+        self
+    }
+
+    fn theme_backdrop(&mut self, material: WindowBackdropMaterial) -> &mut Self {
+        set_theme_backdrop_material(self.world_mut(), material);
+        self
+    }
+
+    fn clear_theme_backdrop_override(&mut self) -> &mut Self {
+        clear_theme_backdrop_material_override(self.world_mut());
         self
     }
 
@@ -337,6 +398,14 @@ impl AppPicusExt for App {
 
         self.register_xilem_font(SyncAssetSource::FilePath(path));
         Ok(self)
+    }
+
+    fn run_picus(
+        self,
+        title: impl Into<String>,
+        options: BevyWindowOptions,
+    ) -> Result<(), EventLoopError> {
+        run_app_with_window_options(self, title, move |_| options.clone())
     }
 }
 

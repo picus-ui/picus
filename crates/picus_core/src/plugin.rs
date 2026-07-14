@@ -26,9 +26,9 @@ use bevy_window::{
 };
 
 use crate::{
-    AppBreakpoints, OverlayStack, WindowSize,
+    AppBreakpoints, BuiltinUiAction, OverlayStack, WindowSize,
     components::register_builtin_ui_components,
-    events::UiEventQueue,
+    events::{InternalUiEventQueue, UiActionRegistry, dispatch_ui_actions, register_ui_action_type},
     fonts::{XilemFontBridge, collect_bevy_font_assets, sync_fonts_to_xilem},
     i18n::AppI18n,
     overlay::{
@@ -67,6 +67,7 @@ use crate::{
         sync_scroll_view_layout_geometry, tick_auto_dismiss,
     },
 };
+use bevy_ecs::schedule::SystemSet;
 
 /// Bevy plugin for headless Masonry runtime + ECS projection synthesis.
 #[derive(Default)]
@@ -78,6 +79,21 @@ pub struct PicusPlugin;
 /// plug-and-play built-ins without manual registration in app setup code.
 #[derive(Default)]
 pub struct PicusBuiltinsPlugin;
+
+/// Ordered PreUpdate sets for Picus input → retained routing → action dispatch.
+///
+/// Input-driven widget actions are written as [`crate::UiAction`] messages before
+/// ordinary `Update` systems run, so application `MessageReader`s see them in the
+/// same frame without extra `.after(...)` ordering.
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub enum PicusUiSet {
+    /// Bevy window/input injection and related pointer prep.
+    Input,
+    /// Retained-view message routing and callback emission into the internal queue.
+    RetainedRouting,
+    /// Sole drain of the internal UI action queue and TypeId dispatch.
+    DispatchActions,
+}
 
 impl Plugin for PicusBuiltinsPlugin {
     fn build(&self, app: &mut App) {
@@ -112,7 +128,8 @@ impl Plugin for PicusPlugin {
             .init_resource::<SynthesizedUiViews>()
             .init_resource::<UiProjectionInvalidation>()
             .init_resource::<UiSynthesisStats>()
-            .init_resource::<UiEventQueue>()
+            .init_resource::<InternalUiEventQueue>()
+            .init_resource::<UiActionRegistry>()
             .init_resource::<StyleSheet>()
             .init_resource::<BaseStyleSheet>()
             .init_resource::<ActiveStyleSheet>()
@@ -150,6 +167,15 @@ impl Plugin for PicusPlugin {
             .add_message::<WindowResized>()
             .add_message::<WindowScaleFactorChanged>()
             .add_message::<AssetEvent<Font>>()
+            .configure_sets(
+                PreUpdate,
+                (
+                    PicusUiSet::Input,
+                    PicusUiSet::RetainedRouting,
+                    PicusUiSet::DispatchActions,
+                )
+                    .chain(),
+            )
             .add_systems(
                 PreUpdate,
                 (
@@ -168,16 +194,33 @@ impl Plugin for PicusPlugin {
                     handle_scroll_view_wheel,
                     handle_clipboard_events,
                     inject_bevy_input_into_masonry,
-                    route_masonry_view_messages,
-                    sync_masonry_ime_state_to_bevy_window,
-                    handle_widget_actions,
-                    sync_ui_interaction_markers,
                 )
-                    .chain(),
+                    .chain()
+                    .in_set(PicusUiSet::Input),
             )
             .add_systems(
                 PreUpdate,
-                process_keyboard_accelerators.after(inject_bevy_input_into_masonry),
+                (
+                    route_masonry_view_messages,
+                    sync_masonry_ime_state_to_bevy_window,
+                    process_keyboard_accelerators,
+                )
+                    .chain()
+                    .in_set(PicusUiSet::RetainedRouting),
+            )
+            .add_systems(
+                PreUpdate,
+                (
+                    // Internal typed drains still used by widget/overlay systems until
+                    // those handlers are fully folded into the registry.
+                    handle_widget_actions,
+                    handle_overlay_actions,
+                    sync_ui_interaction_markers,
+                    // Application Message conversion for registered payloads.
+                    dispatch_ui_actions,
+                )
+                    .chain()
+                    .in_set(PicusUiSet::DispatchActions),
             )
             .add_systems(
                 Update,
@@ -187,6 +230,8 @@ impl Plugin for PicusPlugin {
                     ensure_overlay_defaults,
                     handle_overlay_actions,
                     handle_widget_actions,
+                    // Convert any actions re-queued during Update into Messages.
+                    dispatch_ui_actions,
                     activate_debounced_hovers,
                     handle_tooltip_hovers,
                     tick_auto_dismiss,
@@ -245,6 +290,7 @@ impl Plugin for PicusPlugin {
         register_embedded_fluent_theme_variants(app.world_mut()).unwrap_or_else(|error| {
             panic!("failed to parse embedded Fluent theme bundle: {error}")
         });
+        register_builtin_ui_action_messages(app);
 
         {
             let mut registry = app.world_mut().resource_mut::<UiProjectorRegistry>();
@@ -252,6 +298,56 @@ impl Plugin for PicusPlugin {
             register_projection_invalidation_dependencies(&mut registry);
         }
     }
+}
+
+/// Register built-in action payloads so apps can read them via `MessageReader<UiAction<T>>`
+/// without calling `add_ui_action` for framework types.
+fn register_builtin_ui_action_messages(app: &mut App) {
+    use crate::{
+        TitleBarAction, UiCheckboxChanged, UiColorPickerChanged, UiComboBoxChanged,
+        UiContextMenuItemSelected, UiDataTableSelectionChanged, UiDataTableSortChanged,
+        UiDatePickerChanged, UiExpanderChanged, UiLinkAction, UiListViewSelectionChanged,
+        UiMenuItemSelected, UiMultilineTextInputChanged, UiNavigationBackRequested,
+        UiNavigationDisplayModeChanged, UiNavigationItemExpandedChanged, UiNavigationItemInvoked,
+        UiNavigationPaneChanged, UiNavigationSelectionChanged, UiNumericUpDownChanged,
+        UiPasswordInputChanged, UiRadioGroupChanged, UiRatingChanged, UiScrollViewChanged,
+        UiSearchChanged, UiSliderChanged, UiSwitchChanged, UiTabChanged, UiTextInputChanged,
+        UiThemePickerChanged, UiTimePickerChanged, UiTreeNodeToggled,
+    };
+
+    register_ui_action_type::<BuiltinUiAction>(app);
+    register_ui_action_type::<TitleBarAction>(app);
+    register_ui_action_type::<UiCheckboxChanged>(app);
+    register_ui_action_type::<UiColorPickerChanged>(app);
+    register_ui_action_type::<UiComboBoxChanged>(app);
+    register_ui_action_type::<UiContextMenuItemSelected>(app);
+    register_ui_action_type::<UiDataTableSelectionChanged>(app);
+    register_ui_action_type::<UiDataTableSortChanged>(app);
+    register_ui_action_type::<UiDatePickerChanged>(app);
+    register_ui_action_type::<UiExpanderChanged>(app);
+    register_ui_action_type::<UiLinkAction>(app);
+    register_ui_action_type::<UiListViewSelectionChanged>(app);
+    register_ui_action_type::<UiMenuItemSelected>(app);
+    register_ui_action_type::<UiMultilineTextInputChanged>(app);
+    register_ui_action_type::<UiNavigationBackRequested>(app);
+    register_ui_action_type::<UiNavigationDisplayModeChanged>(app);
+    register_ui_action_type::<UiNavigationItemExpandedChanged>(app);
+    register_ui_action_type::<UiNavigationItemInvoked>(app);
+    register_ui_action_type::<UiNavigationPaneChanged>(app);
+    register_ui_action_type::<UiNavigationSelectionChanged>(app);
+    register_ui_action_type::<UiNumericUpDownChanged>(app);
+    register_ui_action_type::<UiPasswordInputChanged>(app);
+    register_ui_action_type::<UiRadioGroupChanged>(app);
+    register_ui_action_type::<UiRatingChanged>(app);
+    register_ui_action_type::<UiScrollViewChanged>(app);
+    register_ui_action_type::<UiSearchChanged>(app);
+    register_ui_action_type::<UiSliderChanged>(app);
+    register_ui_action_type::<UiSwitchChanged>(app);
+    register_ui_action_type::<UiTabChanged>(app);
+    register_ui_action_type::<UiTextInputChanged>(app);
+    register_ui_action_type::<UiThemePickerChanged>(app);
+    register_ui_action_type::<UiTimePickerChanged>(app);
+    register_ui_action_type::<UiTreeNodeToggled>(app);
 }
 
 #[cfg(test)]

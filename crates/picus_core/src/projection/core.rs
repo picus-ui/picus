@@ -41,6 +41,65 @@ impl fmt::Debug for ProjectionCtx<'_> {
     }
 }
 
+impl ProjectionCtx<'_> {
+    /// Return a cloneable [`crate::UiActionSender`] for deferred emission.
+    ///
+    /// Panics if `T` was not registered with [`crate::AppPicusExt::add_ui_action`].
+    #[must_use]
+    pub fn action_sender<T: Clone + Send + Sync + 'static>(&self) -> crate::UiActionSender<T> {
+        self.world
+            .get_resource::<crate::UiActionSender<T>>()
+            .cloned()
+            .unwrap_or_else(|| {
+                panic!(
+                    "UiActionSender<{}> is not registered; call AppPicusExt::add_ui_action::<{}>()",
+                    std::any::type_name::<T>(),
+                    std::any::type_name::<T>(),
+                )
+            })
+    }
+
+    /// Action-aware button that uses this context's entity as the action source.
+    #[must_use]
+    pub fn button<A: Clone + Send + Sync + 'static>(
+        &self,
+        action: A,
+        label: impl Into<masonry_core::core::ArcStr>,
+    ) -> crate::ButtonView<A> {
+        debug_assert!(
+            self.world
+                .get_resource::<crate::UiActionRegistry>()
+                .is_some_and(|registry| registry.is_registered(std::any::TypeId::of::<A>()))
+                || std::any::TypeId::of::<A>() == std::any::TypeId::of::<BuiltinUiAction>(),
+            "button action type `{}` is not registered with add_ui_action",
+            std::any::type_name::<A>(),
+        );
+        crate::retained_bridge::button(self.entity, action, label)
+    }
+
+    /// Action-aware button with a custom child view.
+    #[must_use]
+    pub fn button_with_child<A, V>(
+        &self,
+        action: A,
+        child: V,
+    ) -> crate::ButtonWithChildView<A, V>
+    where
+        A: Clone + Send + Sync + 'static,
+        V: picus_view::WidgetView<(), ()>,
+    {
+        debug_assert!(
+            self.world
+                .get_resource::<crate::UiActionRegistry>()
+                .is_some_and(|registry| registry.is_registered(std::any::TypeId::of::<A>()))
+                || std::any::TypeId::of::<A>() == std::any::TypeId::of::<BuiltinUiAction>(),
+            "button action type `{}` is not registered with add_ui_action",
+            std::any::type_name::<A>(),
+        );
+        crate::retained_bridge::button_with_child(self.entity, action, child)
+    }
+}
+
 /// Maps ECS entity data into a concrete Xilem Masonry view.
 pub trait UiProjector: Send + Sync + 'static {
     fn project(&self, ctx: ProjectionCtx<'_>) -> Option<UiView>;

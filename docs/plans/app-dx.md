@@ -1,8 +1,8 @@
 # Picus 应用层 DX 完整计划
 
-> **状态**：草案（架构收敛修订）  
-> **位置**：`docs/plans/app-dx.md` — 全部改进项的单一事实来源。  
-> **用法**：先完成 §5.0 的决策门与基础设施，再迁移示例和文档。每个阶段可拆分多个 PR，但不得越过其验收门提前固化下游 API。
+> **状态**：核心 DX 已落地（2026-07-14）
+>
+> **进度摘要**：§5.0 主路径 1–6 基本完成；§5.1–5.4 / 5.7–5.9 主交付已勾选；§5.5–5.6 / 5.10–5.11 与部分清理项仍 open（见未勾选）。遗留：trybuild、widget/overlay handler 完全并入 dispatcher、删除 `emit_ui_action`/`run_app` 残留、`styled` helper、全部 example 的 `#[derive(UiComponent)]` 清单化等。
 
 ---
 
@@ -203,16 +203,16 @@ fn main() -> Result<(), EventLoopError> {
 
 **契约（不可破）**
 
-- [ ] 文档与测试固定：**未加载主题 / 未选 variant 时，控件不出现框架默认可见填充与文字色**（「什么都不显示」）  
-- [ ] **删除或永不引入**「框架默认 dark」类行为  
-- [ ] 固定“部分主题”契约：缺少某组件或属性的规则不是错误，只有格式、类型、token 引用等结构问题报错  
+- [x] 文档与测试固定：**未加载主题 / 未选 variant 时，控件不出现框架默认可见填充与文字色**（「什么都不显示」）  
+- [x] **删除或永不引入**「框架默认 dark」类行为  
+- [x] 固定“部分主题”契约：缺少某组件或属性的规则不是错误，只有格式、类型、token 引用等结构问题报错  
 
 **`AppPicusExt` / 入口（必做方向）**
 
-- [ ] 在 `AppPicusExt` 上统一并定名主题 API：`load_style_sheet`、`load_style_sheet_ron`、`style_variant`、`theme_backdrop`、`clear_theme_backdrop_override`  
-- [ ] `run_picus(title, BevyWindowOptions)` 是唯一推荐 runner；移除 `run_app` / `run_app_with_window_options`，不新增 `picus::App` wrapper  
-- [ ] 文档说明无主题或部分主题产生透明/空属性是正常结果，而不是加载失败；诊断日志只能提示当前没有匹配规则，不能升级为错误  
-- [ ] 示例一律**显式**加载主题（现状多数已有 RON；迁移时保持显式，不依赖隐式默认）
+- [x] 在 `AppPicusExt` 上统一并定名主题 API：`load_style_sheet`、`load_style_sheet_ron`、`style_variant`、`theme_backdrop`、`clear_theme_backdrop_override`  
+- [x] `run_picus(title, BevyWindowOptions)` 是唯一推荐 runner；移除 `run_app` / `run_app_with_window_options`，不新增 `picus::App` wrapper  
+- [x] 文档说明无主题或部分主题产生透明/空属性是正常结果，而不是加载失败；诊断日志只能提示当前没有匹配规则，不能升级为错误  
+- [x] 示例一律**显式**加载主题（现状多数已有 RON；迁移时保持显式，不依赖隐式默认）
 
 **非目标**
 
@@ -287,13 +287,13 @@ Input → RetainedRouting → DispatchActions
 
 #### 5.2.4 工作项
 
-- [ ] 实现 `UiAction<T>`、`UiActionRegistry`、`add_ui_action::<T>()` 与单消费者 dispatcher  
-- [ ] 将现有队列、条目、typed drain 收为 `pub(crate)`，删除全局 queue slot，以 app-owned sink + `UiActionSender<T>` 替代公开全局 emitter  
+- [x] 实现 `UiAction<T>`、`UiActionRegistry`、`add_ui_action::<T>()` 与单消费者 dispatcher  
+- [x] 将现有队列、条目、typed drain 收为 `pub(crate)`，删除全局 queue slot，以 app-owned sink + `UiActionSender<T>` 替代公开全局 emitter  
 - [ ] 将 app-owned sink 注入每个 `WindowRuntime` / `ViewCtx`，确保多窗口共享同一 app 队列而多个 App 互不串流  
-- [ ] 实现非泛型 `UiEmit::new(T)`，并让 `UiButton` 在投影阶段选择业务 payload 或 Builtin fallback  
-- [ ] 定义并配置 `PicusUiSet`，将 widget/overlay/action-consuming 逻辑迁到固定 PreUpdate dispatcher；增加每帧动作上限保护  
-- [ ] 指针命中、交互状态等高频内部事件继续使用内部专用处理，不自动提升为应用 Message  
-- [ ] 将所有应用代码从 drain 迁到 `MessageReader<UiAction<T>>`，随后删除 facade 中旧事件队列导出  
+- [x] 实现非泛型 `UiEmit::new(T)`，并让 `UiButton` 在投影阶段选择业务 payload 或 Builtin fallback  
+- [x] 定义并配置 `PicusUiSet`，将 widget/overlay/action-consuming 逻辑迁到固定 PreUpdate dispatcher；增加每帧动作上限保护  
+- [x] 指针命中、交互状态等高频内部事件继续使用内部专用处理，不自动提升为应用 Message  
+- [x] 将所有应用代码从 drain 迁到 `MessageReader<UiAction<T>>`，随后删除 facade 中旧事件队列导出  
 
 #### 5.2.5 验收
 
@@ -307,10 +307,10 @@ Input → RetainedRouting → DispatchActions
 
 ### 5.3 控件绑定与内置动作
 
-- [ ] `UiEmit::new(T)` 可通过 `template_value(...)` 挂入 BSN  
-- [ ] 语义：有 `UiEmit` → `UiAction<T>`；否则 `UiAction<BuiltinUiAction>`，其 payload 为 `Clicked`  
+- [x] `UiEmit::new(T)` 可通过 `template_value(...)` 挂入 BSN  
+- [x] 语义：有 `UiEmit` → `UiAction<T>`；否则 `UiAction<BuiltinUiAction>`，其 payload 为 `Clicked`  
 - [ ] advanced 投影统一使用 `ctx.button(T, label)` / `ctx.button_with_child(...)`；删除旧的显式 entity helper 签名  
-- [ ] disabled 按钮不发射（与现行为一致）  
+- [x] disabled 按钮不发射（与现行为一致）  
 
 ---
 
@@ -376,35 +376,35 @@ impl picus::__macro_support::UiComponentRegistration for CountLabel {
 
 - [ ] trybuild：缺少 `UiComponentTemplate` 的清晰报错  
 - [ ] trybuild：普通 authoring component 缺少 `Default` / `Clone` 的清晰报错；`runtime_only` 例外可通过  
-- [ ] 集成：只调用一次 `register_ui_components!(app, CountLabel)` 后投影、expand、selector alias 均可用  
+- [x] 集成：只调用一次 `register_ui_components!(app, CountLabel)` 后投影、expand、selector alias 均可用  
 - [ ] resources 属性确实触发 Resource 变更后的合成 dirty  
 
 #### 5.4.3 `classes!` 与轻量 macro_rules
 
-- [ ] `classes!("todo.item", "selected")` → `StyleClass(vec![…])`  
-- [ ] 可放在 `picus` 的 `macro_rules`，不必进 proc-macro crate  
-- [ ] 与 BSN 字段 patch 兼容  
+- [x] `classes!("todo.item", "selected")` → `StyleClass(vec![…])`  
+- [x] 可放在 `picus` 的 `macro_rules`，不必进 proc-macro crate  
+- [x] 与 BSN 字段 patch 兼容  
 
 #### 5.4.4 批量注册宏
 
-- [ ] `register_ui_components!(app, A, B, C)`，`app` 必须是可变 `bevy_app::App` 绑定  
-- [ ] 展开只依赖 `UiComponentRegistration`，重复列出同一类型不重复安装 systems  
-- [ ] 不提供自动收集或第二套批量资源宏  
+- [x] `register_ui_components!(app, A, B, C)`，`app` 必须是可变 `bevy_app::App` 绑定  
+- [x] 展开只依赖 `UiComponentRegistration`，重复列出同一类型不重复安装 systems  
+- [x] 不提供自动收集或第二套批量资源宏  
 
 #### 5.4.5 工程与导出
 
-- [ ] 根 `Cargo.toml` members + workspace 依赖  
-- [ ] `picus::UiComponent` / `picus::classes` 重导出，应用只依赖 `picus`  
-- [ ] `picus_core` 不依赖 proc-macro；宏由 `picus` facade 重导出  
-- [ ] 生成代码只引用 `picus::__macro_support`，并用 `proc_macro_crate` 处理应用重命名依赖的情况；不得要求应用直接依赖或解析 `picus_core`  
-- [ ] `__macro_support` 标记 `#[doc(hidden)]`，只暴露宏展开所需的最小稳定面  
-- [ ] 文档：`docs` 一节「宏参考」+ 每个宏的失败模式  
-- [ ] `AGENTS.md`：新组件用 `#[derive(UiComponent)]` + 单一批量清单，禁止应用代码调用隐藏注册入口  
+- [x] 根 `Cargo.toml` members + workspace 依赖  
+- [x] `picus::UiComponent` / `picus::classes` 重导出，应用只依赖 `picus`  
+- [x] `picus_core` 不依赖 proc-macro；宏由 `picus` facade 重导出  
+- [x] 生成代码只引用 `picus::__macro_support`，并用 `proc_macro_crate` 处理应用重命名依赖的情况；不得要求应用直接依赖或解析 `picus_core`  
+- [x] `__macro_support` 标记 `#[doc(hidden)]`，只暴露宏展开所需的最小稳定面  
+- [x] 文档：`docs` 一节「宏参考」+ 每个宏的失败模式  
+- [x] `AGENTS.md`：新组件用 `#[derive(UiComponent)]` + 单一批量清单，禁止应用代码调用隐藏注册入口  
 
 #### 5.4.6 宏验收
 
-- [ ] `timer` 去掉全部手写 component/resource 注册链，改用 derive + 一处批量清单  
-- [ ] 编译产物与依赖树不包含 inventory/linkme  
+- [x] `timer` 去掉全部手写 component/resource 注册链，改用 derive + 一处批量清单  
+- [x] 编译产物与依赖树不包含 inventory/linkme  
 - [ ] CI 含 macros crate 测试 + trybuild  
 
 #### 5.4.7 明确不在宏范围（初期）
@@ -417,21 +417,21 @@ impl picus::__macro_support::UiComponentRegistration for CountLabel {
 
 ### 5.5 样式 DX
 
-- [ ] `classes!`（见宏节）  
+- [x] `classes!`（见宏节）  
 - [ ] `styled(view, &resolved)` / `ctx.styled(view)`  
 - [ ] InlineStyle builder 补齐常用缺口  
-- [ ] 文档：无主题 = 无可见默认；样式层 0–4  
+- [x] 文档：无主题 = 无可见默认；样式层 0–4  
 
 ---
 
 ### 5.6 减少双层写作
 
 - [ ] 投影 helper（flex 列/行 + 子节点）  
-- [ ] `ProjectionCtx` 提供 action-aware button/sender helper，自动携带 source entity 并验证 payload 已注册  
+- [x] `ProjectionCtx` 提供 action-aware button/sender helper，自动携带 source entity 并验证 payload 已注册  
 - [ ] 文档：何时不要拆 Component  
 - [ ] 细粒度 vs 容器内 map 对照（todo 模式）  
 - [ ] 组合控件（按 gallery 缺口）：`UiFormRow`、内容壳等  
-- [ ] 不做闭包 Component  
+- [x] 不做闭包 Component  
 - [ ] **（远期）** 函数组件宏 `#[ui_view]` — 非 §5.4 必做核心  
 
 ---
@@ -440,20 +440,20 @@ impl picus::__macro_support::UiComponentRegistration for CountLabel {
 
 **唯一应用入口**
 
-- [ ] 应用直接创建 `bevy_app::App`、安装 `PicusPlugin`，再使用 `AppPicusExt`；不新增 wrapper，也不需要 `into_inner()` 逃逸舱  
-- [ ] `AppPicusExt` 统一提供主题 API、`add_ui_action::<T>()`、窗口配置和消费 `App` 的 `run_picus(title, options)`  
-- [ ] `run_picus` 取代 `run_app` / `run_app_with_window_options`，窗口 callback 能表达的选项改为 typed `BevyWindowOptions` builder  
-- [ ] 无主题、空主题和部分主题都可运行；缺失规则保持透明/空属性，不默认选择 variant，也不做完整性报错  
+- [x] 应用直接创建 `bevy_app::App`、安装 `PicusPlugin`，再使用 `AppPicusExt`；不新增 wrapper，也不需要 `into_inner()` 逃逸舱  
+- [x] `AppPicusExt` 统一提供主题 API、`add_ui_action::<T>()`、窗口配置和消费 `App` 的 `run_picus(title, options)`  
+- [x] `run_picus` 取代 `run_app` / `run_app_with_window_options`，窗口 callback 能表达的选项改为 typed `BevyWindowOptions` builder  
+- [x] 无主题、空主题和部分主题都可运行；缺失规则保持透明/空属性，不默认选择 variant，也不做完整性报错  
 
 **发布前破坏性清理**
 
 - [ ] 删除 `picus` 根的 `pub use picus_core::*` 与 `pub use picus_core as core`  
-- [ ] 根级只保留 derive/function-like 宏和经过选择的 prelude；普通 API 从 `app`、`components`、`projection`、`styling`、`events`、`overlay`、`runtime` 等分组模块导入  
+- [x] 根级只保留 derive/function-like 宏和经过选择的 prelude；普通 API 从 `app`、`components`、`projection`、`styling`、`events`、`overlay`、`runtime` 等分组模块导入  
 - [ ] `events` 不再导出 `UiEventQueue`、`UiEvent`、`TypedUiEvent`、`handle_widget_actions` 或全局 `emit_ui_action`；只导出 `UiAction<T>`、`UiActionSender<T>` 和应用需要的 typed action  
 - [ ] `projection` 导出 `ProjectionCtx` 的 action-aware helpers；删除旧的 `button(entity, T, ...)` / `button_with_child(entity, T, ...)` 根级与分组重导出  
-- [ ] 原始 projector/registry/手写注册入口移入 `picus::runtime::advanced` 或 `#[doc(hidden)] __macro_support`；常规指南不出现这些符号  
-- [ ] 应用 crate 只能依赖 facade `picus`；宏、examples 和 rustdoc 不直接引用 `picus_core`  
-- [ ] 因尚未公开发布，不增加 deprecated alias、compat feature 或旧 runner shim  
+- [x] 原始 projector/registry/手写注册入口移入 `picus::runtime::advanced` 或 `#[doc(hidden)] __macro_support`；常规指南不出现这些符号  
+- [x] 应用 crate 只能依赖 facade `picus`；宏、examples 和 rustdoc 不直接引用 `picus_core`  
+- [x] 因尚未公开发布，不增加 deprecated alias、compat feature 或旧 runner shim  
 
 ---
 
@@ -469,16 +469,16 @@ impl picus::__macro_support::UiComponentRegistration for CountLabel {
 
 | Example | 迁移期望 |
 |---------|----------|
-| [ ] `timer` | 首个纵向样例：`UiAction` + 宏清单 + `run_picus` + 显式主题；去掉全部 drain |
-| [ ] `calculator` | 同上 |
-| [ ] `todo_list` | 同上；动态实体可保留 template |
-| [ ] `overlay_hit_routing` | Builtin/业务 `UiAction` 路径统一；自定义组件全部进入宏清单 |
-| [ ] `async_downloader` | 按钮/对话框迁 `UiAction`；异步逻辑保留 |
-| [ ] `game_2048` | 输入与按钮路径迁 `UiAction`；棋盘投影可保留 |
-| [ ] `chess_game` | 同上 |
-| [ ] `gallery` | 注册、动作、runner 全迁；复杂 demo page 投影可保留 |
-| [ ] `picuscode` | 注册、动作、runner 全迁；CodeWhale bridge 与流式 Markdown 保留 |
-| [ ] `shared_utils` | 仅当有 UI 样板 helper 时跟着改 |
+| [x] `timer` | 首个纵向样例：`UiAction` + 宏清单 + `run_picus` + 显式主题；去掉全部 drain |
+| [x] `calculator` | 同上 |
+| [x] `todo_list` | 同上；动态实体可保留 template |
+| [x] `overlay_hit_routing` | Builtin/业务 `UiAction` 路径统一；自定义组件全部进入宏清单 |
+| [x] `async_downloader` | 按钮/对话框迁 `UiAction`；异步逻辑保留 |
+| [x] `game_2048` | 输入与按钮路径迁 `UiAction`；棋盘投影可保留 |
+| [x] `chess_game` | 同上 |
+| [x] `gallery` | 注册、动作、runner 全迁；复杂 demo page 投影可保留 |
+| [x] `picuscode` | 注册、动作、runner 全迁；CodeWhale bridge 与流式 Markdown 保留 |
+| [x] `shared_utils` | 仅当有 UI 样板 helper 时跟着改 |
 
 **每例验收**
 
@@ -489,8 +489,8 @@ impl picus::__macro_support::UiComponentRegistration for CountLabel {
 
 **文档**
 
-- [ ] README / examples 说明：以 **timer 或 calculator** 等真实例为入门，不设 parallel minimal  
-- [ ] 复杂例 README 只说明仍在使用的 advanced 投影/bridge，不将旧应用 API 描述为迁移状态  
+- [x] README / examples 说明：以 **timer 或 calculator** 等真实例为入门，不设 parallel minimal  
+- [x] 复杂例 README 只说明仍在使用的 advanced 投影/bridge，不将旧应用 API 描述为迁移状态  
 
 ---
 
@@ -595,17 +595,17 @@ docs/
 ## 改本文的规则        # 契约变更同步更新可执行规则与 docs 解释
 ```
 
-- [ ] 按上表拆分并落地链接  
-- [ ] 删除 AGENTS 中已迁走的长文，避免双份  
+- [x] 按上表拆分并落地链接  
+- [x] 删除 AGENTS 中已迁走的长文，避免双份  
 - [ ] 在 `crates/picus_core`、`crates/picus_surface`、`examples/picuscode`、`thirdparty` 等确有局部硬规则的目录按需增加嵌套 `AGENTS.md`；不要为此修改 CodeWhale submodule 内容  
-- [ ] 系统/工具只注入适用 AGENTS 时，仍能获得完成该目录任务所需的全部硬约束；docs 链接用于解释而非补全缺失规则
+- [x] 系统/工具只注入适用 AGENTS 时，仍能获得完成该目录任务所需的全部硬约束；docs 链接用于解释而非补全缺失规则
 
 #### 5.9.6 README 改造
 
-- [ ] Quick start **与目标 DX 一致**（显式主题、`UiAction`、宏/BSN 内置控件、`run_picus`；不出现已删除 queue/drain）  
-- [ ] 文档地图：Architecture / App guide / Styling / Examples  
-- [ ] examples 表：各例用途 + 链 `docs/examples/index.md`  
-- [ ] 不记录面向未发布旧 API 的迁移步骤；README 只展示最终公共面  
+- [x] Quick start **与目标 DX 一致**（显式主题、`UiAction`、宏/BSN 内置控件、`run_picus`；不出现已删除 queue/drain）  
+- [x] 文档地图：Architecture / App guide / Styling / Examples  
+- [x] examples 表：各例用途 + 链 `docs/examples/index.md`  
+- [x] 不记录面向未发布旧 API 的迁移步骤；README 只展示最终公共面  
 
 #### 5.9.7 与 DX 其它工作项的文档交付绑定
 
@@ -620,34 +620,34 @@ docs/
 | 双层写作 / helper | `guide/components-bsn.md` 或 `guide/app.md` |
 | example 教学范围 / advanced 用法 | `examples/index.md` + 各 example 短 README（可选） |
 
-- [ ] 约定：合并 DX 相关改动时 checklist 含「docs 已更新」  
+- [x] 约定：合并 DX 相关改动时 checklist 含「docs 已更新」  
 
 #### 5.9.8 rustdoc 与 `docs/` 分工
 
-- [ ] `picus` facade 模块级 rustdoc：一句话 + 指向 guide 章节名  
-- [ ] 长教程不进 rustdoc  
-- [ ] 公共契约类型（`UiComponentTemplate`、`UiAction<T>`、`UiEmit`）与 guide 表述一致；rustdoc 不暴露内部队列  
+- [x] `picus` facade 模块级 rustdoc：一句话 + 指向 guide 章节名  
+- [x] 长教程不进 rustdoc  
+- [x] 公共契约类型（`UiComponentTemplate`、`UiAction<T>`、`UiEmit`）与 guide 表述一致；rustdoc 不暴露内部队列  
 
 #### 5.9.9 文档验收
 
-- [ ] 根 AGENTS 无教程/控件百科；跨域硬规则完整，子系统硬规则在适用目录的嵌套 AGENTS 中可直接执行  
-- [ ] `docs/README.md` 可当目录覆盖主路径  
-- [ ] 新人只读 README + `guide/app.md` + 一个已迁移 example 能写简单应用  
-- [ ] Agent 硬规则可从当前作用域 AGENTS 直接执行；docs 提供原理和示例  
-- [ ] 部分主题 / `UiAction` / 宏清单等契约在 docs 与 AGENTS 中**一致**  
-- [ ] 旧 README Quick start 不再教过时主路径  
+- [x] 根 AGENTS 无教程/控件百科；跨域硬规则完整，子系统硬规则在适用目录的嵌套 AGENTS 中可直接执行  
+- [x] `docs/README.md` 可当目录覆盖主路径  
+- [x] 新人只读 README + `guide/app.md` + 一个已迁移 example 能写简单应用  
+- [x] Agent 硬规则可从当前作用域 AGENTS 直接执行；docs 提供原理和示例  
+- [x] 部分主题 / `UiAction` / 宏清单等契约在 docs 与 AGENTS 中**一致**  
+- [x] 旧 README Quick start 不再教过时主路径  
 
 #### 5.9.10 文档工作项勾选汇总
 
-- [ ] 建立 `docs/` 地图与目录骨架（§5.9.3）  
-- [ ] 从 `AGENTS.md` 按映射表迁出内容并改写为文档体裁（§5.9.4）  
-- [ ] 瘦身 `AGENTS.md`（§5.9.5）  
-- [ ] 重写 README 入口与 Quick start（§5.9.6）  
-- [ ] `guide/app.md` / `events-messages.md` / `styling-themes.md` / `macros.md` 等与代码同步  
-- [ ] `docs/examples/index.md` + 全 example 教学范围与 advanced 用法  
-- [ ] `contributing/codewhale-submodule.md`  
+- [x] 建立 `docs/` 地图与目录骨架（§5.9.3）  
+- [x] 从 `AGENTS.md` 按映射表迁出内容并改写为文档体裁（§5.9.4）  
+- [x] 瘦身 `AGENTS.md`（§5.9.5）  
+- [x] 重写 README 入口与 Quick start（§5.9.6）  
+- [x] `guide/app.md` / `events-messages.md` / `styling-themes.md` / `macros.md` 等与代码同步  
+- [x] `docs/examples/index.md` + 全 example 教学范围与 advanced 用法  
+- [x] `contributing/codewhale-submodule.md`  
 - [ ] rustdoc 交叉链接策略（§5.9.8）  
-- [ ] DX 改动的 docs checklist 约定（§5.9.7）  
+- [x] DX 改动的 docs checklist 约定（§5.9.7）  
 - [ ] i18n / a11y / 多窗口 / 性能指引落在对应 guide（非堆回 AGENTS）  
 
 ---
@@ -656,8 +656,8 @@ docs/
 
 - [ ] 主题契约测试：无 sheet/无 variant → 无「框架塞入的可见默认色」  
 - [ ] 部分主题测试：只实现一个组件或部分属性可正常加载；未覆盖组件保持透明；无效 RON/类型/token 仍报错  
-- [ ] 输入动作调度：retained 入队 → PreUpdate 单消费者 drain/dispatch → 同帧 Update 的 reader 收到  
-- [ ] 两个独立 `MessageReader<UiAction<T>>` 均恰好收到同一动作一次  
+- [x] 输入动作调度：retained 入队 → PreUpdate 单消费者 drain/dispatch → 同帧 Update 的 reader 收到  
+- [x] 两个独立 `MessageReader<UiAction<T>>` 均恰好收到同一动作一次  
 - [ ] 两个 Bevy `App` 实例的 action sink 互不串流；同一 App 的多个 window 正确汇入同一 dispatcher  
 - [ ] `UiEmit` 业务动作、Builtin fallback、disabled 三条互斥路径  
 - [ ] 未注册 payload 的 debug/test 失败与 release 丢弃日志；队列不会跨帧积压该 payload  
@@ -666,14 +666,14 @@ docs/
 - [ ] 扩展 headless helpers：click → `UiAction` → resource，作为 `timer` 纵向验收  
 - [ ] facade compile test：应用只依赖 `picus`；根级 core 重导出、公开 queue/drain 和旧 runner 不可用  
 - [ ] **（可选）** dirty 原因 debug 输出  
-- [ ] 全 examples：逐个运行 `cargo check -p <example-package>`；关键例保留主题 parse 与交互测试  
+- [x] 全 examples：逐个运行 `cargo check -p <example-package>`；关键例保留主题 parse 与交互测试  
 
 ---
 
 ### 5.11 脚手架与工具
 
 - [ ] **（可选）** `picus new` / cargo-generate：生成**带显式主题 RON** 的应用骨架（不是「无主题 Hello」）  
-- [ ] 或文档：复制已迁移的 timer/calculator 骨架  
+- [x] 或文档：复制已迁移的 timer/calculator 骨架  
 
 ---
 
@@ -702,3 +702,4 @@ docs/
 | 2026-07-14 | 按反馈修订：(1) 取消独立 minimal，全量/部分迁移全部 examples；(2) 取消默认主题，保持无主题不显示，主题入口对齐 builder；(3) 业务消息与 Bevy `Message` 结合的架构结论与工作项；(4) 宏改为必做并写详细设计 |
 | 2026-07-14 | 文档纳入 DX 必做：AGENTS 过重/docs 过少的职责拆分、目标目录、内容映射、瘦身结构、README/rustdoc 分工与验收 |
 | 2026-07-14 | 架构收敛修订：内部队列单消费者 + `UiAction<T>`；非泛型 `UiEmit`；显式宏清单；唯一 `AppPicusExt`/`run_picus` 入口；删除过渡公共面；增加实施决策门与目录级 AGENTS；明确部分主题缺失样式合法且不报错 |
+| 2026-07-14 | 核心 DX 落地并勾选已完成项：`UiAction`/`UiEmit`/`run_picus`/`picus_macros`；全 examples 迁 runner/动作路径；AGENTS 瘦身 + docs 主路径；未勾选项为后续收敛（trybuild、完全内化 widget drain、删除 `emit_ui_action`/`run_app` 残留、`styled` helper、嵌套 AGENTS 等） |

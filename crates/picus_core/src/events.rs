@@ -1,13 +1,32 @@
-use std::{any::Any, fmt, sync::Arc};
+//! Internal UI action queue and application-facing [`UiAction`] messages.
+//!
+//! Retained widgets and projection helpers write type-erased payloads into an
+//! app-owned [`InternalUiEventQueue`]. A single PreUpdate dispatcher drains the
+//! queue and routes entries through [`UiActionRegistry`]. Application code only
+//! observes typed [`UiAction<T>`] messages (or captures a [`UiActionSender<T>`]
+//! for deferred emission).
 
-#[cfg(test)]
-use std::cell::RefCell;
-#[cfg(not(test))]
-use std::sync::{OnceLock, PoisonError, RwLock};
+use std::{
+    any::{Any, TypeId},
+    cell::RefCell,
+    collections::HashMap,
+    fmt,
+    marker::PhantomData,
+    sync::Arc,
+};
 
-use bevy_ecs::{entity::Entity, prelude::Component, prelude::Resource};
+use bevy_app::App;
+use bevy_ecs::{
+    entity::Entity,
+    message::Message,
+    prelude::{Component, Resource, World},
+};
 use bevy_input::mouse::MouseButton;
 use crossbeam_queue::SegQueue;
+use tracing::{debug, error};
+
+/// Soft cap on actions processed per frame to break self-trigger loops.
+pub const UI_ACTION_DISPATCH_LIMIT: usize = 10_000;
 
 /// Pointer phase used by high-level UI pointer events.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -40,253 +59,592 @@ pub struct UiPointerEvent {
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct StopUiPointerPropagation;
 
-/// Type-erased UI action emitted by Masonry widgets.
-pub struct UiEvent {
+/// Type-erased UI action entry stored in the internal queue.
+#[derive(Clone)]
+pub(crate) struct InternalUiEvent {
     /// Source ECS entity for this action.
     pub entity: Entity,
+    /// Runtime type of the payload.
+    pub type_id: TypeId,
     /// Type-erased action payload.
-    pub action: Box<dyn Any + Send + Sync>,
+    pub action: Arc<dyn Any + Send + Sync>,
 }
 
-impl fmt::Debug for UiEvent {
+impl fmt::Debug for InternalUiEvent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("UiEvent")
+        f.debug_struct("InternalUiEvent")
             .field("entity", &self.entity)
+            .field("type_id", &self.type_id)
             .field("action", &"<type-erased>")
             .finish()
     }
 }
 
-impl UiEvent {
-    /// Create a new type-erased UI event.
+impl InternalUiEvent {
     #[must_use]
-    pub fn new(entity: Entity, action: Box<dyn Any + Send + Sync>) -> Self {
-        Self { entity, action }
-    }
-
-    /// Create a typed UI event and erase it into [`UiEvent`].
-    #[must_use]
-    pub fn typed<T: Any + Send + Sync>(entity: Entity, action: T) -> Self {
+    pub(crate) fn typed<T: Any + Send + Sync>(entity: Entity, action: T) -> Self {
         Self {
             entity,
-            action: Box::new(action),
+            type_id: TypeId::of::<T>(),
+            action: Arc::new(action),
         }
     }
 
-    /// Attempt to recover a typed event payload.
     #[must_use]
-    pub fn into_action<T: Any + Send + Sync>(self) -> Option<TypedUiEvent<T>> {
-        self.try_into_action::<T>().ok()
-    }
-
-    /// Attempt to recover a typed event payload, returning the original event on mismatch.
-    pub fn try_into_action<T: Any + Send + Sync>(self) -> Result<TypedUiEvent<T>, Self> {
-        match self.action.downcast::<T>() {
-            Ok(action) => Ok(TypedUiEvent {
-                entity: self.entity,
-                action: *action,
-            }),
-            Err(action) => Err(Self {
-                entity: self.entity,
-                action,
-            }),
+    pub(crate) fn erased(
+        entity: Entity,
+        type_id: TypeId,
+        action: Arc<dyn Any + Send + Sync>,
+    ) -> Self {
+        Self {
+            entity,
+            type_id,
+            action,
         }
     }
 }
 
-/// Typed UI event produced from a type-erased [`UiEvent`] queue entry.
+/// Compatibility alias used by older internal call sites that still construct
+/// type-erased events by name.
+pub(crate) type UiEvent = InternalUiEvent;
+
+/// Application-facing UI action message.
+///
+/// Payload `T` does not need to implement [`Message`]; only `UiAction<T>` is a
+/// Bevy message. Register `T` with [`AppPicusExt::add_ui_action`].
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UiAction<T> {
+    /// Entity that produced the action.
+    pub source: Entity,
+    /// Typed action payload.
+    pub action: T,
+}
+
+impl<T: Send + Sync + 'static> Message for UiAction<T> {}
+
+/// Non-generic ECS component that binds a button (or similar control) to a
+/// typed business action.
+///
+/// Use [`UiEmit::new`] and attach via `template_value(...)` in BSN. When
+/// present on a [`crate::UiButton`] entity, projection emits that payload
+/// instead of [`crate::BuiltinUiAction::Clicked`].
+#[derive(Component, Clone)]
+pub struct UiEmit {
+    type_id: TypeId,
+    payload: Arc<dyn Any + Send + Sync>,
+}
+
+impl fmt::Debug for UiEmit {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("UiEmit")
+            .field("type_id", &self.type_id)
+            .finish()
+    }
+}
+
+impl UiEmit {
+    /// Create a type-erased emit binding for payload `T`.
+    ///
+    /// `T` must be registered with [`AppPicusExt::add_ui_action`] before the
+    /// action is dispatched.
+    #[must_use]
+    pub fn new<T: Clone + Send + Sync + 'static>(action: T) -> Self {
+        Self {
+            type_id: TypeId::of::<T>(),
+            payload: Arc::new(action),
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn type_id(&self) -> TypeId {
+        self.type_id
+    }
+
+    #[must_use]
+    pub(crate) fn payload(&self) -> Arc<dyn Any + Send + Sync> {
+        Arc::clone(&self.payload)
+    }
+}
+
+/// Cloneable write-only handle for deferred action emission.
+///
+/// Actions are queued on the app-owned internal sink and become visible to
+/// [`bevy_ecs::message::MessageReader`] after the next PreUpdate dispatch pass.
+/// Emissions from `Update` (or later) are therefore next-frame visible.
+#[derive(Resource, Clone)]
+pub struct UiActionSender<T> {
+    sink: InternalUiActionSink,
+    _marker: PhantomData<fn() -> T>,
+}
+
+impl<T: Clone + Send + Sync + 'static> UiActionSender<T> {
+    /// Queue a typed action for the given source entity.
+    pub fn send(&self, source: Entity, action: T) {
+        self.sink.push_typed(source, action);
+    }
+}
+
+impl<T> fmt::Debug for UiActionSender<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("UiActionSender")
+            .field("type", &std::any::type_name::<T>())
+            .finish()
+    }
+}
+
+/// Shared write sink used by retained widgets and [`UiActionSender`].
+#[derive(Clone, Default)]
+pub(crate) struct InternalUiActionSink {
+    queue: Arc<SegQueue<InternalUiEvent>>,
+}
+
+impl fmt::Debug for InternalUiActionSink {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("InternalUiActionSink").finish_non_exhaustive()
+    }
+}
+
+impl InternalUiActionSink {
+    #[must_use]
+    pub(crate) fn shared_queue(&self) -> Arc<SegQueue<InternalUiEvent>> {
+        Arc::clone(&self.queue)
+    }
+
+    pub(crate) fn push(&self, event: InternalUiEvent) {
+        self.queue.push(event);
+    }
+
+    pub(crate) fn push_typed<T: Any + Send + Sync>(&self, entity: Entity, action: T) {
+        self.push(InternalUiEvent::typed(entity, action));
+    }
+
+    pub(crate) fn push_erased(
+        &self,
+        entity: Entity,
+        type_id: TypeId,
+        action: Arc<dyn Any + Send + Sync>,
+    ) {
+        self.push(InternalUiEvent::erased(entity, type_id, action));
+    }
+}
+
+/// App-owned lock-free queue shared between Bevy systems and retained widgets.
+///
+/// Application code must not drain this queue. Only
+/// [`dispatch_ui_actions`](crate::events::dispatch_ui_actions) is the consumer.
+///
+/// Visible as `pub` only so Bevy system parameter types can appear in public
+/// system function signatures used by `PicusPlugin`. Not part of the app facade.
+#[derive(Resource, Clone, Debug, Default)]
+#[doc(hidden)]
+pub struct InternalUiEventQueue {
+    sink: InternalUiActionSink,
+}
+
+impl InternalUiEventQueue {
+    #[must_use]
+    pub(crate) fn sink(&self) -> InternalUiActionSink {
+        self.sink.clone()
+    }
+
+    #[must_use]
+    pub(crate) fn shared_queue(&self) -> Arc<SegQueue<InternalUiEvent>> {
+        self.sink.shared_queue()
+    }
+
+    pub(crate) fn push(&self, event: InternalUiEvent) {
+        self.sink.push(event);
+    }
+
+    pub(crate) fn push_typed<T: Any + Send + Sync>(&self, entity: Entity, action: T) {
+        self.sink.push_typed(entity, action);
+    }
+
+    pub(crate) fn push_erased(
+        &self,
+        entity: Entity,
+        type_id: TypeId,
+        action: Arc<dyn Any + Send + Sync>,
+    ) {
+        self.sink.push_erased(entity, type_id, action);
+    }
+
+    /// Drain every queued event (single-consumer path only).
+    #[must_use]
+    pub(crate) fn drain_all(&mut self) -> Vec<InternalUiEvent> {
+        let mut drained = Vec::new();
+        while let Some(event) = self.sink.queue.pop() {
+            drained.push(event);
+        }
+        drained
+    }
+}
+
+/// Handler invoked by the dispatcher for a registered payload type.
+pub(crate) type UiActionHandler =
+    Arc<dyn Fn(&mut World, Entity, &dyn Any) + Send + Sync + 'static>;
+
+/// Registry mapping payload `TypeId` values to dispatcher handlers.
+#[derive(Resource, Default)]
+pub struct UiActionRegistry {
+    handlers: HashMap<TypeId, Vec<UiActionHandler>>,
+    /// Type names for diagnostics (optional).
+    type_names: HashMap<TypeId, &'static str>,
+    /// One-shot log markers for unregistered payloads in release builds.
+    logged_unregistered: HashMap<TypeId, ()>,
+}
+
+impl UiActionRegistry {
+    /// Register a low-level handler for payload type `T`.
+    ///
+    /// Multiple handlers may be registered for the same type; they run in
+    /// registration order for each matching event.
+    pub fn register_handler<T, F>(&mut self, handler: F)
+    where
+        T: Any + Send + Sync + 'static,
+        F: Fn(&mut World, Entity, &T) + Send + Sync + 'static,
+    {
+        let type_id = TypeId::of::<T>();
+        self.type_names
+            .entry(type_id)
+            .or_insert(std::any::type_name::<T>());
+        let wrapped: UiActionHandler = Arc::new(move |world, entity, any| {
+            if let Some(action) = any.downcast_ref::<T>() {
+                handler(world, entity, action);
+            } else {
+                error!(
+                    type_name = std::any::type_name::<T>(),
+                    "UiAction handler received payload that failed to downcast"
+                );
+            }
+        });
+        self.handlers.entry(type_id).or_default().push(wrapped);
+    }
+
+    /// Register `T` as an application message payload.
+    ///
+    /// Each matching queue entry is written as [`UiAction<T>`].
+    pub fn register_message_payload<T>(&mut self)
+    where
+        T: Clone + Send + Sync + 'static,
+    {
+        self.register_handler::<T, _>(|world, entity, action| {
+            world.write_message(UiAction {
+                source: entity,
+                action: action.clone(),
+            });
+        });
+    }
+
+    #[must_use]
+    pub(crate) fn is_registered(&self, type_id: TypeId) -> bool {
+        self.handlers.contains_key(&type_id)
+    }
+
+    fn dispatch_one(&mut self, world: &mut World, event: &InternalUiEvent) {
+        let Some(handlers) = self.handlers.get(&event.type_id).cloned() else {
+            let name = self
+                .type_names
+                .get(&event.type_id)
+                .copied()
+                .unwrap_or("<unknown>");
+            if cfg!(debug_assertions) {
+                panic!(
+                    "unregistered UI action payload type `{name}` (TypeId = {:?}); \
+                     call AppPicusExt::add_ui_action::<T>() or register a built-in handler",
+                    event.type_id
+                );
+            }
+            if self.logged_unregistered.insert(event.type_id, ()).is_none() {
+                error!(
+                    type_id = ?event.type_id,
+                    type_name = name,
+                    "dropping unregistered UI action payload (logged once)"
+                );
+            }
+            return;
+        };
+
+        for handler in handlers {
+            handler(world, event.entity, event.action.as_ref());
+        }
+    }
+}
+
+/// Install application action support for payload type `T`.
+///
+/// Registers `Messages<UiAction<T>>`, a [`UiActionSender<T>`] resource, and a
+/// registry handler that writes messages.
+pub fn register_ui_action_type<T>(app: &mut App)
+where
+    T: Clone + Send + Sync + 'static,
+{
+    app.init_resource::<InternalUiEventQueue>();
+    app.init_resource::<UiActionRegistry>();
+    app.add_message::<UiAction<T>>();
+
+    let sink = app.world().resource::<InternalUiEventQueue>().sink();
+    app.insert_resource(UiActionSender::<T> {
+        sink,
+        _marker: PhantomData,
+    });
+
+    app.world_mut()
+        .resource_mut::<UiActionRegistry>()
+        .register_message_payload::<T>();
+}
+
+/// Sole consumer of [`InternalUiEventQueue`].
+///
+/// Drains the queue and dispatches until empty (or until
+/// [`UI_ACTION_DISPATCH_LIMIT`] is hit). Handlers may enqueue additional
+/// actions; those are processed after already-queued entries (FIFO).
+pub fn dispatch_ui_actions(world: &mut World) {
+    world.init_resource::<InternalUiEventQueue>();
+    world.init_resource::<UiActionRegistry>();
+
+    let mut processed = 0usize;
+    loop {
+        let batch = world.resource_mut::<InternalUiEventQueue>().drain_all();
+        if batch.is_empty() {
+            break;
+        }
+
+        for event in batch {
+            if processed >= UI_ACTION_DISPATCH_LIMIT {
+                error!(
+                    limit = UI_ACTION_DISPATCH_LIMIT,
+                    "UI action dispatch limit reached; remaining queue entries deferred to next frame"
+                );
+                // Re-queue the current event and stop so the frame can proceed.
+                world.resource::<InternalUiEventQueue>().push(event);
+                return;
+            }
+            processed += 1;
+
+            // Take registry by value-like access: dispatch needs &mut registry
+            // and &mut world for handlers. Split via resource removal.
+            let mut registry = world
+                .remove_resource::<UiActionRegistry>()
+                .unwrap_or_default();
+            registry.dispatch_one(world, &event);
+            world.insert_resource(registry);
+        }
+    }
+
+    if processed > 0 {
+        debug!(processed, "dispatched UI actions");
+    }
+}
+
+thread_local! {
+    static ACTIVE_UI_ACTION_SINK: RefCell<Option<InternalUiActionSink>> =
+        const { RefCell::new(None) };
+}
+
+/// Install the active app sink used by retained widgets on this thread.
+pub(crate) fn install_app_ui_action_sink(sink: InternalUiActionSink) {
+    ACTIVE_UI_ACTION_SINK.with(|slot| {
+        *slot.borrow_mut() = Some(sink);
+    });
+}
+
+/// Push a type-erased event into the active app sink (if installed).
+pub(crate) fn push_active_ui_event(event: InternalUiEvent) {
+    ACTIVE_UI_ACTION_SINK.with(|slot| {
+        if let Some(sink) = slot.borrow().as_ref() {
+            sink.push(event);
+        }
+    });
+}
+
+/// Push a typed action into the active app sink (if installed).
+pub(crate) fn push_active_ui_action<T: Any + Send + Sync>(entity: Entity, action: T) {
+    push_active_ui_event(InternalUiEvent::typed(entity, action));
+}
+
+// ---------------------------------------------------------------------------
+// Compatibility shims used while internal call sites migrate.
+// ---------------------------------------------------------------------------
+
+/// Historical name for the internal queue. Not part of the public facade.
+pub(crate) type UiEventQueue = InternalUiEventQueue;
+
+impl UiEventQueue {
+    /// Historical typed drain kept for internal systems that have not yet been
+    /// folded into the dispatcher. Prefer dispatcher handlers for new code.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn drain_actions<T: Any + Clone + Send + Sync>(&mut self) -> Vec<TypedUiEvent<T>> {
+        let mut drained = Vec::new();
+        let mut unmatched = Vec::new();
+        while let Some(event) = self.sink.queue.pop() {
+            if event.type_id == TypeId::of::<T>() {
+                if let Some(action) = event.action.downcast_ref::<T>() {
+                    drained.push(TypedUiEvent {
+                        entity: event.entity,
+                        action: action.clone(),
+                    });
+                    continue;
+                }
+            }
+            unmatched.push(event);
+        }
+        for event in unmatched {
+            self.sink.push(event);
+        }
+        drained
+    }
+}
+
+/// Typed event recovered from a type-erased queue entry (internal).
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[doc(hidden)]
 pub struct TypedUiEvent<T> {
     pub entity: Entity,
     pub action: T,
 }
 
-/// Lock-free queue shared between Bevy systems and Masonry widgets.
+/// Emit a typed UI action into the active app-owned sink.
 ///
-/// # Example
-///
-/// ```
-/// use picus_core::{UiEventQueue, bevy_ecs::world::World};
-///
-/// let mut world = World::new();
-/// let entity = world.spawn_empty().id();
-///
-/// let mut queue = UiEventQueue::default();
-/// queue.push_typed(entity, 7_u32);
-///
-/// let drained = queue.drain_actions::<u32>();
-/// assert_eq!(drained.len(), 1);
-/// assert_eq!(drained[0].entity, entity);
-/// assert_eq!(drained[0].action, 7);
-/// ```
-#[derive(Resource, Clone, Debug)]
-pub struct UiEventQueue {
-    queue: Arc<SegQueue<UiEvent>>,
-}
-
-impl Default for UiEventQueue {
-    fn default() -> Self {
-        Self {
-            queue: Arc::new(SegQueue::new()),
-        }
-    }
-}
-
-impl UiEventQueue {
-    /// Get a shared queue handle for cross-runtime wiring.
-    #[must_use]
-    pub fn shared_queue(&self) -> Arc<SegQueue<UiEvent>> {
-        self.queue.clone()
-    }
-
-    /// Push a pre-built type-erased event.
-    pub fn push(&self, event: UiEvent) {
-        self.queue.push(event);
-    }
-
-    /// Push a typed action payload for an entity.
-    pub fn push_typed<T: Any + Send + Sync>(&self, entity: Entity, action: T) {
-        self.push(UiEvent::typed(entity, action));
-    }
-
-    /// Drain every queued event, regardless of payload type.
-    #[must_use]
-    pub fn drain_all(&mut self) -> Vec<UiEvent> {
-        let mut drained = Vec::new();
-        while let Some(event) = self.queue.pop() {
-            drained.push(event);
-        }
-        drained
-    }
-
-    /// Drain queue entries and keep only typed actions.
-    ///
-    /// Entries with other action types are preserved in the queue.
-    #[must_use]
-    pub fn drain_actions<T: Any + Send + Sync>(&mut self) -> Vec<TypedUiEvent<T>> {
-        let mut drained = Vec::new();
-        let mut unmatched = Vec::new();
-        while let Some(event) = self.queue.pop() {
-            match event.try_into_action::<T>() {
-                Ok(typed) => drained.push(typed),
-                Err(event) => unmatched.push(event),
-            }
-        }
-
-        for event in unmatched {
-            self.queue.push(event);
-        }
-
-        drained
-    }
-}
-
-#[cfg(not(test))]
-static GLOBAL_UI_EVENT_QUEUE: OnceLock<RwLock<Option<Arc<SegQueue<UiEvent>>>>> = OnceLock::new();
-
-#[cfg(not(test))]
-fn global_ui_event_queue_slot() -> &'static RwLock<Option<Arc<SegQueue<UiEvent>>>> {
-    GLOBAL_UI_EVENT_QUEUE.get_or_init(|| RwLock::new(None))
-}
-
-#[cfg(test)]
-thread_local! {
-    static GLOBAL_UI_EVENT_QUEUE: RefCell<Option<Arc<SegQueue<UiEvent>>>> =
-        const { RefCell::new(None) };
-}
-
-#[cfg(not(test))]
-pub(crate) fn install_global_ui_event_queue(queue: Arc<SegQueue<UiEvent>>) {
-    let mut slot = global_ui_event_queue_slot()
-        .write()
-        .unwrap_or_else(PoisonError::into_inner);
-    *slot = Some(queue);
-}
-
-#[cfg(test)]
-pub(crate) fn install_global_ui_event_queue(queue: Arc<SegQueue<UiEvent>>) {
-    GLOBAL_UI_EVENT_QUEUE.with(|slot| {
-        *slot.borrow_mut() = Some(queue);
-    });
-}
-
-#[cfg(not(test))]
-pub(crate) fn push_global_ui_event(event: UiEvent) {
-    let queue = {
-        let slot = global_ui_event_queue_slot()
-            .read()
-            .unwrap_or_else(PoisonError::into_inner);
-        slot.as_ref().cloned()
-    };
-
-    if let Some(queue) = queue {
-        queue.push(event);
-    }
-}
-
-#[cfg(test)]
-pub(crate) fn push_global_ui_event(event: UiEvent) {
-    let queue = GLOBAL_UI_EVENT_QUEUE.with(|slot| slot.borrow().as_ref().cloned());
-
-    if let Some(queue) = queue {
-        queue.push(event);
-    }
-}
-
-/// Emit a typed UI action into the global ECS-backed UI queue.
-///
-/// This is intended for callback-based widget APIs in examples/apps that still
-/// want to route all interactions through [`UiEventQueue`].
-///
-/// # Example
-///
-/// ```
-/// use picus_core::{emit_ui_action, UiEventQueue, bevy_ecs::world::World};
-///
-/// let mut world = World::new();
-/// let entity = world.spawn_empty().id();
-/// let mut queue = UiEventQueue::default();
-///
-/// // In real app wiring this global queue is installed by `MasonryRuntime`.
-/// // Here we directly push through queue APIs in tests/docs.
-/// emit_ui_action(entity, "ignored without installed global queue".to_string());
-/// queue.push_typed(entity, "clicked".to_string());
-/// let actions = queue.drain_actions::<String>();
-/// assert_eq!(actions[0].action, "clicked");
-/// ```
+/// Prefer capturing [`UiActionSender<T>`] from [`crate::ProjectionCtx`] in
+/// application code. This function remains for internal retained callbacks.
+#[doc(hidden)]
 pub fn emit_ui_action<T: Any + Send + Sync>(entity: Entity, action: T) {
-    push_global_ui_event(UiEvent::typed(entity, action));
+    push_active_ui_action(entity, action);
+}
+
+/// Historical name for installing the active sink.
+pub(crate) fn install_global_ui_event_queue(queue: Arc<SegQueue<InternalUiEvent>>) {
+    install_app_ui_action_sink(InternalUiActionSink { queue });
+}
+
+pub(crate) fn push_global_ui_event(event: InternalUiEvent) {
+    push_active_ui_event(event);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_helpers::*;
-    use crate::{AppPicusExt, PicusPlugin, UiRoot};
+    use crate::{AppPicusExt, BuiltinUiAction, PicusPlugin, UiRoot};
     use bevy_app::App;
+    use bevy_ecs::message::MessageReader;
+    use bevy_ecs::prelude::*;
+    use bevy_ecs::system::RunSystemOnce;
+
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    enum TestAction {
+        Clicked,
+        Inc,
+    }
 
     #[test]
-    fn ui_event_queue_drains_typed_actions() {
+    fn dispatcher_writes_ui_action_messages() {
         let mut app = App::new();
         app.add_plugins(PicusPlugin)
-            .register_projector::<TestRoot>(project_test_root);
+            .add_ui_action::<TestAction>();
 
-        let root = app.world_mut().spawn((UiRoot, TestRoot)).id();
+        let entity = app.world_mut().spawn(UiRoot).id();
+        app.world()
+            .resource::<InternalUiEventQueue>()
+            .push_typed(entity, TestAction::Clicked);
 
-        // Build synthesized tree + initial Masonry retained tree.
+        app.world_mut()
+            .run_system_once(dispatch_ui_actions)
+            .expect("dispatch");
+
+        let messages = app.world().resource::<bevy_ecs::message::Messages<UiAction<TestAction>>>();
+        let mut cursor = messages.get_cursor();
+        let collected: Vec<_> = cursor.read(messages).cloned().collect();
+        assert_eq!(collected.len(), 1);
+        assert_eq!(collected[0].source, entity);
+        assert_eq!(collected[0].action, TestAction::Clicked);
+    }
+
+    #[test]
+    fn two_message_readers_each_see_action_once() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin)
+            .add_ui_action::<TestAction>()
+            .insert_resource(CountA(0))
+            .insert_resource(CountB(0))
+            .add_systems(
+                bevy_app::Update,
+                (reader_a, reader_b),
+            );
+
+        #[derive(Resource)]
+        struct CountA(u32);
+        #[derive(Resource)]
+        struct CountB(u32);
+
+        fn reader_a(mut reader: MessageReader<UiAction<TestAction>>, mut c: ResMut<CountA>) {
+            for _ in reader.read() {
+                c.0 += 1;
+            }
+        }
+        fn reader_b(mut reader: MessageReader<UiAction<TestAction>>, mut c: ResMut<CountB>) {
+            for _ in reader.read() {
+                c.0 += 1;
+            }
+        }
+
+        let entity = app.world_mut().spawn_empty().id();
+        app.world()
+            .resource::<InternalUiEventQueue>()
+            .push_typed(entity, TestAction::Inc);
+
+        // PreUpdate runs dispatcher via PicusPlugin schedule.
         app.update();
 
+        assert_eq!(app.world().resource::<CountA>().0, 1);
+        assert_eq!(app.world().resource::<CountB>().0, 1);
+    }
+
+    #[test]
+    fn action_sender_queues_for_dispatch() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin).add_ui_action::<TestAction>();
+
+        let entity = app.world_mut().spawn_empty().id();
         app.world()
-            .resource::<UiEventQueue>()
-            .push_typed(root, TestAction::Clicked);
+            .resource::<UiActionSender<TestAction>>()
+            .send(entity, TestAction::Inc);
 
-        let actions = app
-            .world_mut()
-            .resource_mut::<UiEventQueue>()
-            .drain_actions::<TestAction>();
+        app.world_mut()
+            .run_system_once(dispatch_ui_actions)
+            .expect("dispatch");
 
-        assert_eq!(actions.len(), 1);
-        assert_eq!(actions[0].entity, root);
-        assert_eq!(actions[0].action, TestAction::Clicked);
+        let messages = app.world().resource::<bevy_ecs::message::Messages<UiAction<TestAction>>>();
+        let mut cursor = messages.get_cursor();
+        assert_eq!(cursor.read(messages).count(), 1);
+    }
+
+    #[test]
+    fn ui_emit_stores_type_id() {
+        let emit = UiEmit::new(TestAction::Clicked);
+        assert_eq!(emit.type_id(), TypeId::of::<TestAction>());
+        assert!(emit.payload().downcast_ref::<TestAction>().is_some());
+    }
+
+    #[test]
+    fn builtin_action_is_registered_by_plugin() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let entity = app.world_mut().spawn_empty().id();
+        app.world()
+            .resource::<InternalUiEventQueue>()
+            .push_typed(entity, BuiltinUiAction::Clicked);
+
+        app.world_mut()
+            .run_system_once(dispatch_ui_actions)
+            .expect("dispatch");
+
+        let messages = app
+            .world()
+            .resource::<bevy_ecs::message::Messages<UiAction<BuiltinUiAction>>>();
+        let mut cursor = messages.get_cursor();
+        assert_eq!(cursor.read(messages).count(), 1);
     }
 }

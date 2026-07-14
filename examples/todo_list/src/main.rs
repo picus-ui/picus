@@ -1,16 +1,18 @@
 use std::sync::Arc;
 
 use picus::{
-    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiComponentTemplate, UiEventQueue, UiRoot,
-    UiThemePicker, UiView, apply_label_style, apply_text_input_style, apply_widget_style,
-    bevy_app::{App, PreUpdate, Startup},
+    AppPicusExt, BevyWindowOptions, PicusPlugin, ProjectionCtx, StyleClass, UiAction,
+    UiComponentTemplate, UiRoot, UiThemePicker, UiView, apply_label_style, apply_text_input_style,
+    apply_widget_style,
+    bevy_app::{App, Startup, Update},
     bevy_ecs::{
         hierarchy::{ChildOf, Children},
+        message::MessageReader,
         prelude::*,
     },
     button, checkbox, emit_ui_action,
     masonry_core::layout::Length,
-    resolve_style, resolve_style_for_classes, resolve_style_for_entity_classes, run_app,
+    resolve_style, resolve_style_for_classes, resolve_style_for_entity_classes,
     scene::{Scene, WorldSceneExt, bsn, template_value},
     text_input,
     xilem::{
@@ -361,16 +363,28 @@ fn todo_item_scene(item: TodoItem) -> impl Scene {
     }
 }
 
-fn drain_todo_events_and_mutate_world(world: &mut World) {
-    let events = world
-        .resource_mut::<UiEventQueue>()
-        .drain_actions::<TodoEvent>();
+#[derive(Resource, Default)]
+struct TodoActionCursor(bevy_ecs::message::MessageCursor<UiAction<TodoEvent>>);
+
+fn on_todo_actions(world: &mut World) {
+    world.init_resource::<TodoActionCursor>();
+    let events: Vec<TodoEvent> = {
+        let mut cursor = std::mem::take(&mut world.resource_mut::<TodoActionCursor>().0);
+        let messages = world.resource::<bevy_ecs::message::Messages<UiAction<TodoEvent>>>();
+        let events = cursor
+            .read(messages)
+            .map(|UiAction { action, .. }| action.clone())
+            .collect::<Vec<_>>();
+        world.resource_mut::<TodoActionCursor>().0 = cursor;
+        events
+    };
+
     if events.is_empty() {
         return;
     }
 
-    for event in events {
-        match event.action {
+    for action in events {
+        match action {
             TodoEvent::SetDraft(text) => {
                 world.resource_mut::<DraftTodo>().0 = text;
             }
@@ -423,15 +437,15 @@ fn build_bevy_todo_app() -> App {
         .register_ui_component::<TodoItem>()
         .register_ui_component::<TodoFilterBar>()
         .register_ui_component::<FilterToggle>()
-        .add_systems(Startup, setup_todo_world);
-
-    app.add_systems(PreUpdate, drain_todo_events_and_mutate_world);
+        .add_ui_action::<TodoEvent>()
+        .add_systems(Startup, setup_todo_world)
+        .add_systems(Update, on_todo_actions);
 
     app
 }
 
 fn main() -> Result<(), EventLoopError> {
-    run_app(build_bevy_todo_app(), "To Do MVC")
+    build_bevy_todo_app().run_picus("To Do MVC", BevyWindowOptions::default())
 }
 
 #[cfg(test)]

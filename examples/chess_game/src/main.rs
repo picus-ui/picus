@@ -5,17 +5,17 @@ use std::{
 };
 
 use picus::{
-    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiComponentTemplate, UiEventQueue, UiRoot,
-    UiThemePicker, UiView, apply_label_style, apply_widget_style,
+    AppPicusExt, BevyWindowOptions, PicusPlugin, ProjectionCtx, StyleClass, UiAction,
+    UiComponentTemplate, UiRoot, UiThemePicker, UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
-    bevy_ecs::prelude::*,
+    bevy_ecs::{message::MessageCursor, prelude::*},
     button, button_with_child, checkbox,
     masonry_core::{
         dpi::LogicalSize,
         layout::{AsUnit, Length},
         properties::Padding,
     },
-    resolve_style, resolve_style_for_classes, run_app_with_window_options,
+    resolve_style, resolve_style_for_classes, take_ui_actions,
     scene::{CommandsSceneExt, bsn},
     slider,
     xilem::{
@@ -658,10 +658,17 @@ fn setup_chess_world(mut commands: Commands) {
     });
 }
 
+#[derive(Resource, Default)]
+struct ChessActionCursor(MessageCursor<UiAction<ChessEvent>>);
+
 fn drain_events_and_tick(world: &mut World) {
-    let events = world
-        .resource_mut::<UiEventQueue>()
-        .drain_actions::<ChessEvent>();
+    world.init_resource::<ChessActionCursor>();
+    let events = {
+        let mut cursor = std::mem::take(&mut world.resource_mut::<ChessActionCursor>().0);
+        let events = take_ui_actions::<ChessEvent>(world, &mut cursor);
+        world.resource_mut::<ChessActionCursor>().0 = cursor;
+        events
+    };
 
     if events.is_empty() && !chess_should_tick(world) {
         return;
@@ -693,7 +700,8 @@ fn build_bevy_chess_app() -> App {
         .register_ui_component::<ChessRootView>()
         .register_ui_component::<ChessUiComponentsPanel>()
         .register_ui_component::<ChessBoardPanel>()
-        .add_systems(Startup, setup_chess_world);
+        .add_systems(Startup, setup_chess_world)
+        .add_ui_action::<ChessEvent>();
 
     app.add_systems(PreUpdate, drain_events_and_tick);
 
@@ -769,12 +777,13 @@ fn chess_piece_font_family() -> &'static str {
 }
 
 fn main() -> Result<(), EventLoopError> {
-    run_app_with_window_options(build_bevy_chess_app(), "Xilem Chess GUI", |options| {
-        options
+    build_bevy_chess_app().run_picus(
+        "Xilem Chess GUI",
+        BevyWindowOptions::default()
             .with_resizable(true)
             .with_min_inner_size(LogicalSize::new(640.0, 560.0))
-            .with_initial_inner_size(LogicalSize::new(1024.0, 760.0))
-    })
+            .with_initial_inner_size(LogicalSize::new(1024.0, 760.0)),
+    )
 }
 
 #[cfg(test)]

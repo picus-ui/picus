@@ -22,8 +22,8 @@ use std::collections::BTreeMap;
 
 use bevy_ecs::prelude::*;
 use bevy_window::{Window, WindowClosed};
-use picus::{
-    AppPicusExt, PicusPlugin, StyleClass, UiEventQueue, UiMarkdown, UiRoot, UiScrollView,
+use picus::{BevyWindowOptions, 
+    AppPicusExt, PicusPlugin, StyleClass, UiMarkdown, UiRoot, UiScrollView,
     UiStreamingMarkdown, UiWindow, WorldSceneExt,
     bevy_app::{App, PostStartup, PreUpdate, Startup},
     bevy_math::Vec2,
@@ -501,9 +501,7 @@ fn message_body_style_class(role: &str) -> StyleClass {
 /// System: drain UI actions and dispatch them to the bridge or window
 /// lifecycle.
 fn handle_picuscode_actions(world: &mut World) {
-    let actions = world
-        .resource_mut::<UiEventQueue>()
-        .drain_actions::<PicusCodeAction>();
+    let actions = picus::drain_ui_actions::<PicusCodeAction>(world);
 
     let mut to_send = false;
     let mut to_cancel = false;
@@ -813,7 +811,8 @@ fn build_picuscode_app() -> App {
     init_logging();
 
     let mut app = App::new();
-    app.add_plugins(PicusPlugin);
+    app.add_plugins(PicusPlugin)
+        .add_ui_action::<PicusCodeAction>();
 
     app.load_style_sheet_ron(include_str!("../assets/themes/picuscode.ron"))
         .register_projection_resource::<PicusState>()
@@ -849,9 +848,12 @@ fn build_picuscode_app() -> App {
 }
 
 fn main() -> Result<(), EventLoopError> {
-    picus::run_app_with_window_options(build_picuscode_app(), "picuscode", |options| {
-        options.with_initial_inner_size(picus::xilem::winit::dpi::LogicalSize::new(960.0, 720.0))
-    })
+    build_picuscode_app().run_picus(
+        "picuscode",
+        picus::BevyWindowOptions::default().with_initial_inner_size(
+            picus::xilem::winit::dpi::LogicalSize::new(960.0, 720.0),
+        ),
+    )
 }
 
 #[cfg(test)]

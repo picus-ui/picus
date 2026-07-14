@@ -41,80 +41,97 @@ If you're working with this workspace directly, use path dependencies from the r
 
 ## Quick start
 
-Here's a minimal counter app that demonstrates the core pattern:
+Recommended path (explicit theme, `UiAction` messages, component macro list,
+`run_picus`). Full guide: [`docs/guide/app.md`](docs/guide/app.md). Prefer the
+real **`timer`** or **`calculator`** examples over inventing a separate minimal crate.
 
-```rust,no_run
+```rust,ignore
 use std::sync::Arc;
 
 use picus::{
-    AppPicusExt, PicusPlugin, ProjectionCtx, UiComponentTemplate, UiEventQueue, UiRoot,
-    UiView,
-    bevy_app::{App, PreUpdate, Startup},
-    bevy_ecs::prelude::*,
-    button, run_app_with_window_options,
-    xilem::winit::{dpi::LogicalSize, error::EventLoopError},
+    AppPicusExt, BevyWindowOptions, PicusPlugin, ProjectionCtx, UiAction, UiComponent,
+    UiComponentTemplate, UiRoot, UiView, bevy_app::{App, Startup, Update},
+    bevy_ecs::{message::MessageReader, prelude::*},
+    register_ui_components,
+    scene::{CommandsSceneExt, bsn, template_value},
+    xilem::{
+        view::label,
+        winit::{dpi::LogicalSize, error::EventLoopError},
+    },
+    UiButton, UiEmit,
 };
 
-#[derive(Component, Debug, Clone, Copy)]
-struct CounterRoot;
-
-#[derive(Resource, Debug, Default)]
-struct Counter(i32);
-
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Debug)]
 enum CounterEvent {
     Increment,
 }
 
+#[derive(Resource, Default)]
+struct Counter(i32);
+
+#[derive(Component, Clone, Default, UiComponent)]
+#[ui_component(resources(Counter))]
+struct CounterRoot;
+
 impl UiComponentTemplate for CounterRoot {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-        Arc::new(button(ctx.entity, CounterEvent::Increment, "Increment"))
+        let n = ctx.world.resource::<Counter>().0;
+        Arc::new(label(format!("Count: {n}")))
     }
 }
 
 fn setup(mut commands: Commands) {
-    commands.spawn((UiRoot, CounterRoot));
+    commands.spawn_scene(bsn! {
+        UiRoot
+        Children [
+            CounterRoot,
+            (UiButton { label: { "+".into() } } template_value(UiEmit::new(CounterEvent::Increment))),
+        ]
+    });
 }
 
-fn drain_events(world: &mut World) {
-    let events = world
-        .resource::<UiEventQueue>()
-        .drain_actions::<CounterEvent>();
-
-    if events.is_empty() {
-        return;
+fn on_counter(
+    mut reader: MessageReader<UiAction<CounterEvent>>,
+    mut counter: ResMut<Counter>,
+) {
+    for UiAction { action, .. } in reader.read() {
+        if matches!(action, CounterEvent::Increment) {
+            counter.0 += 1;
+        }
     }
-
-    let mut counter = world.resource_mut::<Counter>();
-    for _ in events {
-        counter.0 += 1;
-    }
-}
-
-fn build_app() -> App {
-    let mut app = App::new();
-    app.add_plugins(PicusPlugin)
-        .insert_resource(Counter::default())
-        .register_ui_component::<CounterRoot>()
-        .add_systems(Startup, setup)
-        .add_systems(PreUpdate, drain_events);
-    app
 }
 
 fn main() -> Result<(), EventLoopError> {
-    run_app_with_window_options(build_app(), "Counter", |options| {
-        options.with_initial_inner_size(LogicalSize::new(360.0, 220.0))
-    })
+    let mut app = App::new();
+    app.add_plugins(PicusPlugin)
+        .load_style_sheet_ron(include_str!("../assets/themes/app.ron"))
+        .insert_resource(Counter::default())
+        .add_ui_action::<CounterEvent>()
+        .add_systems(Startup, setup)
+        .add_systems(Update, on_counter);
+    register_ui_components!(&mut app, CounterRoot);
+    app.run_picus(
+        "Counter",
+        BevyWindowOptions::default().with_initial_inner_size(LogicalSize::new(360.0, 220.0)),
+    )
 }
 ```
 
-The pattern is straightforward:
+1. Load a theme explicitly (no framework default dark).
+2. Register `add_ui_action::<T>()` and handle `MessageReader<UiAction<T>>`.
+3. Derive `UiComponent` + `register_ui_components!` for custom regions.
+4. Run with `run_picus`.
 
-1. Define a component type that implements `UiComponentTemplate`
-2. In `project()`, return a Picus view built from the entity
-3. Spawn the component with `UiRoot` to attach it to the UI tree
-4. Handle typed events from `UiEventQueue` in your systems
-5. Run with `run_app_with_window_options` or `run_app`
+## Documentation map
+
+| Doc | Contents |
+|-----|----------|
+| [`docs/README.md`](docs/README.md) | Full documentation index |
+| [`docs/guide/app.md`](docs/guide/app.md) | Application authoring |
+| [`docs/guide/styling-themes.md`](docs/guide/styling-themes.md) | Theme / “no theme” contract |
+| [`docs/guide/events-messages.md`](docs/guide/events-messages.md) | `UiAction` / scheduling |
+| [`docs/examples/index.md`](docs/examples/index.md) | Example index |
+| [`AGENTS.md`](AGENTS.md) | Hard rules for agents (not a tutorial) |
 
 ---
 
@@ -187,13 +204,13 @@ real entity reference when the value matters at runtime.
 - **Bevy-native scheduling** — runs entirely within Bevy's update loop, no separate event loop
 - **ECS-driven projection** — map components to widget views via `UiComponentTemplate`
 - **BSN authoring** — describe static Picus UI trees with Rust-embedded Bevy Scene Notation
-- **Typed action queue** — `UiEventQueue` provides type-safe event handling without closures
+- **Typed UI actions** — `UiAction<T>` Bevy messages via `MessageReader`
 - **Explicit rendering pass** — Vello paint in `Last` stage, no Bevy render graph needed
 - **Built-in components** — buttons, checkboxes, sliders, text inputs, dialogs, scroll views, and more
 - **Styling engine** — CSS-like cascade with class selectors, inline overrides, and smooth transitions
 - **Internationalization** — synchronous `AppI18n` with `LocalizeText` component
 - **Overlay system** — dialogs, tooltips, dropdowns, toasts with automatic placement
-- **Helper utilities** — `run_app()` auto-configures window plugins for desktop apps
+- **Helper utilities** — `run_picus()` configures window plugins for desktop apps
 
 ---
 
@@ -207,7 +224,7 @@ The main application-facing crate. It provides grouped modules for clearer impor
 - `picus::components` for ECS authoring components and common action helpers
 - `picus::projection` for low-level custom projector helpers
 - `picus::styling` for style resolution and theme APIs
-- `picus::events` for `UiEventQueue`, typed events, and widget actions
+- `picus::events` for `UiAction`, `UiActionSender`, and related action APIs
 - `picus::overlay`, `picus::runtime`, `picus::i18n`, and `picus::scene` for focused subsystems
 
 The root also re-exports the established `picus_core` API during migration, but new code should prefer the grouped modules or `picus::prelude::*`.
@@ -279,14 +296,14 @@ Application code depends on `picus`, not `picus_core`. Prefer grouped imports wh
 
 ```rust
 use picus::{
-    app::{AppPicusExt, PicusPlugin, run_app},
+    app::{AppPicusExt, PicusPlugin},
     components::{UiComponentTemplate, UiRoot, UiView, button},
-    events::UiEventQueue,
+    events::{UiAction, UiActionSender},
     runtime::ProjectionCtx,
 };
 ```
 
-Helper views such as `button`, `checkbox`, `slider`, `switch`, and `text_input` are Picus-native helpers that emit typed actions into `UiEventQueue`. Import them from `picus::components` or `picus::prelude` with the rest of the authoring surface. Raw retained widgets are internal implementation details imported from `picus_view::view` by projectors when needed.
+Helper views such as `button`, `checkbox`, `slider`, `switch`, and `text_input` are Picus-native helpers that enqueue typed payloads for conversion into `UiAction` messages. Import them from `picus::components` or `picus::prelude` with the rest of the authoring surface. Raw retained widgets are internal implementation details imported from `picus_view::view` by projectors when needed.
 
 ---
 
@@ -294,7 +311,7 @@ Helper views such as `button`, `checkbox`, `slider`, `switch`, and `text_input` 
 
 The framework follows a clear pipeline each frame:
 
-1. UI components emit typed actions into `UiEventQueue`
+1. UI components enqueue typed actions that become `UiAction<T>` messages
 2. Your systems drain those actions in `PreUpdate`
 3. You mutate ECS state/resources based on events
 4. Picus synthesizes the widget tree in `PostUpdate`

@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
 use picus::{
-    AppPicusExt, BuiltinUiAction, PicusPlugin, ProjectionCtx, UiButton, UiComboBox, UiComboOption,
-    UiComponentTemplate, UiEventQueue, UiFlexColumn, UiLabel, UiRoot, UiThemePicker, UiView,
-    bevy_app::{App, PreUpdate, Startup},
-    bevy_ecs::prelude::*,
-    run_app_with_window_options,
+    AppPicusExt, BevyWindowOptions, BuiltinUiAction, PicusPlugin, ProjectionCtx, UiAction, UiButton,
+    UiComboBox, UiComboOption, UiComponent, UiComponentTemplate, UiFlexColumn, UiLabel, UiRoot,
+    UiThemePicker, UiView, bevy_app::{App, Startup, Update},
+    bevy_ecs::{message::MessageReader, prelude::*},
+    register_ui_components,
     scene::{CommandsSceneExt, bsn},
     spawn_in_overlay_root,
     xilem::{
@@ -15,15 +15,19 @@ use picus::{
 };
 use shared_utils::init_logging;
 
-#[derive(Component, Debug, Clone)]
-struct UiToast {
+#[derive(Component, Debug, Clone, UiComponent)]
+#[ui_component(runtime_only)]
+struct DemoToast {
     message: String,
 }
 
 #[derive(Component, Debug, Clone, Copy, Default)]
 struct SpawnToastButton;
 
-impl UiComponentTemplate for UiToast {
+#[derive(Resource, Default)]
+struct PendingToastSpawn(bool);
+
+impl UiComponentTemplate for DemoToast {
     fn project(toast: &Self, _ctx: ProjectionCtx<'_>) -> UiView {
         Arc::new(transformed(label(toast.message.clone())).translate((520.0, 40.0)))
     }
@@ -62,60 +66,59 @@ fn setup_overlay_hit_routing_world(mut commands: Commands) {
     });
 }
 
-fn drain_overlay_hit_routing_events(world: &mut World) {
-    let button_events = world
-        .resource_mut::<UiEventQueue>()
-        .drain_actions::<BuiltinUiAction>();
-
-    if button_events.is_empty() {
-        return;
-    }
-
-    for event in button_events {
-        if !matches!(event.action, BuiltinUiAction::Clicked) {
-            continue;
+fn mark_toast_spawn(
+    mut reader: MessageReader<UiAction<BuiltinUiAction>>,
+    spawn_buttons: Query<(), With<SpawnToastButton>>,
+    mut pending: ResMut<PendingToastSpawn>,
+) {
+    for UiAction { source, action } in reader.read() {
+        if matches!(action, BuiltinUiAction::Clicked) && spawn_buttons.get(*source).is_ok() {
+            pending.0 = true;
         }
-
-        if world.get::<SpawnToastButton>(event.entity).is_none() {
-            continue;
-        }
-
-        let has_toast = {
-            let mut query = world.query_filtered::<Entity, With<UiToast>>();
-            query.iter(world).next().is_some()
-        };
-
-        if has_toast {
-            continue;
-        }
-
-        spawn_in_overlay_root(
-            world,
-            (UiToast {
-                message: "🍞 Toast: I am outside OverlayStack logic.".to_string(),
-            },),
-        );
     }
 }
 
-fn build_overlay_hit_routing_app() -> App {
+fn spawn_toasts_from_clicks(world: &mut World) {
+    let Some(mut pending) = world.get_resource_mut::<PendingToastSpawn>() else {
+        return;
+    };
+    if !pending.0 {
+        return;
+    }
+    pending.0 = false;
+    drop(pending);
+
+    let has_toast = {
+        let mut query = world.query_filtered::<Entity, With<DemoToast>>();
+        query.iter(world).next().is_some()
+    };
+    if has_toast {
+        return;
+    }
+
+    spawn_in_overlay_root(
+        world,
+        (DemoToast {
+            message: "🍞 Toast: I am outside OverlayStack logic.".to_string(),
+        },),
+    );
+}
+
+fn main() -> Result<(), EventLoopError> {
     init_logging();
 
     let mut app = App::new();
     app.add_plugins(PicusPlugin)
         .load_style_sheet_ron(include_str!("../assets/themes/overlay_hit_routing.ron"))
-        .register_ui_component::<UiToast>()
+        .init_resource::<PendingToastSpawn>()
         .add_systems(Startup, setup_overlay_hit_routing_world)
-        .add_systems(PreUpdate, drain_overlay_hit_routing_events);
+        .add_systems(Update, (mark_toast_spawn, spawn_toasts_from_clicks).chain());
 
-    app
-}
+    register_ui_components!(&mut app, DemoToast);
 
-fn main() -> Result<(), EventLoopError> {
-    run_app_with_window_options(
-        build_overlay_hit_routing_app(),
+    app.run_picus(
         "Overlay Hit Routing",
-        |opts| opts.with_initial_inner_size(LogicalSize::new(960.0, 640.0)),
+        BevyWindowOptions::default().with_initial_inner_size(LogicalSize::new(960.0, 640.0)),
     )
 }
 

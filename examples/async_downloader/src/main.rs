@@ -5,14 +5,14 @@ use std::{
     time::{Duration, Instant},
 };
 
-use picus::{
+use picus::{BevyWindowOptions, UiAction, take_ui_actions, 
     AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiComponentTemplate, UiDialog,
-    UiEventQueue, UiRoot, UiThemePicker, UiView, apply_label_style, apply_widget_style,
+    UiRoot, UiThemePicker, UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
-    bevy_ecs::prelude::*,
+    bevy_ecs::{message::MessageCursor, prelude::*},
     bevy_tasks::{IoTaskPool, TaskPoolBuilder},
     button, emit_ui_action, resolve_style, resolve_style_for_classes, rfd,
-    run_app_with_window_options,
+
     scene::{CommandsSceneExt, bsn},
     spawn_in_overlay_root, switch, text_input,
     xilem::{
@@ -449,9 +449,7 @@ fn setup_download_world(mut commands: Commands) {
 }
 
 fn drain_download_events(world: &mut World) {
-    let events = world
-        .resource_mut::<UiEventQueue>()
-        .drain_actions::<DownloadEvent>();
+    let events = picus::drain_ui_actions::<DownloadEvent>(world);
 
     if events.is_empty() {
         return;
@@ -474,14 +472,14 @@ fn drain_download_events(world: &mut World) {
                     let mut state = world.resource_mut::<DownloadState>();
                     if state.in_progress {
                         state.status = "A download is already in progress.".to_string();
-                        (event.entity, String::new(), false)
+                        (event.source, String::new(), false)
                     } else {
                         state.in_progress = true;
                         state.downloaded_bytes = 0;
                         state.total_bytes = None;
                         state.active_target = None;
                         state.status = "Starting download...".to_string();
-                        (event.entity, state.url.clone(), true)
+                        (event.source, state.url.clone(), true)
                     }
                 };
 
@@ -495,7 +493,7 @@ fn drain_download_events(world: &mut World) {
             }
             DownloadEvent::Tick => {}
             DownloadEvent::ShowSystemDialog { title, description } => {
-                spawn_system_dialog(event.entity, title, description);
+                spawn_system_dialog(event.source, title, description);
             }
             DownloadEvent::SystemDialogClosed => {
                 let mut state = world.resource_mut::<DownloadState>();
@@ -540,7 +538,7 @@ fn drain_download_events(world: &mut World) {
 
                 if use_system_dialog {
                     emit_ui_action(
-                        event.entity,
+                        event.source,
                         DownloadEvent::ShowSystemDialog {
                             title: "Download finished".to_string(),
                             description: message,
@@ -564,6 +562,7 @@ fn build_async_downloader_app() -> App {
 
     let mut app = App::new();
     app.add_plugins(PicusPlugin)
+        .add_ui_action::<DownloadEvent>()
         .load_style_sheet_ron(include_str!("../assets/themes/async_downloader.ron"))
         .insert_resource(DownloadState::default())
         .register_projection_resource::<DownloadState>()
@@ -580,10 +579,9 @@ fn build_async_downloader_app() -> App {
 }
 
 fn main() -> Result<(), EventLoopError> {
-    run_app_with_window_options(
-        build_async_downloader_app(),
+    build_async_downloader_app().run_picus(
         "Async Downloader",
-        |options| options.with_initial_inner_size(LogicalSize::new(760.0, 360.0)),
+        BevyWindowOptions::default().with_initial_inner_size(LogicalSize::new(760.0, 360.0)),
     )
 }
 

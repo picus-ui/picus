@@ -16,19 +16,19 @@ use picus::masonry_core::{
     layout::{LenReq, Length},
     properties::Padding,
 };
-use picus::{
-    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiComponentTemplate, UiEventQueue, UiRoot,
+use picus::{BevyWindowOptions, 
+    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiComponentTemplate, UiRoot,
     UiThemePicker, UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
-    bevy_ecs::prelude::*,
+    bevy_ecs::{message::MessageCursor, prelude::*},
     bevy_input::{ButtonInput, keyboard::KeyCode},
     bevy_window::WindowResized,
-    button, emit_ui_action,
+    button, emit_ui_action, take_ui_actions, UiAction,
     picus_view::{
         Pod, ViewCtx, WidgetView,
         core::{MessageCtx, MessageResult, Mut, View, ViewId, ViewMarker, ViewPathTracker},
     },
-    resolve_style, resolve_style_for_classes, run_app_with_window_options,
+    resolve_style, resolve_style_for_classes, 
     scene::{CommandsSceneExt, Scene, SceneList, bsn, bsn_list, template_value},
     xilem::{
         Color,
@@ -1199,9 +1199,7 @@ fn ui_component_button_scene(
 }
 
 fn drain_game_events(world: &mut World) {
-    let events = world
-        .resource_mut::<UiEventQueue>()
-        .drain_actions::<GameEvent>();
+    let events = picus::drain_ui_actions::<GameEvent>(world);
 
     if events.is_empty() {
         return;
@@ -1244,9 +1242,7 @@ fn sync_keyboard_input(world: &mut World) {
         world.insert_resource(ButtonInput::<KeyCode>::default());
     }
 
-    let events = world
-        .resource_mut::<UiEventQueue>()
-        .drain_actions::<KeyboardAction>();
+    let events = picus::drain_ui_actions::<KeyboardAction>(world);
 
     if events.is_empty() {
         world.resource_mut::<ButtonInput<KeyCode>>().clear();
@@ -1304,6 +1300,8 @@ fn build_2048_app() -> App {
 
     let mut app = App::new();
     app.add_plugins(PicusPlugin)
+        .add_ui_action::<GameEvent>()
+        .add_ui_action::<KeyboardAction>()
         .load_style_sheet_ron(include_str!("../assets/themes/game_2048.ron"))
         .insert_resource(ButtonInput::<KeyCode>::default())
         .insert_resource(GameViewport::default())
@@ -1339,9 +1337,10 @@ fn build_2048_app() -> App {
 }
 
 fn main() -> Result<(), EventLoopError> {
-    run_app_with_window_options(build_2048_app(), "2048 Game", |options| {
-        options.with_initial_inner_size(LogicalSize::new(1040.0, 720.0))
-    })
+    build_2048_app().run_picus(
+        "2048 Game",
+        BevyWindowOptions::default().with_initial_inner_size(LogicalSize::new(1040.0, 720.0)),
+    )
 }
 
 #[cfg(test)]
@@ -1440,11 +1439,14 @@ mod tests {
 
     #[test]
     fn keyboard_action_pipeline_applies_move_immediately() {
-        let mut world = World::new();
-        let sender = world.spawn_empty().id();
-        world.insert_resource(UiEventQueue::default());
-        world.insert_resource(ButtonInput::<KeyCode>::default());
+        use picus::{AppPicusExt, PicusPlugin, UiAction};
 
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin)
+            .add_ui_action::<KeyboardAction>()
+            .insert_resource(ButtonInput::<KeyCode>::default());
+
+        let sender = app.world_mut().spawn_empty().id();
         let mut state = Game2048State {
             game: Game2048::new(123),
         };
@@ -1452,18 +1454,19 @@ mod tests {
         state.game.score = 0;
         state.game.moves = 0;
         state.game.game_over = false;
-        world.insert_resource(state);
+        app.world_mut().insert_resource(state);
 
-        world.resource::<UiEventQueue>().push_typed(
-            sender,
-            KeyboardAction {
+        app.world_mut().write_message(UiAction {
+            source: sender,
+            action: KeyboardAction {
                 key: KeyCode::ArrowLeft,
                 pressed: true,
             },
-        );
+        });
 
-        sync_keyboard_input(&mut world);
-        apply_keyboard_game_input(&mut world);
+        let world = app.world_mut();
+        sync_keyboard_input(world);
+        apply_keyboard_game_input(world);
 
         let state = world.resource::<Game2048State>();
         assert_eq!(state.game.tiles[0], 4);

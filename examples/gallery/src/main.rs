@@ -19,7 +19,7 @@ use picus::{
     UiScrollView, UiSearch, UiThemePicker, avatar_sizes,
     bevy_app::{App, Startup, Update},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
-    run_app_with_window_options,
+    BevyWindowOptions,
     scene::{CommandsSceneExt, bsn, template_value},
     xilem::winit::{dpi::LogicalSize, error::EventLoopError},
 };
@@ -218,9 +218,7 @@ fn build_gallery_app() -> App {
         .add_systems(Startup, setup_gallery)
         .add_systems(
             Update,
-            drain_gallery_events
-                .after(picus::handle_widget_actions)
-                .after(picus::handle_overlay_actions),
+            drain_gallery_events.after(picus::dispatch_ui_actions),
         );
 
     picus::set_theme_backdrop_material(app.world_mut(), picus::WindowBackdropMaterial::Mica);
@@ -232,9 +230,10 @@ fn build_gallery_app() -> App {
 ///
 /// Creates a 1360×760 window with the WinUI Gallery-style Picus Gallery.
 fn main() -> Result<(), EventLoopError> {
-    run_app_with_window_options(build_gallery_app(), "Picus Gallery", |options| {
-        options.with_initial_inner_size(LogicalSize::new(1360.0, 760.0))
-    })
+    build_gallery_app().run_picus(
+        "Picus Gallery",
+        BevyWindowOptions::default().with_initial_inner_size(LogicalSize::new(1360.0, 760.0)),
+    )
 }
 
 #[cfg(test)]

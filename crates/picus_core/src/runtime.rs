@@ -57,7 +57,7 @@ use xilem_core::{
 };
 
 use crate::{
-    events::{UiEventQueue, install_global_ui_event_queue},
+    events::{InternalUiEventQueue, install_global_ui_event_queue},
     fonts::{XilemFontBridge, font_bytes_fingerprint},
     overlay::OverlayPointerRoutingState,
     projection::{UiAnyView, UiView},
@@ -1005,8 +1005,8 @@ pub struct MasonryRuntime {
 
 impl FromWorld for MasonryRuntime {
     fn from_world(world: &mut World) -> Self {
-        world.init_resource::<UiEventQueue>();
-        let queue = world.resource::<UiEventQueue>().shared_queue();
+        world.init_resource::<InternalUiEventQueue>();
+        let queue = world.resource::<InternalUiEventQueue>().shared_queue();
         install_global_ui_event_queue(queue);
 
         Self {
@@ -2137,7 +2137,7 @@ mod tests {
             app.update();
             let actions = app
                 .world_mut()
-                .resource_mut::<UiEventQueue>()
+                .resource_mut::<crate::events::InternalUiEventQueue>()
                 .drain_actions::<ProxyTaskAction>();
             if actions
                 .iter()
@@ -2613,15 +2613,17 @@ mod tests {
 
         let changed: Vec<_> = app
             .world_mut()
-            .resource_mut::<UiEventQueue>()
+            .resource_mut::<crate::events::InternalUiEventQueue>()
             .drain_actions::<crate::WidgetUiAction>();
         assert!(
             changed.iter().any(|event| {
-                matches!(
-                    &event.action,
-                    crate::WidgetUiAction::SetTextInput { input: changed_input, value }
-                        if *changed_input == input && value == "h"
-                )
+                match &event.action {
+                    crate::WidgetUiAction::SetTextInput {
+                        input: changed_input,
+                        value,
+                    } => *changed_input == input && value == "h",
+                    _ => false,
+                }
             }),
             "text_input on_changed should route through route_masonry_view_messages, got: {changed:?}"
         );
@@ -2668,15 +2670,17 @@ mod tests {
 
         let changed: Vec<_> = app
             .world_mut()
-            .resource_mut::<UiEventQueue>()
+            .resource_mut::<crate::events::InternalUiEventQueue>()
             .drain_actions::<crate::WidgetUiAction>();
         assert!(
             changed.iter().any(|event| {
-                matches!(
-                    &event.action,
-                    crate::WidgetUiAction::SetSearch { search: changed_search, value }
-                        if *changed_search == search && value == "button"
-                )
+                match &event.action {
+                    crate::WidgetUiAction::SetSearch {
+                        search: changed_search,
+                        value,
+                    } => *changed_search == search && value == "button",
+                    _ => false,
+                }
             }),
             "search on_changed should route through route_masonry_view_messages, got: {changed:?}"
         );

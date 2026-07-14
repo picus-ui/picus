@@ -1,4 +1,5 @@
-use std::any::TypeId;
+use std::any::{Any, TypeId};
+use std::sync::Arc;
 
 use bevy_ecs::entity::Entity;
 use masonry_core::{
@@ -21,7 +22,7 @@ use picus_view::picus_widget::{
 };
 
 use crate::{
-    events::{UiEvent, push_global_ui_event},
+    events::{InternalUiEvent, UiEvent, push_global_ui_event},
     styling::UiInteractionEvent,
 };
 
@@ -33,27 +34,78 @@ pub enum ActionButtonWidgetAction {
     StateChanged,
 }
 
+/// Type-erased action payload stored on action buttons.
+#[derive(Clone)]
+struct StoredAction {
+    type_id: TypeId,
+    payload: Arc<dyn Any + Send + Sync>,
+}
+
+impl StoredAction {
+    fn from_typed<A: Clone + Send + Sync + 'static>(action: A) -> Self {
+        Self {
+            type_id: TypeId::of::<A>(),
+            payload: Arc::new(action),
+        }
+    }
+
+    fn from_erased(type_id: TypeId, payload: Arc<dyn Any + Send + Sync>) -> Self {
+        Self { type_id, payload }
+    }
+
+    fn push(&self, entity: Entity) {
+        push_global_ui_event(InternalUiEvent::erased(
+            entity,
+            self.type_id,
+            Arc::clone(&self.payload),
+        ));
+    }
+}
+
 /// Masonry widget that emits typed ECS actions without user-facing closures.
 pub struct ActionButtonWidget<A> {
     entity: Entity,
-    action: A,
+    action: StoredAction,
     label: WidgetPod<HitTransparentWidget>,
     hovered: bool,
     pressed: bool,
+    _marker: std::marker::PhantomData<A>,
 }
 
 impl<A> UsesProperty<ContentColor> for ActionButtonWidget<A> where A: Clone + Send + Sync + 'static {}
 impl<A> UsesProperty<BorderBrush> for ActionButtonWidget<A> where A: Clone + Send + Sync + 'static {}
 
-impl<A> ActionButtonWidget<A> {
+impl<A> ActionButtonWidget<A>
+where
+    A: Clone + Send + Sync + 'static,
+{
     #[must_use]
     pub fn new(entity: Entity, action: A, label: impl Into<ArcStr>) -> Self {
         Self {
             entity,
-            action,
+            action: StoredAction::from_typed(action),
             label: NewWidget::new(HitTransparentWidget::new(Label::new(label).prepare())).to_pod(),
             hovered: false,
             pressed: false,
+            _marker: std::marker::PhantomData,
+        }
+    }
+
+    /// Create a button that emits a pre-erased [`crate::UiEmit`] payload.
+    #[must_use]
+    pub fn new_erased(
+        entity: Entity,
+        type_id: TypeId,
+        payload: Arc<dyn Any + Send + Sync>,
+        label: impl Into<ArcStr>,
+    ) -> ActionButtonWidget<()> {
+        ActionButtonWidget {
+            entity,
+            action: StoredAction::from_erased(type_id, payload),
+            label: NewWidget::new(HitTransparentWidget::new(Label::new(label).prepare())).to_pod(),
+            hovered: false,
+            pressed: false,
+            _marker: std::marker::PhantomData,
         }
     }
 
@@ -61,18 +113,13 @@ impl<A> ActionButtonWidget<A> {
     pub const fn entity(&self) -> Entity {
         self.entity
     }
-}
 
-impl<A> ActionButtonWidget<A>
-where
-    A: Clone + Send + Sync + 'static,
-{
     pub fn set_entity(this: &mut WidgetMut<'_, Self>, entity: Entity) {
         this.widget.entity = entity;
     }
 
     pub fn set_action(this: &mut WidgetMut<'_, Self>, action: A) {
-        this.widget.action = action;
+        this.widget.action = StoredAction::from_typed(action);
     }
 
     pub fn set_label(this: &mut WidgetMut<'_, Self>, label: impl Into<ArcStr>) {
@@ -83,7 +130,7 @@ where
     }
 
     fn push_action(&self) {
-        push_global_ui_event(UiEvent::typed(self.entity, self.action.clone()));
+        self.action.push(self.entity);
     }
 
     fn push_interaction(&self, event: UiInteractionEvent) {

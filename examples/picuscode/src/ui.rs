@@ -7,8 +7,7 @@ use picus::{
     ProjectionCtx, UiComponentTemplate, UiView, apply_direct_text_input_style, apply_label_style,
     apply_widget_style,
     bevy_ecs::hierarchy::Children,
-    button_with_child, emit_ui_action,
-    icon::icon,
+    button_with_child, emit_ui_action, icon,
     icons::{FluentIcon, IconGlyph},
     masonry_core::{
         layout::{Dim, Length},

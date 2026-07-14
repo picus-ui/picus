@@ -30,7 +30,7 @@ pub fn spawn_text_box_page(commands: &mut Commands, parent: Entity) {
     note(
         commands,
         ecs,
-        "Edits update the UiTextInput component and emit change events into UiEventQueue.",
+        "Edits update the UiTextInput component and emit change events into UiAction messages.",
     );
 }
 
