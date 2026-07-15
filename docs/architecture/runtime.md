@@ -31,9 +31,36 @@ See [multi-window](../guide/multi-window.md), [i18n and fonts](../guide/i18n-fon
 and [styling and themes](../guide/styling-themes.md) for application-facing
 configuration.
 
+### 四条时间线 (four timelines)
+
+The long-term frame architecture separates four independent timelines so that
+animation clock, scene build, and present freshness are no longer one OR-coupled
+path. Full plan: [plans/frame-pipeline.md](../plans/frame-pipeline.md).
+
+| Timeline | Role | Trigger | Drop policy |
+|----------|------|---------|-------------|
+| **A Input/Shell** | Pointer, keyboard, move/resize message pump | Events | Do not drop messages |
+| **B Anim clock** | Advance `t`, opacity, cursor blink timers | Logical clock (may be 60–120 Hz) | State may jump |
+| **C Scene build** | Rewrite + build/encode scene (today: full window; target: painter-order entries) | Only when corresponding content changes | Uncommitted work may merge |
+| **D Present** | Submit the latest ready composite | Display path | Mailbox drops stale; FIFO may only backpressure |
+
+**Today (Phase 0)** these timelines still share `WindowRuntime::paint_frame`: anim
+tick, full-window redraw/encode, and present remain on one path. Continuous
+widgets (e.g. Spinner) that request every anim tick can still force full-window
+encode+present. A **transitional** pure-animation present throttle (~30 Hz
+default, override `PICUS_ANIM_PRESENT_HZ`, `0` = off) reduces DWM drag ghosting
+without changing content/resize present rates. That throttle is **not** the end
+state; it is removed only after layered anim encode gates pass (G10).
+
+**Observability:** set `PICUS_FRAME_TIMING=1` for per-window phase averages and a
+monotonic `frame_id` (`input_dispatch_ms`, `anim_tick_ms`,
+`scene_build_base_ms` / `scene_build_anim_ms`, `surface_acquire_ms`,
+`encode_*_ms`, `composite_ms`, `present_submit_ms`, `presented` /
+`anim_tick_only`). These are **CPU submit-path** times — not displayed-frame
+latency. Windows baselines require PresentMon/ETW; protocol and result template:
+[perf/frame-pipeline-baseline.md](../perf/frame-pipeline-baseline.md).
+
 ### Frame pipeline evolution
 
-The long-term direction is to decouple **anim clock**, **per-layer encode**, and
-**latest-frame present** so continuous widgets (e.g. Spinner) do not force a
-full-window present pump that desyncs from DWM window motion. Implementation
-plan: [plans/frame-pipeline.md](../plans/frame-pipeline.md).
+Implementation plan and success metrics G1–G10:
+[plans/frame-pipeline.md](../plans/frame-pipeline.md).

@@ -4,6 +4,19 @@ use std::{
     sync::{Arc, Mutex, mpsc},
 };
 
+use crate::masonry_core::{
+    app::{RenderRoot, RenderRootOptions, RenderRootSignal, VisualLayerKind, WindowSizePolicy},
+    core::{
+        DefaultProperties, ErasedAction, Handled, PointerButton, PointerButtonEvent, PointerEvent,
+        PointerId, PointerInfo, PointerScrollEvent, PointerState, PointerType, PointerUpdate,
+        ScrollDelta, TextEvent, Widget, WidgetId, WidgetRef, WindowEvent,
+        keyboard::{Key, KeyState, Modifiers, NamedKey},
+    },
+    dpi::{PhysicalPosition, PhysicalSize},
+    layout::UnitPoint,
+    peniko::Color,
+    properties::Dimensions,
+};
 use crate::xilem::style::Style as _;
 use crate::xilem::winit::window::Window as XilemWinitWindow;
 use bevy_ecs::{
@@ -24,19 +37,6 @@ use bevy_window::{
     WindowScaleFactorChanged, WindowWrapper,
 };
 use bevy_winit::{EventLoopProxy, EventLoopProxyWrapper, WinitUserEvent};
-use crate::masonry_core::{
-    app::{RenderRoot, RenderRootOptions, RenderRootSignal, VisualLayerKind, WindowSizePolicy},
-    core::{
-        DefaultProperties, ErasedAction, Handled, PointerButton, PointerButtonEvent, PointerEvent,
-        PointerId, PointerInfo, PointerScrollEvent, PointerState, PointerType, PointerUpdate,
-        ScrollDelta, TextEvent, Widget, WidgetId, WidgetRef, WindowEvent,
-        keyboard::{Key, KeyState, Modifiers, NamedKey},
-    },
-    dpi::{PhysicalPosition, PhysicalSize},
-    layout::UnitPoint,
-    peniko::Color,
-    properties::Dimensions,
-};
 use picus_imaging::{Layer as ImagingLayer, PreparedFrame, texture_render::Renderer};
 use picus_surface::{ExistingWindowMetrics, ExternalWindowSurface, RenderFrameResult};
 use picus_view::{
@@ -125,9 +125,10 @@ enum RedrawSignal {
 struct PaintFrameResult {
     painted: bool,
     wants_redraw: bool,
+    /// Animation ticked without presenting (idle anim clock or throttle skip).
+    anim_tick_only: bool,
     paint_reasons: u32,
-    redraw_duration: std::time::Duration,
-    present_duration: std::time::Duration,
+    phases: crate::perf::PaintPhaseTimings,
 }
 
 #[cfg(test)]
@@ -168,7 +169,8 @@ pub struct WindowRuntime {
     needs_anim_frame: bool,
     has_painted_once: bool,
     /// Last time an animation-driven frame was presented (spinner, etc.).
-    /// Used to cap pure-anim present rate and reduce DWM drag ghosting.
+    /// Used by the **transitional** pure-anim present throttle
+    /// (`anim_present_min_interval` / `PICUS_ANIM_PRESENT_HZ`).
     last_anim_present: Option<std::time::Instant>,
     viewport_width: f64,
     viewport_height: f64,
@@ -181,14 +183,63 @@ pub struct WindowRuntime {
     pointer_trace: Vec<PointerTraceEvent>,
 }
 
-/// Minimum interval between animation-only presents (~30 Hz).
+/// Transitional default minimum interval between animation-only presents (~30 Hz).
 ///
-/// Widgets like [`Spinner`](picus_widget::widgets::Spinner) request a paint every
-/// anim tick. Presenting that at full display rate while the window is moved by
-/// DWM causes visible ghosting because frames queue behind the compositor.
-/// Throttling pure-anim presents keeps the spinner smooth enough while the
-/// swapchain stays closer to the live window position.
-const ANIM_PRESENT_MIN_INTERVAL: std::time::Duration = std::time::Duration::from_millis(33);
+/// # Transitional policy (frame-pipeline Phase 0)
+///
+/// Widgets like Spinner request a paint every anim tick. Presenting that at full
+/// display rate while the window is moved by DWM causes visible ghosting because
+/// frames queue behind the compositor. This ~30 Hz pure-anim present throttle is
+/// a **temporary** drag-ghosting mitigation — **not** the product end-state.
+///
+/// - Default remains ~30 Hz so product behavior is unchanged until layered anim
+///   encode + PresentPolicy gates pass (see `docs/plans/frame-pipeline.md` G10 / P2e).
+/// - Override with `PICUS_ANIM_PRESENT_HZ` for baseline/debug only:
+///   - unset → transitional ~30 Hz (`from_millis(33)`)
+///   - `0` / `off` / `none` → disable throttle (full anim present rate)
+///   - positive number → present at most that many anim-only frames per second
+/// - Content/input/resize redraws are **never** throttled by this path.
+///
+/// TODO(frame-pipeline): remove default throttle after anim-layer isolation
+/// lands; keep env override as optional diagnostic if useful.
+const DEFAULT_ANIM_PRESENT_MIN_INTERVAL: std::time::Duration = std::time::Duration::from_millis(33);
+
+/// Parse `PICUS_ANIM_PRESENT_HZ` (or absence) into a min present interval.
+///
+/// Returns `None` when throttling is disabled (`0` / `off` / `none` / `false`).
+fn parse_anim_present_min_interval(raw: Option<&str>) -> Option<std::time::Duration> {
+    let Some(raw) = raw.map(str::trim).filter(|s| !s.is_empty()) else {
+        return Some(DEFAULT_ANIM_PRESENT_MIN_INTERVAL);
+    };
+    if raw == "0"
+        || raw.eq_ignore_ascii_case("off")
+        || raw.eq_ignore_ascii_case("none")
+        || raw.eq_ignore_ascii_case("false")
+    {
+        return None;
+    }
+    match raw.parse::<f64>() {
+        Ok(hz) if hz.is_finite() && hz > 0.0 => Some(std::time::Duration::from_secs_f64(1.0 / hz)),
+        _ => {
+            tracing::warn!(
+                value = %raw,
+                "invalid PICUS_ANIM_PRESENT_HZ; using transitional ~30Hz default"
+            );
+            Some(DEFAULT_ANIM_PRESENT_MIN_INTERVAL)
+        }
+    }
+}
+
+/// Resolve the animation-only present throttle interval.
+///
+/// Returns `None` when throttling is disabled (`PICUS_ANIM_PRESENT_HZ=0`).
+fn anim_present_min_interval() -> Option<std::time::Duration> {
+    use std::sync::OnceLock;
+    static INTERVAL: OnceLock<Option<std::time::Duration>> = OnceLock::new();
+    *INTERVAL.get_or_init(|| {
+        parse_anim_present_min_interval(std::env::var("PICUS_ANIM_PRESENT_HZ").ok().as_deref())
+    })
+}
 
 impl WindowRuntime {
     /// Install this window's app action sink as the active thread-local target
@@ -805,19 +856,19 @@ impl WindowRuntime {
         // ticks. Animation alone must not force a full Vello present every frame
         // (cursor blink / fade timers re-request anim far more often than pixels
         // change).
-        let should_enter =
-            first_paint || incoming_redraw || should_tick_animation || needs_rewrite;
+        let should_enter = first_paint || incoming_redraw || should_tick_animation || needs_rewrite;
         if !should_enter {
             return PaintFrameResult {
                 painted: false,
                 wants_redraw: false,
+                anim_tick_only: false,
                 paint_reasons: crate::perf::PaintReason::Skipped as u32,
-                redraw_duration: std::time::Duration::ZERO,
-                present_duration: std::time::Duration::ZERO,
+                phases: crate::perf::PaintPhaseTimings::default(),
             };
         }
 
         let mut paint_reasons = 0u32;
+        let mut phases = crate::perf::PaintPhaseTimings::default();
         if first_paint {
             paint_reasons |= crate::perf::PaintReason::FirstPaint as u32;
         }
@@ -837,13 +888,14 @@ impl WindowRuntime {
         self.needs_redraw = false;
         self.needs_anim_frame = false;
 
-        let redraw_started = std::time::Instant::now();
         if should_tick_animation {
             // AnimFrame already runs rewrite passes and may emit RequestRedraw
             // only when a widget actually dirtied paint (e.g. cursor blink flip).
+            let anim_started = std::time::Instant::now();
             let _ = self
                 .render_root
                 .handle_window_event(WindowEvent::AnimFrame(delta));
+            phases.anim_tick = anim_started.elapsed();
             self.drain_redraw_signals();
         }
 
@@ -862,21 +914,21 @@ impl WindowRuntime {
                     || self.needs_anim_frame
                     || self.render_root.needs_anim()
                     || self.render_root.needs_rewrite_passes(),
+                anim_tick_only: true,
                 paint_reasons,
-                redraw_duration: redraw_started.elapsed(),
-                present_duration: std::time::Duration::ZERO,
+                phases,
             };
         }
 
-        // Animation-only presents (spinner paint_only, etc.): cap rate so DWM
-        // window-move composition does not display a multi-frame backlog.
+        // Transitional animation-only present throttle (~30 Hz default).
         // Content/input-driven redraws (`incoming_redraw`) stay unrestricted.
+        // See `anim_present_min_interval` / `PICUS_ANIM_PRESENT_HZ`.
         let anim_driven_present = should_tick_animation && !incoming_redraw && !first_paint;
-        if anim_driven_present {
+        if anim_driven_present && let Some(min_interval) = anim_present_min_interval() {
             let now = std::time::Instant::now();
             if self
                 .last_anim_present
-                .is_some_and(|last| now.duration_since(last) < ANIM_PRESENT_MIN_INTERVAL)
+                .is_some_and(|last| now.duration_since(last) < min_interval)
             {
                 paint_reasons |= crate::perf::PaintReason::AnimTickNoPresent as u32;
                 // Keep requesting frames so the anim clock continues; just skip
@@ -885,9 +937,9 @@ impl WindowRuntime {
                 return PaintFrameResult {
                     painted: false,
                     wants_redraw: true,
+                    anim_tick_only: true,
                     paint_reasons,
-                    redraw_duration: redraw_started.elapsed(),
-                    present_duration: std::time::Duration::ZERO,
+                    phases,
                 };
             }
             self.last_anim_present = Some(now);
@@ -897,17 +949,20 @@ impl WindowRuntime {
         self.needs_redraw = false;
 
         let logical_size = self.render_root.size();
+        // Full-window scene build today; `scene_build_anim` stays 0 until
+        // layered anim isolation (frame-pipeline Phase 2).
+        let scene_started = std::time::Instant::now();
         let (visual_layers, _tree_update) = self.render_root.redraw();
-        let redraw_duration = redraw_started.elapsed();
+        phases.scene_build_base = scene_started.elapsed();
 
         let Some(surface) = self.window_surface.as_mut() else {
             self.needs_redraw = true;
             return PaintFrameResult {
                 painted: false,
                 wants_redraw: true,
+                anim_tick_only: false,
                 paint_reasons,
-                redraw_duration,
-                present_duration: std::time::Duration::ZERO,
+                phases,
             };
         };
 
@@ -928,9 +983,9 @@ impl WindowRuntime {
                 painted: false,
                 wants_redraw: self.render_root.needs_anim()
                     || self.render_root.needs_rewrite_passes(),
+                anim_tick_only: false,
                 paint_reasons,
-                redraw_duration,
-                present_duration: std::time::Duration::ZERO,
+                phases,
             };
         };
         let VisualLayerKind::Scene(root_scene) = &root_layer.kind else {
@@ -950,9 +1005,12 @@ impl WindowRuntime {
             &overlays,
         );
 
-        let present_started = std::time::Instant::now();
-        let render_result = surface.render_frame(&mut self.renderer, frame);
-        let present_duration = present_started.elapsed();
+        let (render_result, surface_timings) = surface.render_frame(&mut self.renderer, frame);
+        phases.surface_acquire = surface_timings.surface_acquire;
+        // Full-window encode maps to base until layered anim encode exists.
+        phases.encode_base = surface_timings.encode;
+        phases.composite = surface_timings.composite;
+        phases.present_submit = surface_timings.present_submit;
         let painted = matches!(render_result, RenderFrameResult::Presented);
         if painted {
             self.has_painted_once = true;
@@ -967,9 +1025,9 @@ impl WindowRuntime {
                 || self.needs_anim_frame
                 || self.render_root.needs_anim()
                 || self.render_root.needs_rewrite_passes(),
+            anim_tick_only: false,
             paint_reasons,
-            redraw_duration,
-            present_duration,
+            phases,
         }
     }
 
@@ -1417,6 +1475,7 @@ fn update_modifiers_from_logical_key(modifiers: &mut Modifiers, key: &BevyKey, s
 pub fn inject_bevy_input_into_masonry(
     runtime: Option<NonSendMut<MasonryRuntime>>,
     mut overlay_routing: ResMut<OverlayPointerRoutingState>,
+    mut frame_timing: ResMut<crate::perf::FrameTiming>,
     window_query: Query<&Window>,
     primary_window_entity_query: Query<Entity, With<PrimaryWindow>>,
     mut keyboard_input: MessageReader<KeyboardInput>,
@@ -1432,6 +1491,7 @@ pub fn inject_bevy_input_into_masonry(
     let Some(mut runtime) = runtime else {
         return;
     };
+    let input_phase = crate::perf::PhaseTimer::start();
     runtime.install_action_sink();
 
     let primary_window_entity = primary_window_entity_query.iter().next();
@@ -1482,18 +1542,23 @@ pub fn inject_bevy_input_into_masonry(
                 cursor,
             } => (
                 *window,
-                TextEvent::Ime(crate::masonry_core::core::Ime::Preedit(value.clone(), *cursor)),
+                TextEvent::Ime(crate::masonry_core::core::Ime::Preedit(
+                    value.clone(),
+                    *cursor,
+                )),
             ),
             BevyIme::Commit { window, value } => (
                 *window,
                 TextEvent::Ime(crate::masonry_core::core::Ime::Commit(value.clone())),
             ),
-            BevyIme::Enabled { window } => {
-                (*window, TextEvent::Ime(crate::masonry_core::core::Ime::Enabled))
-            }
-            BevyIme::Disabled { window } => {
-                (*window, TextEvent::Ime(crate::masonry_core::core::Ime::Disabled))
-            }
+            BevyIme::Enabled { window } => (
+                *window,
+                TextEvent::Ime(crate::masonry_core::core::Ime::Enabled),
+            ),
+            BevyIme::Disabled { window } => (
+                *window,
+                TextEvent::Ime(crate::masonry_core::core::Ime::Disabled),
+            ),
         };
 
         let Some(window_runtime) = runtime.window_mut(window) else {
@@ -1535,9 +1600,9 @@ pub fn inject_bevy_input_into_masonry(
             && let Some(text) = event.text.as_ref()
             && !text.is_empty()
         {
-            window_runtime.handle_text_event(TextEvent::Ime(crate::masonry_core::core::Ime::Commit(
-                text.to_string(),
-            )));
+            window_runtime.handle_text_event(TextEvent::Ime(
+                crate::masonry_core::core::Ime::Commit(text.to_string()),
+            ));
         }
     }
 
@@ -1644,6 +1709,7 @@ pub fn inject_bevy_input_into_masonry(
     }
 
     let _ = primary_window_entity;
+    frame_timing.record_input_dispatch(input_phase.elapsed());
 }
 
 /// Attach a Masonry window runtime to each Bevy window once it appears.
@@ -1783,7 +1849,8 @@ pub fn rebuild_masonry_runtime(world: &mut World) {
     }
 
     let phase = crate::perf::PhaseTimer::start();
-    let _span = tracing::trace_span!(target: "picus_core::perf", "rebuild_masonry_runtime").entered();
+    let _span =
+        tracing::trace_span!(target: "picus_core::perf", "rebuild_masonry_runtime").entered();
 
     let window_views: Vec<(Entity, UiView)> = world
         .get_resource_mut::<SynthesizedUiViews>()
@@ -1856,15 +1923,10 @@ pub fn paint_masonry_ui(
         return;
     };
 
-    let paint_phase = crate::perf::PhaseTimer::start();
     let _span = tracing::trace_span!(target: "picus_core::perf", "paint_masonry_ui").entered();
 
     let window_entities: Vec<Entity> = runtime.window_entities().collect();
     let mut wants_redraw = false;
-    let mut any_painted = false;
-    let mut paint_reasons = 0u32;
-    let mut redraw_duration = std::time::Duration::ZERO;
-    let mut present_duration = std::time::Duration::ZERO;
 
     for window_entity in window_entities {
         let Ok(bevy_window) = active_window_query.get(window_entity) else {
@@ -1906,22 +1968,21 @@ pub fn paint_masonry_ui(
         };
         let result = window_runtime.paint_frame(time.delta());
         wants_redraw |= result.wants_redraw;
-        any_painted |= result.painted;
-        paint_reasons |= result.paint_reasons;
-        redraw_duration += result.redraw_duration;
-        present_duration += result.present_duration;
+        // Skip pure idle (Skipped reason with no work) from frame_id accounting.
+        let entered_work = result.paint_reasons & crate::perf::PaintReason::Skipped as u32 == 0;
+        if entered_work {
+            frame_timing.record_window_paint(
+                window_entity,
+                result.phases,
+                result.painted,
+                result.anim_tick_only,
+                result.paint_reasons,
+            );
+        }
         if result.painted {
             tracing::trace!("painted Masonry frame for window {:?}", window_entity);
         }
     }
-
-    frame_timing.record_paint(
-        paint_phase.elapsed(),
-        redraw_duration,
-        present_duration,
-        any_painted,
-        paint_reasons,
-    );
 
     if wants_redraw {
         redraw_requests.write(RequestRedraw);
@@ -2951,6 +3012,50 @@ mod tests {
                 }
             }),
             "search on_changed should route through route_masonry_view_messages, got: {changed:?}"
+        );
+    }
+
+    #[test]
+    fn anim_present_hz_default_is_transitional_30hz() {
+        assert_eq!(
+            parse_anim_present_min_interval(None),
+            Some(DEFAULT_ANIM_PRESENT_MIN_INTERVAL)
+        );
+        assert_eq!(
+            parse_anim_present_min_interval(Some("")),
+            Some(DEFAULT_ANIM_PRESENT_MIN_INTERVAL)
+        );
+        assert_eq!(
+            parse_anim_present_min_interval(Some("   ")),
+            Some(DEFAULT_ANIM_PRESENT_MIN_INTERVAL)
+        );
+    }
+
+    #[test]
+    fn anim_present_hz_zero_disables_throttle() {
+        assert_eq!(parse_anim_present_min_interval(Some("0")), None);
+        assert_eq!(parse_anim_present_min_interval(Some("off")), None);
+        assert_eq!(parse_anim_present_min_interval(Some("NONE")), None);
+        assert_eq!(parse_anim_present_min_interval(Some("false")), None);
+    }
+
+    #[test]
+    fn anim_present_hz_positive_sets_interval() {
+        let interval = parse_anim_present_min_interval(Some("60")).expect("60 Hz enabled");
+        assert!((interval.as_secs_f64() - (1.0 / 60.0)).abs() < 1e-9);
+        let interval = parse_anim_present_min_interval(Some("10")).expect("10 Hz enabled");
+        assert!((interval.as_secs_f64() - 0.1).abs() < 1e-9);
+    }
+
+    #[test]
+    fn anim_present_hz_invalid_falls_back_to_default() {
+        assert_eq!(
+            parse_anim_present_min_interval(Some("not-a-number")),
+            Some(DEFAULT_ANIM_PRESENT_MIN_INTERVAL)
+        );
+        assert_eq!(
+            parse_anim_present_min_interval(Some("-5")),
+            Some(DEFAULT_ANIM_PRESENT_MIN_INTERVAL)
         );
     }
 }

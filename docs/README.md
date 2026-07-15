@@ -28,6 +28,7 @@ repository `AGENTS.md` files (root and nested where needed).
 | [reference/public-modules.md](reference/public-modules.md) | Public facade modules and advanced boundary |
 | [reference/style-tokens.md](reference/style-tokens.md) | Theme, token, and missing-rule contract |
 | [plans/frame-pipeline.md](plans/frame-pipeline.md) | Frame pipeline decoupling: anim clock / layers / present freshness |
+| [perf/frame-pipeline-baseline.md](perf/frame-pipeline-baseline.md) | Frame pipeline baseline protocol, PresentMon/ETW, result tables |
 
 **Rustdoc strategy**: crate/module docs on `picus` are one-liners plus a pointer to
 the matching guide file above. Long tutorials and architecture narrative stay in

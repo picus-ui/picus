@@ -67,9 +67,16 @@ pub enum NativeWindowBackdropError {
 impl core::fmt::Display for NativeWindowBackdropError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::UnsupportedPlatform => write!(f, "native window backdrops are unsupported on this platform"),
-            Self::UnsupportedWindowHandle => write!(f, "native window backdrop requires a Win32 window handle"),
-            Self::WindowsHresult(hr) => write!(f, "DwmSetWindowAttribute failed with HRESULT {hr:#010x}"),
+            Self::UnsupportedPlatform => write!(
+                f,
+                "native window backdrops are unsupported on this platform"
+            ),
+            Self::UnsupportedWindowHandle => {
+                write!(f, "native window backdrop requires a Win32 window handle")
+            }
+            Self::WindowsHresult(hr) => {
+                write!(f, "DwmSetWindowAttribute failed with HRESULT {hr:#010x}")
+            }
         }
     }
 }
@@ -131,9 +138,9 @@ fn set_native_window_backdrop_material_impl(
 ) -> Result<(), NativeWindowBackdropError> {
     use raw_window_handle::RawWindowHandle;
     use windows_sys::Win32::Graphics::Dwm::{
-        DWM_SYSTEMBACKDROP_TYPE, DWMSBT_AUTO, DWMSBT_MAINWINDOW, DWMSBT_NONE,
-        DWMSBT_TABBEDWINDOW, DWMSBT_TRANSIENTWINDOW, DWMWA_SYSTEMBACKDROP_TYPE,
-        DWMWA_USE_IMMERSIVE_DARK_MODE, DwmExtendFrameIntoClientArea, DwmSetWindowAttribute,
+        DWM_SYSTEMBACKDROP_TYPE, DWMSBT_AUTO, DWMSBT_MAINWINDOW, DWMSBT_NONE, DWMSBT_TABBEDWINDOW,
+        DWMSBT_TRANSIENTWINDOW, DWMWA_SYSTEMBACKDROP_TYPE, DWMWA_USE_IMMERSIVE_DARK_MODE,
+        DwmExtendFrameIntoClientArea, DwmSetWindowAttribute,
     };
     use windows_sys::Win32::UI::Controls::MARGINS;
 
@@ -290,6 +297,22 @@ pub enum RenderFrameResult {
     Failed,
 }
 
+/// CPU-side phase timings for one [`ExternalWindowSurface::render_frame`] call.
+///
+/// These are wall-clock durations measured around the present path only. They are
+/// **not** display latency or DWM composition time; use PresentMon/ETW for that.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RenderFrameTimings {
+    /// Time spent acquiring the swapchain texture (including reconfigure attempts).
+    pub surface_acquire: std::time::Duration,
+    /// Time spent in Vello `render_to_texture` (full-window encode today).
+    pub encode: std::time::Duration,
+    /// Time spent blitting the rendered texture into the swapchain view.
+    pub composite: std::time::Duration,
+    /// Time spent in the CPU `present()` call (submit, not vsync wait).
+    pub present_submit: std::time::Duration,
+}
+
 impl ExternalWindowSurface {
     /// Create an attached Vello surface from a Bevy-owned raw-handle wrapper.
     pub fn new_from_bevy_raw_handle(
@@ -302,7 +325,7 @@ impl ExternalWindowSurface {
             use raw_window_handle::RawWindowHandle;
             if let RawWindowHandle::Win32(handle) = raw_handle.get_window_handle() {
                 prepare_hwnd_for_composition_surface(
-                    handle.hwnd.get() as windows_sys::Win32::Foundation::HWND,
+                    handle.hwnd.get() as windows_sys::Win32::Foundation::HWND
                 );
             }
         }
@@ -312,11 +335,7 @@ impl ExternalWindowSurface {
         // We create a thread-locked handle target only for surface initialization.
         let target = unsafe { raw_handle.get_handle() };
         let mut render_cx = RenderContext::new(metrics.transparent);
-        let surface = pollster::block_on(render_cx.create_surface(
-            target,
-            metrics,
-            present_mode,
-        ))?;
+        let surface = pollster::block_on(render_cx.create_surface(target, metrics, present_mode))?;
 
         Ok(Self {
             render_cx,
@@ -360,17 +379,22 @@ impl ExternalWindowSurface {
     }
 
     /// Render a prepared Masonry frame and present it to the attached window surface.
+    ///
+    /// Returns the outcome together with CPU-side phase timings. Timings measure
+    /// submit-path wall time only — not actual display time.
     #[must_use]
     pub fn render_frame(
         &mut self,
         renderer: &mut Renderer,
         frame: PreparedFrame<'_>,
-    ) -> RenderFrameResult {
+    ) -> (RenderFrameResult, RenderFrameTimings) {
+        let mut timings = RenderFrameTimings::default();
         let dev_id = self.surface.dev_id;
         let adapter = &self.render_cx.devices[dev_id].adapter;
         let device = &self.render_cx.devices[dev_id].device;
         let queue = &self.render_cx.devices[dev_id].queue;
 
+        let acquire_started = std::time::Instant::now();
         let mut did_reconfigure = false;
         let surface_texture = loop {
             match get_current_surface_texture(&self.surface.surface, device) {
@@ -378,7 +402,8 @@ impl ExternalWindowSurface {
                     discard_surface_texture(device, texture);
                     self.render_cx.configure_surface(&self.surface);
                     tracing::debug!("swap chain texture was suboptimal; surface reconfigured");
-                    return RenderFrameResult::Retry;
+                    timings.surface_acquire = acquire_started.elapsed();
+                    return (RenderFrameResult::Retry, timings);
                 }
                 Ok(texture) => break texture,
                 Err(error) => match surface_recovery_action(&error) {
@@ -390,16 +415,20 @@ impl ExternalWindowSurface {
                         tracing::warn!(
                             "couldn't acquire swap chain texture; retrying next frame: {error}"
                         );
-                        return RenderFrameResult::Retry;
+                        timings.surface_acquire = acquire_started.elapsed();
+                        return (RenderFrameResult::Retry, timings);
                     }
                     SurfaceRecoveryAction::Fail => {
                         tracing::error!("couldn't acquire swap chain texture: {error}");
-                        return RenderFrameResult::Failed;
+                        timings.surface_acquire = acquire_started.elapsed();
+                        return (RenderFrameResult::Failed, timings);
                     }
                 },
             }
         };
+        timings.surface_acquire = acquire_started.elapsed();
 
+        let encode_started = std::time::Instant::now();
         if let Err(error) = renderer.render_to_texture(
             RenderTarget {
                 adapter,
@@ -412,9 +441,12 @@ impl ExternalWindowSurface {
         ) {
             tracing::error!("failed to render Masonry frame to texture: {error}");
             discard_surface_texture(device, surface_texture);
-            return RenderFrameResult::Failed;
+            timings.encode = encode_started.elapsed();
+            return (RenderFrameResult::Failed, timings);
         }
+        timings.encode = encode_started.elapsed();
 
+        let composite_started = std::time::Instant::now();
         let (surface_view, view_errors) = capture_device_errors(device, || {
             surface_texture
                 .texture
@@ -427,7 +459,8 @@ impl ExternalWindowSurface {
             log_device_errors("creating the swap chain texture view", view_errors);
             discard_surface_texture(device, surface_texture);
             self.render_cx.configure_surface(&self.surface);
-            return RenderFrameResult::Retry;
+            timings.composite = composite_started.elapsed();
+            return (RenderFrameResult::Retry, timings);
         }
         let ((), blit_errors) = capture_device_errors(device, || {
             let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -445,22 +478,25 @@ impl ExternalWindowSurface {
             log_device_errors("submitting the swap chain blit", blit_errors);
             discard_surface_texture(device, surface_texture);
             self.render_cx.configure_surface(&self.surface);
-            return RenderFrameResult::Retry;
+            timings.composite = composite_started.elapsed();
+            return (RenderFrameResult::Retry, timings);
         }
+        timings.composite = composite_started.elapsed();
 
-        let ((), present_errors) =
-            capture_device_errors(device, || surface_texture.present());
+        let present_started = std::time::Instant::now();
+        let ((), present_errors) = capture_device_errors(device, || surface_texture.present());
+        timings.present_submit = present_started.elapsed();
         if !present_errors.is_empty() {
             log_device_errors("presenting the swap chain texture", present_errors);
             self.render_cx.configure_surface(&self.surface);
-            return RenderFrameResult::Retry;
+            return (RenderFrameResult::Retry, timings);
         }
 
         if let Err(error) = device.poll(wgpu::PollType::Poll) {
             tracing::trace!("non-blocking GPU poll after present returned: {error}");
         }
 
-        RenderFrameResult::Presented
+        (RenderFrameResult::Presented, timings)
     }
 }
 
@@ -551,8 +587,7 @@ impl RenderContext {
         // Prefer low-latency present modes so continuous animation (e.g. Spinner)
         // does not queue multiple frames behind DWM during window drag. Mailbox
         // drops intermediate frames instead of displaying a backlog (ghosting).
-        let present_mode =
-            select_present_mode(&capabilities.present_modes, present_mode);
+        let present_mode = select_present_mode(&capabilities.present_modes, present_mode);
 
         let config = SurfaceConfiguration {
             usage: TextureUsages::RENDER_ATTACHMENT,
@@ -700,8 +735,7 @@ async fn select_adapter(
     compatible_surface: Option<&Surface<'_>>,
     prefer_composition: bool,
 ) -> Option<wgpu::Adapter> {
-    if let Ok(adapter) =
-        wgpu::util::initialize_adapter_from_env(instance, compatible_surface).await
+    if let Ok(adapter) = wgpu::util::initialize_adapter_from_env(instance, compatible_surface).await
     {
         return Some(adapter);
     }
@@ -891,10 +925,7 @@ fn create_blitter(
         },
     };
 
-    let needs_premultiplied_blit = needs_premultiplied_blit(
-        alpha_mode,
-        transparent,
-    );
+    let needs_premultiplied_blit = needs_premultiplied_blit(alpha_mode, transparent);
     if needs_premultiplied_blit {
         TextureBlitterBuilder::new(device, format)
             .blend_state(PREMUL_BLEND_STATE)
@@ -904,12 +935,8 @@ fn create_blitter(
     }
 }
 
-fn needs_premultiplied_blit(
-    alpha_mode: CompositeAlphaMode,
-    transparent: bool,
-) -> bool {
-    matches!(alpha_mode, CompositeAlphaMode::PreMultiplied)
-        || (cfg!(windows) && transparent)
+fn needs_premultiplied_blit(alpha_mode: CompositeAlphaMode, transparent: bool) -> bool {
+    matches!(alpha_mode, CompositeAlphaMode::PreMultiplied) || (cfg!(windows) && transparent)
 }
 
 #[cfg(test)]
@@ -951,9 +978,9 @@ enum SurfaceRecoveryAction {
 
 fn surface_recovery_action(error: &wgpu::SurfaceError) -> SurfaceRecoveryAction {
     match error {
-        wgpu::SurfaceError::Outdated
-        | wgpu::SurfaceError::Lost
-        | wgpu::SurfaceError::Other => SurfaceRecoveryAction::Reconfigure,
+        wgpu::SurfaceError::Outdated | wgpu::SurfaceError::Lost | wgpu::SurfaceError::Other => {
+            SurfaceRecoveryAction::Reconfigure
+        }
         wgpu::SurfaceError::Timeout => SurfaceRecoveryAction::Retry,
         wgpu::SurfaceError::OutOfMemory => SurfaceRecoveryAction::Fail,
     }
@@ -1175,9 +1202,18 @@ mod tests {
 
     #[test]
     fn native_backdrop_materials_match_dwm_system_backdrop_values() {
-        assert_eq!(native_backdrop_ordinal(NativeWindowBackdropMaterial::Auto), 0);
-        assert_eq!(native_backdrop_ordinal(NativeWindowBackdropMaterial::None), 1);
-        assert_eq!(native_backdrop_ordinal(NativeWindowBackdropMaterial::Mica), 2);
+        assert_eq!(
+            native_backdrop_ordinal(NativeWindowBackdropMaterial::Auto),
+            0
+        );
+        assert_eq!(
+            native_backdrop_ordinal(NativeWindowBackdropMaterial::None),
+            1
+        );
+        assert_eq!(
+            native_backdrop_ordinal(NativeWindowBackdropMaterial::Mica),
+            2
+        );
         assert_eq!(
             native_backdrop_ordinal(NativeWindowBackdropMaterial::Acrylic),
             3
@@ -1215,9 +1251,8 @@ mod tests {
             backend_options: backend_options_for_surface(true),
         });
 
-        let adapter = pollster::block_on(async {
-            select_adapter(&instance, None, cfg!(windows)).await
-        })?;
+        let adapter =
+            pollster::block_on(async { select_adapter(&instance, None, cfg!(windows)).await })?;
 
         let (device, queue) = pollster::block_on(async {
             adapter
@@ -1439,8 +1474,7 @@ mod tests {
     /// destination pixels (alpha == 0) so DWM Mica/Acrylic can show through.
     #[test]
     fn transparent_surface_blit_keeps_specific_pixels_transparent() {
-        let Some(pixels) = blit_surface_like_pixels(true, CompositeAlphaMode::PreMultiplied)
-        else {
+        let Some(pixels) = blit_surface_like_pixels(true, CompositeAlphaMode::PreMultiplied) else {
             eprintln!("skipping GPU transparency test: no compatible wgpu adapter");
             return;
         };
