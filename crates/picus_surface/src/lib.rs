@@ -279,11 +279,176 @@ pub struct ExistingWindowMetrics {
     pub composite_alpha_mode: BevyCompositeAlphaMode,
 }
 
+/// Negotiated present capability after mode selection (G7).
+///
+/// **Do not** treat this as a unified `drop_stale` boolean across modes:
+/// frames already submitted to a FIFO / FifoRelaxed swapchain cannot be
+/// withdrawn by Picus. Only [`MailboxLatest`](Self::MailboxLatest) can replace
+/// queued frames at the GPU/compositor; FIFO relies on CPU-side ready-queue
+/// coalescing and backpressure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum NegotiatedPresentCapability {
+    /// Mailbox present mode: intermediate queued frames may be replaced
+    /// (true drop-stale at the display path).
+    MailboxLatest,
+    /// FIFO / FifoRelaxed / AutoVsync / Immediate fallback: only CPU-side
+    /// [`LatestReadyQueue`] coalescing of *unsubmitted* frames; submitted
+    /// frames are not withdrawable. Prefer backpressure over false drop-stale.
+    FifoBackpressure,
+}
+
+/// CPU-side policy for unsubmitted ready frames before `present()`.
+///
+/// Applies to both mailbox and FIFO paths for work that Picus still owns.
+/// Once a frame is submitted to the swapchain, only mailbox can replace it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum ReadyQueuePolicy {
+    /// Keep only the latest unsubmitted ready frame; older unsubmitted frames
+    /// are dropped. Submitted frames are never claimed withdrawable here.
+    #[default]
+    LatestOnly,
+}
+
+/// Present mode preference and latency hints shared by surface creation and core.
+///
+/// Extracted from the surface configuration path so runtime scheduling and
+/// diagnostics can name the **actual** negotiated capability (G7) instead of
+/// a fake cross-mode `drop_stale` flag.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PresentPolicy {
+    /// Caller's preferred present mode (typically [`PresentMode::AutoVsync`]).
+    pub preferred: PresentMode,
+    /// Backend hint for swapchain depth — not a hard guarantee.
+    pub desired_maximum_frame_latency: u32,
+    /// How unsubmitted ready frames are coalesced on the CPU.
+    pub ready_queue: ReadyQueuePolicy,
+}
+
+impl Default for PresentPolicy {
+    fn default() -> Self {
+        Self::default_ui()
+    }
+}
+
+impl PresentPolicy {
+    /// Default UI policy: prefer low-latency modes, latency hint 1, latest-only ready queue.
+    #[must_use]
+    pub const fn default_ui() -> Self {
+        Self {
+            preferred: PresentMode::AutoVsync,
+            desired_maximum_frame_latency: 1,
+            ready_queue: ReadyQueuePolicy::LatestOnly,
+        }
+    }
+
+    /// Negotiate against adapter-reported present modes.
+    ///
+    /// Logs the selected mode and the effective fallback strategy.
+    #[must_use]
+    pub fn negotiate(self, available: &[PresentMode]) -> NegotiatedPresent {
+        let mode = select_present_mode(available, self.preferred);
+        let capability = match mode {
+            PresentMode::Mailbox => NegotiatedPresentCapability::MailboxLatest,
+            _ => NegotiatedPresentCapability::FifoBackpressure,
+        };
+        let negotiated = NegotiatedPresent {
+            mode,
+            capability,
+            desired_maximum_frame_latency: self.desired_maximum_frame_latency,
+            ready_queue: self.ready_queue,
+        };
+        match capability {
+            NegotiatedPresentCapability::MailboxLatest => {
+                tracing::info!(
+                    ?mode,
+                    preferred = ?self.preferred,
+                    available = ?available,
+                    desired_maximum_frame_latency = self.desired_maximum_frame_latency,
+                    ready_queue = ?self.ready_queue,
+                    capability = "MailboxLatest",
+                    strategy = "replace_queued_frame",
+                    "negotiated present policy"
+                );
+            }
+            NegotiatedPresentCapability::FifoBackpressure => {
+                tracing::info!(
+                    ?mode,
+                    preferred = ?self.preferred,
+                    available = ?available,
+                    desired_maximum_frame_latency = self.desired_maximum_frame_latency,
+                    ready_queue = ?self.ready_queue,
+                    capability = "FifoBackpressure",
+                    strategy = "cpu_latest_only_unsubmitted_plus_backpressure",
+                    note = "submitted FIFO frames are not withdrawable",
+                    "negotiated present policy"
+                );
+            }
+        }
+        negotiated
+    }
+}
+
+/// Result of [`PresentPolicy::negotiate`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NegotiatedPresent {
+    pub mode: PresentMode,
+    pub capability: NegotiatedPresentCapability,
+    pub desired_maximum_frame_latency: u32,
+    pub ready_queue: ReadyQueuePolicy,
+}
+
+/// Single-slot ready queue for unsubmitted frames (LatestOnly).
+///
+/// Used by FIFO fallback (and as a CPU-side coalescer generally): only the
+/// newest unsubmitted frame is retained. Calling [`take_for_submit`](Self::take_for_submit)
+/// moves the frame out for present; after that it is no longer in the queue and
+/// **cannot** be withdrawn through this API (G7 honesty for FIFO).
+#[derive(Debug, Default)]
+pub struct LatestReadyQueue<T> {
+    pending: Option<T>,
+}
+
+impl<T> LatestReadyQueue<T> {
+    #[must_use]
+    pub const fn new() -> Self {
+        Self { pending: None }
+    }
+
+    /// Push a ready unsubmitted frame, replacing any previous unsubmitted one.
+    pub fn push_ready(&mut self, frame: T) -> Option<T> {
+        self.pending.replace(frame)
+    }
+
+    /// Take the latest unsubmitted frame for submit/present.
+    ///
+    /// After this returns `Some`, the frame is no longer withdrawable via this queue.
+    pub fn take_for_submit(&mut self) -> Option<T> {
+        self.pending.take()
+    }
+
+    #[must_use]
+    pub fn peek(&self) -> Option<&T> {
+        self.pending.as_ref()
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.pending.is_none()
+    }
+
+    #[must_use]
+    pub fn len(&self) -> usize {
+        usize::from(self.pending.is_some())
+    }
+}
+
 /// A Vello surface context attached to an externally owned Bevy window.
 pub struct ExternalWindowSurface {
     render_cx: RenderContext,
     surface: RenderSurface<'static>,
     scale_factor: f64,
+    /// Actual negotiated present capability (G7); not a fake unified drop_stale.
+    negotiated_present: NegotiatedPresent,
 }
 
 /// Result of rendering and presenting one frame to an external window surface.
@@ -319,10 +484,25 @@ pub struct RenderFrameTimings {
 
 impl ExternalWindowSurface {
     /// Create an attached Vello surface from a Bevy-owned raw-handle wrapper.
+    ///
+    /// Uses [`PresentPolicy::default_ui`] and records the negotiated capability.
     pub fn new_from_bevy_raw_handle(
         raw_handle: RawHandleWrapper,
         metrics: ExistingWindowMetrics,
         present_mode: PresentMode,
+    ) -> Result<Self, RenderSurfaceError> {
+        let policy = PresentPolicy {
+            preferred: present_mode,
+            ..PresentPolicy::default_ui()
+        };
+        Self::new_from_bevy_raw_handle_with_policy(raw_handle, metrics, policy)
+    }
+
+    /// Create an attached surface with an explicit [`PresentPolicy`].
+    pub fn new_from_bevy_raw_handle_with_policy(
+        raw_handle: RawHandleWrapper,
+        metrics: ExistingWindowMetrics,
+        policy: PresentPolicy,
     ) -> Result<Self, RenderSurfaceError> {
         #[cfg(windows)]
         if metrics.transparent {
@@ -339,13 +519,21 @@ impl ExternalWindowSurface {
         // We create a thread-locked handle target only for surface initialization.
         let target = unsafe { raw_handle.get_handle() };
         let mut render_cx = RenderContext::new(metrics.transparent);
-        let surface = pollster::block_on(render_cx.create_surface(target, metrics, present_mode))?;
+        let (surface, negotiated) =
+            pollster::block_on(render_cx.create_surface(target, metrics, policy))?;
 
         Ok(Self {
             render_cx,
             surface,
             scale_factor: metrics.scale_factor,
+            negotiated_present: negotiated,
         })
+    }
+
+    /// Actual present mode / capability negotiated at surface creation (G7).
+    #[must_use]
+    pub fn negotiated_present(&self) -> NegotiatedPresent {
+        self.negotiated_present
     }
 
     /// Synchronize internal surface size and scale-factor from the attached window.
@@ -548,14 +736,14 @@ impl RenderContext {
         &mut self,
         window: impl Into<wgpu::SurfaceTarget<'w>>,
         metrics: ExistingWindowMetrics,
-        present_mode: PresentMode,
-    ) -> Result<RenderSurface<'w>, RenderSurfaceError> {
+        policy: PresentPolicy,
+    ) -> Result<(RenderSurface<'w>, NegotiatedPresent), RenderSurfaceError> {
         self.create_render_surface(
             self.instance
                 .create_surface(window.into())
                 .map_err(RenderSurfaceError::CreateSurface)?,
             metrics,
-            present_mode,
+            policy,
         )
         .await
     }
@@ -564,8 +752,8 @@ impl RenderContext {
         &mut self,
         surface: Surface<'w>,
         metrics: ExistingWindowMetrics,
-        present_mode: PresentMode,
-    ) -> Result<RenderSurface<'w>, RenderSurfaceError> {
+        policy: PresentPolicy,
+    ) -> Result<(RenderSurface<'w>, NegotiatedPresent), RenderSurfaceError> {
         let dev_id = self
             .device(Some(&surface))
             .await
@@ -595,20 +783,19 @@ impl RenderContext {
             alpha_mode,
             metrics.transparent,
         );
-        // Prefer low-latency present modes so continuous animation (e.g. Spinner)
-        // does not queue multiple frames behind DWM during window drag. Mailbox
-        // drops intermediate frames instead of displaying a backlog (ghosting).
-        let present_mode = select_present_mode(&capabilities.present_modes, present_mode);
+        // PresentPolicy selects mode + names real capability (MailboxLatest vs
+        // FifoBackpressure). Continuous animation still benefits from mailbox
+        // when available; FIFO does not claim drop-stale for submitted frames.
+        let negotiated = policy.negotiate(&capabilities.present_modes);
 
         let config = SurfaceConfiguration {
             usage: TextureUsages::RENDER_ATTACHMENT,
             format,
             width: metrics.physical_width.max(1),
             height: metrics.physical_height.max(1),
-            present_mode,
-            // Keep swapchain depth shallow so the displayed image tracks the
-            // live window position as closely as possible under DWM composition.
-            desired_maximum_frame_latency: 1,
+            present_mode: negotiated.mode,
+            // Backend hint only — not a hard guarantee of single in-flight frame.
+            desired_maximum_frame_latency: negotiated.desired_maximum_frame_latency,
             alpha_mode,
             view_formats: vec![],
         };
@@ -628,7 +815,7 @@ impl RenderContext {
             blitter,
         };
         self.configure_surface(&surface);
-        Ok(surface)
+        Ok((surface, negotiated))
     }
 
     fn resize_surface(&self, surface: &mut RenderSurface<'_>, width: u32, height: u32) {
@@ -844,12 +1031,18 @@ fn map_requested_alpha_mode(mode: BevyCompositeAlphaMode) -> Option<CompositeAlp
 /// Choose a swapchain present mode from device capabilities.
 ///
 /// Preference order prioritizes **low latency under load**:
-/// 1. [`PresentMode::Mailbox`] — triple-buffer, drops intermediate frames (best
-///    against window-drag ghosting while continuously animating)
-/// 2. [`PresentMode::FifoRelaxed`] — allows late frames without hard queueing
+/// 1. [`PresentMode::Mailbox`] — triple-buffer, may replace queued frames
+///    ([`NegotiatedPresentCapability::MailboxLatest`])
+/// 2. [`PresentMode::FifoRelaxed`] — late frames without hard queueing
+///    ([`NegotiatedPresentCapability::FifoBackpressure`])
 /// 3. The caller's preferred mode (typically [`PresentMode::AutoVsync`])
 /// 4. [`PresentMode::Fifo`] / [`PresentMode::AutoVsync`] as final fallbacks
-fn select_present_mode(available: &[PresentMode], preferred: PresentMode) -> PresentMode {
+///
+/// Shared with core scheduling via [`PresentPolicy::negotiate`]. Callers must
+/// map the result to an explicit capability — do not invent a unified
+/// `drop_stale` promise across modes.
+#[must_use]
+pub fn select_present_mode(available: &[PresentMode], preferred: PresentMode) -> PresentMode {
     let prefer = [
         PresentMode::Mailbox,
         PresentMode::FifoRelaxed,
@@ -1117,6 +1310,53 @@ mod tests {
             select_present_mode(&modes, PresentMode::AutoVsync),
             PresentMode::FifoRelaxed
         );
+    }
+
+    #[test]
+    fn present_policy_negotiates_mailbox_latest() {
+        let modes = [PresentMode::Fifo, PresentMode::Mailbox];
+        let negotiated = PresentPolicy::default_ui().negotiate(&modes);
+        assert_eq!(negotiated.mode, PresentMode::Mailbox);
+        assert_eq!(
+            negotiated.capability,
+            NegotiatedPresentCapability::MailboxLatest
+        );
+        assert_eq!(negotiated.desired_maximum_frame_latency, 1);
+        assert_eq!(negotiated.ready_queue, ReadyQueuePolicy::LatestOnly);
+    }
+
+    #[test]
+    fn present_policy_negotiates_fifo_backpressure_without_fake_drop_stale() {
+        let modes = [PresentMode::Fifo];
+        let negotiated = PresentPolicy::default_ui().negotiate(&modes);
+        assert_eq!(negotiated.mode, PresentMode::Fifo);
+        assert_eq!(
+            negotiated.capability,
+            NegotiatedPresentCapability::FifoBackpressure
+        );
+        // Capability enum is explicit — no unified drop_stale boolean.
+        assert_ne!(
+            negotiated.capability,
+            NegotiatedPresentCapability::MailboxLatest
+        );
+    }
+
+    #[test]
+    fn latest_ready_queue_keeps_only_latest_unsubmitted() {
+        let mut q = LatestReadyQueue::new();
+        assert!(q.is_empty());
+        assert_eq!(q.push_ready(1), None);
+        assert_eq!(q.push_ready(2), Some(1)); // dropped unsubmitted older frame
+        assert_eq!(q.push_ready(3), Some(2));
+        assert_eq!(q.len(), 1);
+        assert_eq!(q.peek(), Some(&3));
+        // Submit moves the frame out — it is no longer withdrawable from the queue.
+        assert_eq!(q.take_for_submit(), Some(3));
+        assert!(q.is_empty());
+        assert_eq!(q.take_for_submit(), None);
+        // A newly ready frame after submit does not resurrect the submitted one.
+        q.push_ready(4);
+        assert_eq!(q.take_for_submit(), Some(4));
     }
 
     #[test]

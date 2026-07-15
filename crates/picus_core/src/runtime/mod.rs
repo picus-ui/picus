@@ -1,7 +1,19 @@
+//! Per-window retained Masonry runtime and paint scheduling.
+//!
+//! [`frame_driver`] owns dirty-reason aggregation and the present decision table
+//! (Phase 1). Execution (anim tick, encode, present) remains on [`WindowRuntime`].
+
+pub(crate) mod frame_driver;
+
 use std::{
     collections::{HashMap, HashSet},
     fmt::Debug,
     sync::{Arc, Mutex, mpsc},
+};
+
+use self::frame_driver::{
+    DirtyBudget, DirtyReason, FrameDecision, FrameDriver, FrameStepResult,
+    anim_present_min_interval,
 };
 
 use crate::masonry_core::{
@@ -38,7 +50,9 @@ use bevy_window::{
 };
 use bevy_winit::{EventLoopProxy, EventLoopProxyWrapper, WinitUserEvent};
 use picus_imaging::{Layer as ImagingLayer, PreparedFrame, texture_render::Renderer};
-use picus_surface::{ExistingWindowMetrics, ExternalWindowSurface, RenderFrameResult};
+use picus_surface::{
+    ExistingWindowMetrics, ExternalWindowSurface, PresentPolicy, RenderFrameResult,
+};
 use picus_view::{
     ViewCtx,
     picus_widget::{
@@ -50,7 +64,6 @@ use picus_view::{
     },
     view::{label, sized_box, zstack},
 };
-use wgpu::PresentMode;
 use xilem::core::{
     DynMessage, MessageCtx, MessageResult, ProxyError, RawProxy, SendMessage, View, ViewId,
     ViewPathTracker,
@@ -121,16 +134,6 @@ enum RedrawSignal {
     AnimFrame,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct PaintFrameResult {
-    painted: bool,
-    wants_redraw: bool,
-    /// Animation ticked without presenting (idle anim clock or throttle skip).
-    anim_tick_only: bool,
-    paint_reasons: u32,
-    phases: crate::perf::PaintPhaseTimings,
-}
-
 #[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PointerTraceEvent {
@@ -168,10 +171,14 @@ pub struct WindowRuntime {
     needs_redraw: bool,
     needs_anim_frame: bool,
     has_painted_once: bool,
-    /// Last time an animation-driven frame was presented (spinner, etc.).
-    /// Used by the **transitional** pure-anim present throttle
-    /// (`anim_present_min_interval` / `PICUS_ANIM_PRESENT_HZ`).
-    last_anim_present: Option<std::time::Instant>,
+    /// Resize / scale metrics dirty — never anim-throttled (G5).
+    resize_dirty: bool,
+    /// Surface returned [`RenderFrameResult::Retry`] — never anim-throttled (G5).
+    retry_dirty: bool,
+    /// Theme/font registration dirty.
+    theme_or_font_dirty: bool,
+    /// Per-window frame scheduler (decision table + transitional anim throttle).
+    frame_driver: FrameDriver,
     viewport_width: f64,
     viewport_height: f64,
     window_surface: Option<ExternalWindowSurface>,
@@ -181,64 +188,6 @@ pub struct WindowRuntime {
     rebuild_count: usize,
     #[cfg(test)]
     pointer_trace: Vec<PointerTraceEvent>,
-}
-
-/// Transitional default minimum interval between animation-only presents (~30 Hz).
-///
-/// # Transitional policy (frame-pipeline Phase 0)
-///
-/// Widgets like Spinner request a paint every anim tick. Presenting that at full
-/// display rate while the window is moved by DWM causes visible ghosting because
-/// frames queue behind the compositor. This ~30 Hz pure-anim present throttle is
-/// a **temporary** drag-ghosting mitigation — **not** the product end-state.
-///
-/// - Default remains ~30 Hz so product behavior is unchanged until layered anim
-///   encode + PresentPolicy gates pass (see `docs/plans/frame-pipeline.md` G10 / P2e).
-/// - Override with `PICUS_ANIM_PRESENT_HZ` for baseline/debug only:
-///   - unset → transitional ~30 Hz (`from_millis(33)`)
-///   - `0` / `off` / `none` / `false` → disable throttle (full anim present rate)
-///   - positive number → present at most that many anim-only frames per second
-/// - Content/input/resize redraws are **never** throttled by this path.
-///
-/// TODO(frame-pipeline): remove default throttle after anim-layer isolation
-/// lands; keep env override as optional diagnostic if useful.
-const DEFAULT_ANIM_PRESENT_MIN_INTERVAL: std::time::Duration = std::time::Duration::from_millis(33);
-
-/// Parse `PICUS_ANIM_PRESENT_HZ` (or absence) into a min present interval.
-///
-/// Returns `None` when throttling is disabled (`0` / `off` / `none` / `false`).
-fn parse_anim_present_min_interval(raw: Option<&str>) -> Option<std::time::Duration> {
-    let Some(raw) = raw.map(str::trim).filter(|s| !s.is_empty()) else {
-        return Some(DEFAULT_ANIM_PRESENT_MIN_INTERVAL);
-    };
-    if raw == "0"
-        || raw.eq_ignore_ascii_case("off")
-        || raw.eq_ignore_ascii_case("none")
-        || raw.eq_ignore_ascii_case("false")
-    {
-        return None;
-    }
-    match raw.parse::<f64>() {
-        Ok(hz) if hz.is_finite() && hz > 0.0 => Some(std::time::Duration::from_secs_f64(1.0 / hz)),
-        _ => {
-            tracing::warn!(
-                value = %raw,
-                "invalid PICUS_ANIM_PRESENT_HZ; using transitional ~30Hz default"
-            );
-            Some(DEFAULT_ANIM_PRESENT_MIN_INTERVAL)
-        }
-    }
-}
-
-/// Resolve the animation-only present throttle interval.
-///
-/// Returns `None` when throttling is disabled (`PICUS_ANIM_PRESENT_HZ=0`).
-fn anim_present_min_interval() -> Option<std::time::Duration> {
-    use std::sync::OnceLock;
-    static INTERVAL: OnceLock<Option<std::time::Duration>> = OnceLock::new();
-    *INTERVAL.get_or_init(|| {
-        parse_anim_present_min_interval(std::env::var("PICUS_ANIM_PRESENT_HZ").ok().as_deref())
-    })
 }
 
 impl WindowRuntime {
@@ -346,7 +295,10 @@ impl WindowRuntime {
             needs_redraw: true,
             needs_anim_frame: true,
             has_painted_once: false,
-            last_anim_present: None,
+            resize_dirty: false,
+            retry_dirty: false,
+            theme_or_font_dirty: false,
+            frame_driver: FrameDriver::new(),
             viewport_width: initial_viewport.0,
             viewport_height: initial_viewport.1,
             window_surface: None,
@@ -762,6 +714,7 @@ impl WindowRuntime {
         self.viewport_width = width.max(1.0) as f64;
         self.viewport_height = height.max(1.0) as f64;
         self.needs_redraw = true;
+        self.resize_dirty = true;
 
         let scale = self.window_scale_factor.max(f64::EPSILON);
         let physical_width = (self.viewport_width * scale).round().max(1.0) as u32;
@@ -777,6 +730,7 @@ impl WindowRuntime {
     pub fn handle_window_scale_factor_changed(&mut self, scale_factor: f64) -> Handled {
         self.window_scale_factor = scale_factor.max(f64::EPSILON);
         self.needs_redraw = true;
+        self.resize_dirty = true;
         let _ = self
             .render_root
             .handle_window_event(WindowEvent::Rescale(self.window_scale_factor));
@@ -803,6 +757,7 @@ impl WindowRuntime {
         if let Some(surface) = self.window_surface.as_mut() {
             if surface.sync_window_metrics(metrics) {
                 self.needs_redraw = true;
+                self.resize_dirty = true;
             }
             return true;
         }
@@ -815,12 +770,17 @@ impl WindowRuntime {
             }
         };
 
-        match ExternalWindowSurface::new_from_bevy_raw_handle(
+        match ExternalWindowSurface::new_from_bevy_raw_handle_with_policy(
             raw_handle,
             metrics,
-            PresentMode::AutoVsync,
+            PresentPolicy::default_ui(),
         ) {
             Ok(surface) => {
+                tracing::debug!(
+                    capability = ?surface.negotiated_present().capability,
+                    mode = ?surface.negotiated_present().mode,
+                    "Masonry surface present policy ready"
+                );
                 self.window_surface = Some(surface);
                 self.needs_redraw = true;
                 self.has_painted_once = false;
@@ -842,55 +802,72 @@ impl WindowRuntime {
         }
     }
 
-    fn paint_frame(&mut self, delta: std::time::Duration) -> PaintFrameResult {
+    /// Collect Phase-1 dirty reasons from sticky flags + Masonry signals.
+    fn collect_dirty_budget(&self) -> DirtyBudget {
+        let mut dirty = DirtyBudget::new();
+        if !self.has_painted_once {
+            dirty.insert(DirtyReason::FirstPaint);
+        }
+        if self.resize_dirty {
+            dirty.insert(DirtyReason::ResizeMetrics);
+        }
+        if self.retry_dirty {
+            dirty.insert(DirtyReason::RetrySurface);
+        }
+        if self.theme_or_font_dirty {
+            dirty.insert(DirtyReason::ThemeOrFont);
+        }
+        if self.needs_redraw {
+            // Generic content/input redraw when not already tagged finer.
+            dirty.insert(DirtyReason::InputOrRebuild);
+        }
+        if self.needs_anim_frame || self.render_root.needs_anim() {
+            dirty.insert(DirtyReason::AnimTick);
+        }
+        if self.render_root.needs_rewrite_passes() {
+            dirty.insert(DirtyReason::LayoutRewrite);
+        }
+        dirty
+    }
+
+    /// Frame scheduling spine: [`FrameDriver`] decides; this method executes.
+    ///
+    /// Anim tick, rewrite/encode, and present are separate decision flags.
+    /// Full-window encode is still used (Phase 1); layered textures are Phase 2.
+    ///
+    /// Called from [`paint_masonry_ui`] as `window_runtime.step_frame(delta)`.
+    fn step_frame(&mut self, delta: std::time::Duration) -> FrameStepResult {
         self.drain_redraw_signals();
 
-        let first_paint = !self.has_painted_once;
-        let incoming_redraw = self.needs_redraw;
-        let needs_anim_frame = self.needs_anim_frame;
-        let render_root_needs_anim = self.render_root.needs_anim();
-        let needs_rewrite = self.render_root.needs_rewrite_passes();
-
-        let should_tick_animation = needs_anim_frame || render_root_needs_anim;
-        // Enter the paint path for content changes, rewrite work, or animation
-        // ticks. Animation alone must not force a full Vello present every frame
-        // (cursor blink / fade timers re-request anim far more often than pixels
-        // change).
-        let should_enter = first_paint || incoming_redraw || should_tick_animation || needs_rewrite;
-        if !should_enter {
-            return PaintFrameResult {
-                painted: false,
-                wants_redraw: false,
-                anim_tick_only: false,
-                paint_reasons: crate::perf::PaintReason::Skipped as u32,
-                phases: crate::perf::PaintPhaseTimings::default(),
-            };
+        let pre_dirty = self.collect_dirty_budget();
+        let entry = FrameDriver::decide_entry(&pre_dirty);
+        if !entry.enter_work {
+            return FrameStepResult::skipped();
         }
 
-        let mut paint_reasons = 0u32;
-        let mut phases = crate::perf::PaintPhaseTimings::default();
-        if first_paint {
-            paint_reasons |= crate::perf::PaintReason::FirstPaint as u32;
-        }
-        if incoming_redraw {
-            paint_reasons |= crate::perf::PaintReason::NeedsRedraw as u32;
-        }
-        if needs_anim_frame {
-            paint_reasons |= crate::perf::PaintReason::NeedsAnimFrame as u32;
-        }
-        if render_root_needs_anim {
+        let mut paint_reasons = FrameDriver::paint_reasons_mask(&pre_dirty);
+        if self.render_root.needs_anim() {
             paint_reasons |= crate::perf::PaintReason::RenderRootNeedsAnim as u32;
         }
-        if needs_rewrite {
-            paint_reasons |= crate::perf::PaintReason::NeedsRewritePasses as u32;
-        }
+        let mut phases = crate::perf::PaintPhaseTimings::default();
+
+        // Snapshot sticky flags before consuming them for this frame.
+        let incoming_redraw = self.needs_redraw;
+        let first_paint = !self.has_painted_once;
+        let resize_dirty = self.resize_dirty;
+        let retry_dirty = self.retry_dirty;
+        let theme_or_font_dirty = self.theme_or_font_dirty;
+        let had_unthrottled = pre_dirty.requires_unthrottled_present();
 
         self.needs_redraw = false;
         self.needs_anim_frame = false;
+        self.resize_dirty = false;
+        self.retry_dirty = false;
+        self.theme_or_font_dirty = false;
 
-        if should_tick_animation {
-            // AnimFrame already runs rewrite passes and may emit RequestRedraw
-            // only when a widget actually dirtied paint (e.g. cursor blink flip).
+        if entry.do_anim_tick {
+            // AnimFrame may run rewrite and emit RequestRedraw when pixels change.
+            // That rewrite cost is attributed to `phases.anim_tick` (perf honesty).
             let anim_started = std::time::Instant::now();
             let _ = self
                 .render_root
@@ -899,58 +876,66 @@ impl WindowRuntime {
             self.drain_redraw_signals();
         }
 
-        // Present only when pixels may have changed. Pure anim ticks keep the
-        // event loop alive via wants_redraw without rebuilding/submitting a scene.
-        // Re-check rewrite *after* AnimFrame — the pre-tick flag is often stale.
-        let paint_needed = first_paint
-            || incoming_redraw
-            || self.needs_redraw
-            || self.render_root.needs_rewrite_passes();
-        if !paint_needed {
+        // Post-tick dirty budget for encode/present decision.
+        let mut post_dirty = DirtyBudget::new();
+        if first_paint {
+            post_dirty.insert(DirtyReason::FirstPaint);
+        }
+        if resize_dirty {
+            post_dirty.insert(DirtyReason::ResizeMetrics);
+        }
+        if retry_dirty {
+            post_dirty.insert(DirtyReason::RetrySurface);
+        }
+        if theme_or_font_dirty {
+            post_dirty.insert(DirtyReason::ThemeOrFont);
+        }
+        if incoming_redraw {
+            // Pre-tick redraw is content/input/rebuild (unthrottled).
+            post_dirty.insert(DirtyReason::InputOrRebuild);
+        }
+        if self.needs_redraw {
+            // Raised during AnimFrame (e.g. Spinner `request_paint_only`) → anim paint.
+            // Full-window encode still; layer isolation is Phase 2.
+            post_dirty.insert(DirtyReason::AnimPaint { layer: 0 });
+        }
+        if self.render_root.needs_rewrite_passes() {
+            post_dirty.insert(DirtyReason::LayoutRewrite);
+        }
+        if self.needs_anim_frame || self.render_root.needs_anim() {
+            post_dirty.insert(DirtyReason::AnimTick);
+        }
+
+        let now = std::time::Instant::now();
+        let present_decision =
+            self.frame_driver
+                .decide_present(&post_dirty, anim_present_min_interval(), now);
+
+        if !present_decision.do_encode {
             paint_reasons |= crate::perf::PaintReason::AnimTickNoPresent as u32;
-            return PaintFrameResult {
+            if present_decision.throttled_anim_present {
+                // Keep the anim clock scheduled; skip expensive encode/present.
+                self.needs_anim_frame = true;
+            }
+            return FrameStepResult {
                 painted: false,
                 wants_redraw: self.needs_redraw
                     || self.needs_anim_frame
                     || self.render_root.needs_anim()
-                    || self.render_root.needs_rewrite_passes(),
+                    || self.render_root.needs_rewrite_passes()
+                    || present_decision.throttled_anim_present,
                 anim_tick_only: true,
                 paint_reasons,
                 phases,
+                decision: present_decision,
             };
         }
 
-        // Transitional animation-only present throttle (~30 Hz default).
-        // Content/input-driven redraws (`incoming_redraw`) stay unrestricted.
-        // See `anim_present_min_interval` / `PICUS_ANIM_PRESENT_HZ`.
-        let anim_driven_present = should_tick_animation && !incoming_redraw && !first_paint;
-        if anim_driven_present && let Some(min_interval) = anim_present_min_interval() {
-            let now = std::time::Instant::now();
-            if self
-                .last_anim_present
-                .is_some_and(|last| now.duration_since(last) < min_interval)
-            {
-                paint_reasons |= crate::perf::PaintReason::AnimTickNoPresent as u32;
-                // Keep requesting frames so the anim clock continues; just skip
-                // the expensive Vello encode/present this tick.
-                self.needs_anim_frame = true;
-                return PaintFrameResult {
-                    painted: false,
-                    wants_redraw: true,
-                    anim_tick_only: true,
-                    paint_reasons,
-                    phases,
-                };
-            }
-            self.last_anim_present = Some(now);
-        }
-
-        // Consume the redraw flag we are about to fulfill.
+        // About to encode/present — clear pending paint flag from anim.
         self.needs_redraw = false;
 
         let logical_size = self.render_root.size();
-        // Root `redraw()` only. Rewrite that ran inside AnimFrame is already
-        // attributed to `phases.anim_tick` (see perf module B/C notes).
+        // Root `redraw()` only. Rewrite inside AnimFrame is already in anim_tick.
         // `scene_build_anim` stays 0 until layered isolation (Phase 2).
         let scene_started = std::time::Instant::now();
         let (visual_layers, _tree_update) = self.render_root.redraw();
@@ -958,12 +943,14 @@ impl WindowRuntime {
 
         let Some(surface) = self.window_surface.as_mut() else {
             self.needs_redraw = true;
-            return PaintFrameResult {
+            self.retry_dirty = true;
+            return FrameStepResult {
                 painted: false,
                 wants_redraw: true,
                 anim_tick_only: false,
                 paint_reasons,
                 phases,
+                decision: present_decision,
             };
         };
 
@@ -980,13 +967,14 @@ impl WindowRuntime {
             })
             .collect::<Vec<_>>();
         let Some(root_layer) = visual_layers.root_layer() else {
-            return PaintFrameResult {
+            return FrameStepResult {
                 painted: false,
                 wants_redraw: self.render_root.needs_anim()
                     || self.render_root.needs_rewrite_passes(),
                 anim_tick_only: false,
                 paint_reasons,
                 phases,
+                decision: present_decision,
             };
         };
         let VisualLayerKind::Scene(root_scene) = &root_layer.kind else {
@@ -1015,20 +1003,43 @@ impl WindowRuntime {
         let painted = matches!(render_result, RenderFrameResult::Presented);
         if painted {
             self.has_painted_once = true;
+            // Record anim-driven present for transitional throttle bookkeeping.
+            if !had_unthrottled
+                && (entry.do_anim_tick
+                    || post_dirty
+                        .iter()
+                        .any(|r| matches!(r, DirtyReason::AnimPaint { .. })))
+            {
+                self.frame_driver.note_anim_present(now);
+            }
         } else if matches!(render_result, RenderFrameResult::Retry) {
+            // Retry retains dirty so the next frame is not anim-throttled away (P1.6).
             self.needs_redraw = true;
+            self.retry_dirty = true;
         }
         self.drain_redraw_signals();
 
-        PaintFrameResult {
+        let decision = FrameDecision {
+            do_anim_tick: entry.do_anim_tick,
+            do_rewrite: true,
+            do_encode: true,
+            do_present: painted || present_decision.do_present,
+            anim_tick_only: false,
+            enter_work: true,
+            throttled_anim_present: false,
+        };
+
+        FrameStepResult {
             painted,
             wants_redraw: self.needs_redraw
                 || self.needs_anim_frame
+                || self.retry_dirty
                 || self.render_root.needs_anim()
                 || self.render_root.needs_rewrite_passes(),
             anim_tick_only: false,
             paint_reasons,
             phases,
+            decision,
         }
     }
 
@@ -1064,6 +1075,7 @@ impl WindowRuntime {
                     metrics.physical_height.max(1),
                 )));
             self.needs_redraw = true;
+            self.resize_dirty = true;
         }
 
         if transparency_changed {
@@ -1084,6 +1096,8 @@ impl WindowRuntime {
 
         self.render_root
             .register_fonts(crate::masonry_core::peniko::Blob::new(Arc::new(font_bytes)));
+        self.theme_or_font_dirty = true;
+        self.needs_redraw = true;
         true
     }
 }
@@ -1967,7 +1981,8 @@ pub fn paint_masonry_ui(
         let Some(window_runtime) = runtime.window_mut(window_entity) else {
             continue;
         };
-        let result = window_runtime.paint_frame(time.delta());
+        // FrameDriver decision+execution spine (Phase 1).
+        let result = window_runtime.step_frame(time.delta());
         wants_redraw |= result.wants_redraw;
         // Skip pure idle (Skipped reason with no work) from frame_id accounting.
         let entered_work = result.paint_reasons & crate::perf::PaintReason::Skipped as u32 == 0;
@@ -3017,46 +3032,35 @@ mod tests {
     }
 
     #[test]
-    fn anim_present_hz_default_is_transitional_30hz() {
-        assert_eq!(
-            parse_anim_present_min_interval(None),
-            Some(DEFAULT_ANIM_PRESENT_MIN_INTERVAL)
+    fn retry_dirty_appears_in_dirty_budget_as_unthrottled() {
+        // P1.6: RetrySurface is retained on WindowRuntime until step_frame
+        // consumes it; while set it must force unthrottled present (G5).
+        let mut runtime = MasonryRuntime {
+            windows: HashMap::new(),
+            primary_window: None,
+            event_loop_proxy: Arc::new(Mutex::new(None)),
+            action_sink: InternalUiActionSink::default(),
+        };
+        let entity = Entity::from_bits(99);
+        let window = runtime.ensure_window(entity, true);
+        window.retry_dirty = true;
+        window.needs_redraw = true;
+        let dirty = window.collect_dirty_budget();
+        assert!(
+            dirty.has(frame_driver::DirtyReason::RetrySurface),
+            "retry_dirty must appear in DirtyBudget for unthrottled present"
         );
-        assert_eq!(
-            parse_anim_present_min_interval(Some("")),
-            Some(DEFAULT_ANIM_PRESENT_MIN_INTERVAL)
-        );
-        assert_eq!(
-            parse_anim_present_min_interval(Some("   ")),
-            Some(DEFAULT_ANIM_PRESENT_MIN_INTERVAL)
-        );
-    }
+        assert!(dirty.requires_unthrottled_present());
 
-    #[test]
-    fn anim_present_hz_zero_disables_throttle() {
-        assert_eq!(parse_anim_present_min_interval(Some("0")), None);
-        assert_eq!(parse_anim_present_min_interval(Some("off")), None);
-        assert_eq!(parse_anim_present_min_interval(Some("NONE")), None);
-        assert_eq!(parse_anim_present_min_interval(Some("false")), None);
-    }
-
-    #[test]
-    fn anim_present_hz_positive_sets_interval() {
-        let interval = parse_anim_present_min_interval(Some("60")).expect("60 Hz enabled");
-        assert!((interval.as_secs_f64() - (1.0 / 60.0)).abs() < 1e-9);
-        let interval = parse_anim_present_min_interval(Some("10")).expect("10 Hz enabled");
-        assert!((interval.as_secs_f64() - 0.1).abs() < 1e-9);
-    }
-
-    #[test]
-    fn anim_present_hz_invalid_falls_back_to_default() {
-        assert_eq!(
-            parse_anim_present_min_interval(Some("not-a-number")),
-            Some(DEFAULT_ANIM_PRESENT_MIN_INTERVAL)
-        );
-        assert_eq!(
-            parse_anim_present_min_interval(Some("-5")),
-            Some(DEFAULT_ANIM_PRESENT_MIN_INTERVAL)
+        // After a failed present path, flags stay so the next frame still presents.
+        let mut driver = FrameDriver::new();
+        let t0 = std::time::Instant::now();
+        driver.note_anim_present(t0);
+        let decision =
+            driver.decide_present(&dirty, Some(std::time::Duration::from_millis(33)), t0);
+        assert!(
+            decision.do_present,
+            "RetrySurface must not be blocked by anim throttle"
         );
     }
 }

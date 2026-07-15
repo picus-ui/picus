@@ -119,11 +119,17 @@ DirtyReason =
 ```text
 PresentPolicy {
   mode_preference: Mailbox > FifoRelaxed > AutoVsync > Fifo
-  max_frame_latency: 1
-  drop_stale: true
-  // 可选：EnterSizeMove 时 PreferFreshness 更激进
+  desired_maximum_frame_latency: 1 // backend hint，不是硬保证
+  ready_queue: LatestOnly           // 只丢尚未提交的旧合成结果
+  // 协商结果（勿伪造统一 drop_stale）:
+  //   MailboxLatest     — GPU/compositor 可替换已排队帧
+  //   FifoBackpressure  — CPU 侧合并未提交帧 + 背压；已 submit 的 FIFO 帧不可撤回
 }
 ```
+
+`drop_stale` 不作为跨 present mode 的布尔承诺：已经提交给 FIFO/FifoRelaxed
+swapchain 的帧无法由 Picus 撤回。运行时必须记录实际模式和生效的 fallback
+策略，验收报告按模式分组。
 
 ### 3.5 与 Bevy 的边界
 

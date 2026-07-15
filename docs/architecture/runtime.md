@@ -44,14 +44,35 @@ path. Full plan: [plans/frame-pipeline.md](../plans/frame-pipeline.md).
 | **C Scene build** | Rewrite + build/encode scene (today: full window; target: painter-order entries) | Only when corresponding content changes | Uncommitted work may merge |
 | **D Present** | Submit the latest ready composite | Display path | Mailbox drops stale; FIFO may only backpressure |
 
-**Today (Phase 0)** these timelines still share `WindowRuntime::paint_frame`: anim
-tick, full-window redraw/encode, and present remain on one path. Continuous
-widgets (e.g. Spinner) that request every anim tick can still force full-window
-encode+present. A **transitional** pure-animation present throttle (~30 Hz
-default; override `PICUS_ANIM_PRESENT_HZ` with a positive Hz, or
-`0` / `off` / `none` / `false` to disable) reduces DWM drag ghosting without
-changing content/resize present rates. That throttle is **not** the end state;
-it is removed only after layered anim encode gates pass (G10).
+**Today (Phase 1)** each window’s paint path runs through an internal
+`FrameDriver` (`picus_core::runtime::frame_driver`, not on the app facade).
+`paint_masonry_ui` → `WindowRuntime::step_frame` collects a `DirtyBudget`
+(`FirstPaint`, `InputOrRebuild`, `LayoutRewrite`, `ResizeMetrics`,
+`AnimPaint { layer }`, `AnimTick`, `CompositorPlan`, `ThemeOrFont`,
+`RetrySurface`) and separates `do_anim_tick` / `do_rewrite` / `do_encode` /
+`do_present`. Execution (Masonry anim tick, full-window Vello encode, present)
+still lives on `WindowRuntime`; the driver owns the decision table and the
+transitional anim present throttle.
+
+**Hard rule (G5):** `ResizeMetrics`, `InputOrRebuild`, `FirstPaint`, and
+`RetrySurface` are **never** skipped by the anim present throttle. Continuous
+widgets (e.g. Spinner) may still full-window encode this phase; scheduling
+semantics are correct so interaction/resize redraws are not blocked.
+
+A **transitional** pure-animation present throttle (~30 Hz default; override
+`PICUS_ANIM_PRESENT_HZ` with a positive Hz, or `0` / `off` / `none` / `false` to
+disable) reduces DWM drag ghosting. That throttle is **not** the end state; it is
+removed only after layered anim encode gates pass (G10). Anim tick and present
+are **not** inseparably tied: pure `AnimTick` may skip encode/present while
+keeping the event loop awake.
+
+**PresentPolicy (G7):** surface creation negotiates an explicit capability —
+`MailboxLatest` (GPU/compositor may replace queued frames) or
+`FifoBackpressure` (CPU-side `LatestReadyQueue` coalesces only *unsubmitted*
+frames; submitted FIFO frames are **not** claimed withdrawable). There is no
+fake unified `drop_stale` boolean across modes. Runtime logs mode + strategy at
+surface init. Shared helper: `picus_surface::select_present_mode` /
+`PresentPolicy::negotiate`.
 
 **Observability:** set `PICUS_FRAME_TIMING=1` for per-window phase averages and a
 monotonic `frame_id` (`input_dispatch_ms`, `anim_tick_ms`,
@@ -60,11 +81,11 @@ monotonic `frame_id` (`input_dispatch_ms`, `anim_tick_ms`,
 `anim_tick_only`). These are **CPU submit-path** times — not displayed-frame
 latency.
 
-**Phase instrumentation today (Phase 0 honesty):** `anim_tick_ms` includes
-rewrite that Masonry performs inside `AnimFrame`. `scene_build_base_ms` is only
-the subsequent root `redraw()` call. Present-path averages (`encode_*`,
-`composite`, `present_submit`, …) and process `paint_ms` / `present_ms` are over
-**content paint attempts** (`frames − anim_tick_only`), not diluted by throttled
+**Phase instrumentation honesty:** `anim_tick_ms` includes rewrite that Masonry
+performs inside `AnimFrame`. `scene_build_base_ms` is only the subsequent root
+`redraw()` call. Present-path averages (`encode_*`, `composite`,
+`present_submit`, …) and process `paint_ms` / `present_ms` are over **content
+paint attempts** (`frames − anim_tick_only`), not diluted by throttled
 anim-only zeros. Process log `frames` counts **per-window paint attempts**; ECS
 averages use `bevy_frames`. Idle pure-`Skipped` paint does not assign `frame_id`s
 but still flushes process summaries on a ~1s wall clock.
