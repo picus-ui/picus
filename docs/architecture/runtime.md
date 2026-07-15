@@ -227,8 +227,9 @@ present success                 → mark_encoded + clear host dirty (sticky)
 present fail/retry              → retain dirty (no permanent spin beyond Phase 1 rules)
 resize/DPI                      → metrics_generation++ from surface.physical_size();
                                   drop all layer targets; FirstPaint-all
-alpha / Mica                    → layer targets straight-alpha; intermediate stack is
-                                  replace + straight-alpha over; present blitter premuls once
+alpha / Mica                    → layer targets straight-alpha; when present needs premul,
+                                  intermediate is held premul (layer0 convert + src-over,
+                                  final replace) so semi-transparent upper layers are correct
 ```
 
 **Not yet (do not overclaim):**

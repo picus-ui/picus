@@ -465,19 +465,24 @@ pub struct ExternalWindowSurface {
     render_cx: RenderContext,
     surface: RenderSurface<'static>,
     scale_factor: f64,
+    /// Window requested a transparent composition surface (Mica / clear).
+    window_transparent: bool,
     /// Actual negotiated present capability (G7); not a fake unified drop_stale.
     negotiated_present: NegotiatedPresent,
     /// Painter-order intermediate textures keyed by compositor layer id (P2.3).
-    /// Layer contents are **straight-alpha** (same as Vello targets).
+    /// Layer contents from Vello are **straight-alpha**; ordered stack may convert
+    /// to premul in the intermediate when present needs premultiply (Issue 9).
     layer_targets: HashMap<u64, LayerTextureTarget>,
     /// Metrics generation last applied to layer targets (P2.6).
     layer_metrics_generation: LayerMetricsGeneration,
-    /// Replace (no blend) blitter for layer 0 → intermediate stack (straight alpha).
+    /// Replace (no blend) blitter — layer0 when stacking in straight space, or
+    /// final present blit when intermediate is already premul.
     layer_replace_blitter: TextureBlitter,
-    /// Straight-alpha src-over for layer 1+ → intermediate stack.
-    ///
-    /// Must **not** use the present premul blitter: Vello writes straight alpha;
-    /// present-time premultiply happens **once** via [`RenderSurface::blitter`].
+    /// Straight → premul convert for layer0 when intermediate is held in premul space
+    /// (same factors as present premul: SrcAlpha / Zero).
+    layer_premul_convert_blitter: TextureBlitter,
+    /// Src-over for upper layers: straight src over intermediate.
+    /// Safe when dest is premul (Issue 9) or when dest is opaque (a≈1).
     layer_stack_blitter: TextureBlitter,
 }
 
@@ -591,16 +596,20 @@ impl ExternalWindowSurface {
         let dev_id = surface.dev_id;
         let device = &render_cx.devices[dev_id].device;
         let layer_replace_blitter = create_layer_replace_blitter(device, surface.format);
+        let layer_premul_convert_blitter =
+            create_layer_premul_convert_blitter(device, surface.format);
         let layer_stack_blitter = create_layer_stack_blitter(device, surface.format);
 
         Ok(Self {
             render_cx,
             surface,
             scale_factor: metrics.scale_factor,
+            window_transparent: metrics.transparent,
             negotiated_present: negotiated,
             layer_targets: HashMap::new(),
             layer_metrics_generation: LayerMetricsGeneration(0),
             layer_replace_blitter,
+            layer_premul_convert_blitter,
             layer_stack_blitter,
         })
     }
@@ -622,6 +631,7 @@ impl ExternalWindowSurface {
     /// before the next ordered encode.
     pub fn sync_window_metrics(&mut self, metrics: ExistingWindowMetrics) -> bool {
         self.scale_factor = metrics.scale_factor;
+        self.window_transparent = metrics.transparent;
         let mut changed = false;
 
         if self.surface.config.width != metrics.physical_width
@@ -650,6 +660,16 @@ impl ExternalWindowSurface {
         }
 
         changed
+    }
+
+    /// Whether ordered intermediate stack is held in premultiplied space.
+    ///
+    /// When true, layer0 is converted straight→premul and the final swapchain
+    /// blit is replace (already premul). When false, stack stays straight-alpha
+    /// and the present blitter may convert once (opaque / non-premul present).
+    #[inline]
+    fn ordered_stack_holds_premul(&self) -> bool {
+        needs_premultiplied_blit(self.surface.config.alpha_mode, self.window_transparent)
     }
 
     /// Align intermediate layer targets with the core [`LayerMetricsGeneration`].
@@ -964,13 +984,19 @@ impl ExternalWindowSurface {
             }
         }
 
-        // --- composite: straight-alpha stack → target, then present blitter once ---
+        // --- composite into intermediate, then present once ---
         //
-        // Contract (matches single-path + Mica tests):
-        // - Layer textures are straight-alpha Vello output.
-        // - Intermediate stack never uses the present premul blitter.
-        // - Present premultiply (when needed) happens exactly once:
-        //   target_view → swapchain via surface.blitter.
+        // Layer textures are straight-alpha Vello output.
+        //
+        // When present needs premul (Mica / PreMultiplied) the intermediate is
+        // held in **premul** space (Issue 9):
+        //   layer0: straight→premul convert (SrcAlpha/Zero)
+        //   layer1+: straight src over premul dest (SrcAlpha/OneMinusSrcAlpha)
+        //   final:  replace (already premul — never double-premul)
+        //
+        // Otherwise intermediate stays straight-alpha; final uses surface.blitter
+        // (replace on opaque paths).
+        let stack_premul = self.ordered_stack_holds_premul();
         let composite_started = std::time::Instant::now();
         let device = &self.render_cx.devices[dev_id].device;
         let queue = &self.render_cx.devices[dev_id].queue;
@@ -1000,15 +1026,24 @@ impl ExternalWindowSurface {
                     .get(&entry.layer_id)
                     .expect("layer target required for composite");
                 if i == 0 {
-                    // Replace into intermediate (no blend, no premul).
-                    self.layer_replace_blitter.copy(
-                        device,
-                        &mut encoder,
-                        &src.view,
-                        &self.surface.target_view,
-                    );
+                    if stack_premul {
+                        // Straight → premul into intermediate.
+                        self.layer_premul_convert_blitter.copy(
+                            device,
+                            &mut encoder,
+                            &src.view,
+                            &self.surface.target_view,
+                        );
+                    } else {
+                        self.layer_replace_blitter.copy(
+                            device,
+                            &mut encoder,
+                            &src.view,
+                            &self.surface.target_view,
+                        );
+                    }
                 } else {
-                    // Straight-alpha src-over (Vello convention).
+                    // Upper layers: straight src over intermediate (premul or opaque dest).
                     self.layer_stack_blitter.copy(
                         device,
                         &mut encoder,
@@ -1017,13 +1052,22 @@ impl ExternalWindowSurface {
                     );
                 }
             }
-            // Single present-path blit (may premultiply for Mica / PreMultiplied).
-            self.surface.blitter.copy(
-                device,
-                &mut encoder,
-                &self.surface.target_view,
-                &surface_view,
-            );
+            if stack_premul {
+                // Intermediate already premul — replace into swapchain.
+                self.layer_replace_blitter.copy(
+                    device,
+                    &mut encoder,
+                    &self.surface.target_view,
+                    &surface_view,
+                );
+            } else {
+                self.surface.blitter.copy(
+                    device,
+                    &mut encoder,
+                    &self.surface.target_view,
+                    &surface_view,
+                );
+            }
             queue.submit([encoder.finish()]);
         });
         if !composite_errors.is_empty() {
@@ -1496,17 +1540,35 @@ fn create_blitter(
     }
 }
 
-/// Replace blitter for intermediate stack layer 0 (no blend, no present premul).
+/// Replace blitter (no blend) for intermediate layer0 (straight path) or final
+/// present when intermediate is already premultiplied.
 fn create_layer_replace_blitter(device: &Device, format: TextureFormat) -> TextureBlitter {
     TextureBlitter::new(device, format)
 }
 
-/// Straight-alpha src-over for stacking Vello layer targets into the intermediate.
+/// Straight-alpha → premultiplied convert (layer0 when intermediate holds premul).
+///
+/// Same color factors as the present premul blitter (`SrcAlpha` / `Zero`).
+fn create_layer_premul_convert_blitter(device: &Device, format: TextureFormat) -> TextureBlitter {
+    const PREMUL_CONVERT: wgpu::BlendState = wgpu::BlendState {
+        alpha: wgpu::BlendComponent::REPLACE,
+        color: wgpu::BlendComponent {
+            src_factor: wgpu::BlendFactor::SrcAlpha,
+            dst_factor: wgpu::BlendFactor::Zero,
+            operation: wgpu::BlendOperation::Add,
+        },
+    };
+    TextureBlitterBuilder::new(device, format)
+        .blend_state(PREMUL_CONVERT)
+        .build()
+}
+
+/// Src-over for upper Vello layers (straight src) onto the intermediate.
 ///
 /// Color: `Cs*As + Cd*(1-As)`; alpha: `As + Ad*(1-As)`.
-/// Do **not** use for present — that path may premultiply once via [`create_blitter`].
+/// Correct when dest is **premul** (Mica stack) or dest is fully opaque.
 fn create_layer_stack_blitter(device: &Device, format: TextureFormat) -> TextureBlitter {
-    const STRAIGHT_ALPHA_OVER: wgpu::BlendState = wgpu::BlendState {
+    const STRAIGHT_SRC_OVER: wgpu::BlendState = wgpu::BlendState {
         color: wgpu::BlendComponent {
             src_factor: wgpu::BlendFactor::SrcAlpha,
             dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
@@ -1519,15 +1581,8 @@ fn create_layer_stack_blitter(device: &Device, format: TextureFormat) -> Texture
         },
     };
     TextureBlitterBuilder::new(device, format)
-        .blend_state(STRAIGHT_ALPHA_OVER)
+        .blend_state(STRAIGHT_SRC_OVER)
         .build()
-}
-
-/// Blend factors used by intermediate layer stacking (testable inventory).
-#[cfg(test)]
-fn layer_stack_blend_is_straight_alpha_over() -> bool {
-    // Documented contract: SrcAlpha / OneMinusSrcAlpha color, One / OneMinusSrcAlpha alpha.
-    true
 }
 
 fn needs_premultiplied_blit(alpha_mode: CompositeAlphaMode, transparent: bool) -> bool {
@@ -2207,16 +2262,15 @@ mod tests {
         }
     }
 
-    /// Ordered multi-layer composite: straight-alpha stack intermediate, present
-    /// premul **once** (Issue 1). Mirrors `render_ordered_frame` blit sequence.
+    /// Ordered multi-layer composite for Mica/premul present (Issues 1 + 9).
+    ///
+    /// Production path when `ordered_stack_holds_premul()`:
+    /// layer0 premul-convert → intermediate; layer1+ src-over; final **replace**.
     ///
     /// Layer 0 = full BLIT_TEST_SOURCE (straight alpha).
-    /// Layer 1 = transparent everywhere except (0,1) overwrites with opaque green.
-    /// Final present uses the same premultiply blitter as single-path Mica.
+    /// Layer 1 = transparent except opaque green at (0,1).
     #[test]
     fn ordered_multi_layer_straight_alpha_stack_then_present_premul_once() {
-        assert!(layer_stack_blend_is_straight_alpha_over());
-
         let Some((device, queue)) = create_headless_device() else {
             eprintln!("skipping ordered multi-layer GPU test: no compatible wgpu adapter");
             return;
@@ -2292,13 +2346,8 @@ mod tests {
         );
 
         let replace = create_layer_replace_blitter(&device, TextureFormat::Rgba8Unorm);
+        let premul_convert = create_layer_premul_convert_blitter(&device, TextureFormat::Rgba8Unorm);
         let stack = create_layer_stack_blitter(&device, TextureFormat::Rgba8Unorm);
-        let present = create_blitter(
-            &device,
-            TextureFormat::Rgba8Unorm,
-            CompositeAlphaMode::PreMultiplied,
-            true,
-        );
 
         let l0_view = layer0.create_view(&wgpu::TextureViewDescriptor::default());
         let l1_view = layer1.create_view(&wgpu::TextureViewDescriptor::default());
@@ -2308,11 +2357,11 @@ mod tests {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("ordered multi-layer composite"),
         });
-        // Same sequence as render_ordered_frame intermediate stack.
-        replace.copy(&device, &mut encoder, &l0_view, &mid_view);
+        // Mirrors render_ordered_frame when ordered_stack_holds_premul().
+        premul_convert.copy(&device, &mut encoder, &l0_view, &mid_view);
         stack.copy(&device, &mut encoder, &l1_view, &mid_view);
-        // Present blitter once (would double-premul if intermediate already premul).
-        present.copy(&device, &mut encoder, &mid_view, &dest_view);
+        // Already premul — replace final (not present premul again).
+        replace.copy(&device, &mut encoder, &mid_view, &dest_view);
         queue.submit(Some(encoder.finish()));
 
         let pixels = readback_rgba8_pixels(
@@ -2333,9 +2382,9 @@ mod tests {
         assert_eq!(
             pixel_at(&pixels, 0, 1),
             [0, 255, 0, 255],
-            "straight-alpha over must let opaque green replace red"
+            "src-over must let opaque green replace red"
         );
-        // Semi-transparent base pixels get present premul once — not a².
+        // Semi-transparent base pixels: single premul (via layer0 convert), not a².
         assert_approx_premultiplied(
             BLIT_TEST_SOURCE[1],
             pixel_at(&pixels, 1, 0),
@@ -2346,6 +2395,121 @@ mod tests {
             pixel_at(&pixels, 1, 1),
             "ordered quarter-blue must be single-premul not double",
         );
+    }
+
+    /// Issue 9: semi-transparent **upper** layer over opaque base must not be
+    /// darkened by a second present premul (intermediate held in premul space).
+    #[test]
+    fn ordered_semi_transparent_upper_layer_over_opaque_no_double_premul() {
+        let Some((device, queue)) = create_headless_device() else {
+            eprintln!("skipping ordered upper-layer GPU test: no compatible wgpu adapter");
+            return;
+        };
+
+        let tex_usage = TextureUsages::TEXTURE_BINDING
+            | TextureUsages::COPY_DST
+            | TextureUsages::RENDER_ATTACHMENT;
+
+        // Layer0: opaque red everywhere.
+        let layer0_px = [[255u8, 0, 0, 255]; 4];
+        let layer0 = create_rgba8_texture(
+            &device,
+            BLIT_TEST_WIDTH,
+            BLIT_TEST_HEIGHT,
+            tex_usage,
+            "upper-semi-layer0",
+        );
+        write_rgba8_pixels(
+            &queue,
+            &layer0,
+            BLIT_TEST_WIDTH,
+            BLIT_TEST_HEIGHT,
+            &layer0_px,
+        );
+
+        // Layer1: half-white only at (1,0); rest transparent.
+        let mut layer1_px = [[0u8, 0, 0, 0]; 4];
+        layer1_px[1] = [255, 255, 255, 128]; // (1,0)
+        let layer1 = create_rgba8_texture(
+            &device,
+            BLIT_TEST_WIDTH,
+            BLIT_TEST_HEIGHT,
+            tex_usage,
+            "upper-semi-layer1",
+        );
+        write_rgba8_pixels(
+            &queue,
+            &layer1,
+            BLIT_TEST_WIDTH,
+            BLIT_TEST_HEIGHT,
+            &layer1_px,
+        );
+
+        let intermediate = create_rgba8_texture(
+            &device,
+            BLIT_TEST_WIDTH,
+            BLIT_TEST_HEIGHT,
+            TextureUsages::TEXTURE_BINDING
+                | TextureUsages::RENDER_ATTACHMENT
+                | TextureUsages::COPY_SRC
+                | TextureUsages::COPY_DST,
+            "upper-semi-mid",
+        );
+        let destination = create_rgba8_texture(
+            &device,
+            BLIT_TEST_WIDTH,
+            BLIT_TEST_HEIGHT,
+            TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC | TextureUsages::COPY_DST,
+            "upper-semi-dest",
+        );
+
+        let replace = create_layer_replace_blitter(&device, TextureFormat::Rgba8Unorm);
+        let premul_convert = create_layer_premul_convert_blitter(&device, TextureFormat::Rgba8Unorm);
+        let stack = create_layer_stack_blitter(&device, TextureFormat::Rgba8Unorm);
+
+        let l0_view = layer0.create_view(&wgpu::TextureViewDescriptor::default());
+        let l1_view = layer1.create_view(&wgpu::TextureViewDescriptor::default());
+        let mid_view = intermediate.create_view(&wgpu::TextureViewDescriptor::default());
+        let dest_view = destination.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("ordered upper semi composite"),
+        });
+        premul_convert.copy(&device, &mut encoder, &l0_view, &mid_view);
+        stack.copy(&device, &mut encoder, &l1_view, &mid_view);
+        replace.copy(&device, &mut encoder, &mid_view, &dest_view);
+        queue.submit(Some(encoder.finish()));
+
+        let pixels = readback_rgba8_pixels(
+            &device,
+            &queue,
+            &destination,
+            BLIT_TEST_WIDTH,
+            BLIT_TEST_HEIGHT,
+        );
+
+        // Uncovered opaque red stays opaque red.
+        assert_eq!(pixel_at(&pixels, 0, 0), [255, 0, 0, 255]);
+
+        // Half-white over premul red: Cout = (255,255,255)*0.5 + (255,0,0)*0.5
+        // ≈ (255, 128, 128), A=255. A wrong double-premul path would darken RGB.
+        let blended = pixel_at(&pixels, 1, 0);
+        assert_eq!(blended[3], 255, "result must be opaque; got {blended:?}");
+        for (ch, (got, exp)) in blended[..3]
+            .iter()
+            .zip([255u8, 128, 128].iter())
+            .enumerate()
+        {
+            let delta = got.abs_diff(*exp);
+            assert!(
+                delta <= 1,
+                "channel {ch}: expected ~{exp} got {got}; full {blended:?} (double-premul would be darker)"
+            );
+        }
+
+        // Contrast: if we had wrongly present-premul'd coverage-weighted straight
+        // intermediate, half-white-over-red could collapse; ensure not near black.
+        assert!(blended[0] > 200, "R must stay bright: {blended:?}");
     }
 
     #[test]

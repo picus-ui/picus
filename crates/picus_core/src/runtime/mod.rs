@@ -1372,6 +1372,14 @@ impl WindowRuntime {
     }
 }
 
+/// True when coalesced visual runs align with the compositor plan length (Issue 10).
+///
+/// Empty visual plan may still produce a single fallback CachedScene entry.
+#[inline]
+fn visual_runs_match_plan_len(runs_len: usize, plan_len: usize) -> bool {
+    (runs_len == 0 && plan_len <= 1) || runs_len == plan_len
+}
+
 /// Encode dirty painter-order entries and composite (multi-entry path, P2.3–P2.4).
 fn encode_ordered_composite(
     registry: &LayerRegistry,
@@ -1388,9 +1396,7 @@ fn encode_ordered_composite(
     // Same run coalescing as LayerRegistry::rebuild_from_visual_plan (Issue 3).
     let runs = coalesce_visual_runs(visual_layers);
     debug_assert!(
-        runs.is_empty()
-            || runs.len() == registry.plan().len()
-            || (runs.is_empty() && registry.plan().len() == 1),
+        visual_runs_match_plan_len(runs.len(), registry.plan().len()),
         "compositor plan / visual runs length mismatch: runs={} plan={}",
         runs.len(),
         registry.plan().len()
@@ -3502,6 +3508,17 @@ mod tests {
             decision.do_present,
             "RetrySurface must not be blocked by anim throttle"
         );
+    }
+
+    #[test]
+    fn visual_runs_match_plan_len_accepts_empty_fallback_and_equal_counts() {
+        // Issue 10: empty runs with single fallback plan entry is OK; empty runs
+        // with multi-entry plan is not; equal non-zero counts match.
+        assert!(visual_runs_match_plan_len(0, 0));
+        assert!(visual_runs_match_plan_len(0, 1));
+        assert!(!visual_runs_match_plan_len(0, 2));
+        assert!(visual_runs_match_plan_len(3, 3));
+        assert!(!visual_runs_match_plan_len(2, 3));
     }
 
     #[test]
