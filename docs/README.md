@@ -10,7 +10,7 @@ repository `AGENTS.md` files (root and nested where needed).
 |------|--------|
 | [architecture/overview.md](architecture/overview.md) | Bevy + Masonry + projection overview |
 | [architecture/crates.md](architecture/crates.md) | Crate boundaries |
-| [architecture/runtime.md](architecture/runtime.md) | Per-window runtime, frame stages, fonts, and presentation |
+| [architecture/runtime.md](architecture/runtime.md) | Per-window runtime, frame stages, layer model, fonts, presentation |
 | [architecture/input-ime-hit.md](architecture/input-ime-hit.md) | Input coordinates, ordering, IME, and hit testing |
 | [architecture/projection.md](architecture/projection.md) | Projector registration, dependencies, and invalidation |
 | [guide/app.md](guide/app.md) | How to write a Picus app (`AppPicusExt`, theme, `UiAction`, BSN) |

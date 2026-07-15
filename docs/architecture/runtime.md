@@ -31,41 +31,87 @@ See [multi-window](../guide/multi-window.md), [i18n and fonts](../guide/i18n-fon
 and [styling and themes](../guide/styling-themes.md) for application-facing
 configuration.
 
-### 四条时间线 (four timelines)
+### Frame stages and four timelines
 
-The long-term frame architecture separates four independent timelines so that
-animation clock, scene build, and present freshness are no longer one OR-coupled
-path. Full plan: [plans/frame-pipeline.md](../plans/frame-pipeline.md).
+The frame architecture separates four timelines so animation clock, scene build,
+and present freshness are not one OR-coupled path. Required plan phases
+(P0–P3 + docs P6) are delivered; optional P4/P5 remain open. Full plan and
+progress: [plans/frame-pipeline.md](../plans/frame-pipeline.md).
 
 | Timeline | Role | Trigger | Drop policy |
 |----------|------|---------|-------------|
 | **A Input/Shell** | Pointer, keyboard, move/resize message pump | Events | Do not drop messages |
 | **B Anim clock** | Advance `t`, opacity, cursor blink timers | Logical clock (may be 60–120 Hz) | State may jump |
-| **C Scene build** | Rewrite + build/encode scene (today: full window; target: painter-order entries) | Only when corresponding content changes | Uncommitted work may merge |
+| **C Scene build** | Rewrite + per-entry encode (painter-order plan; pure anim may skip base) | Only when corresponding content/entry changes | Uncommitted work may merge |
 | **D Present** | Submit the latest ready composite | Display path | Mailbox drops stale; FIFO may only backpressure |
 
-**Today (Phase 1 / 1b + P2b infrastructure)** each window's paint path runs through an
-internal `FrameDriver` (`picus_core::runtime::frame_driver`, not on the app facade).
-`paint_masonry_ui` → `WindowRuntime::step_frame`, which uses
-`FrameDriver::decide_entry` / `decide_present` (there is no `FrameDriver::step`).
-`DirtyBudget` aggregates `FirstPaint`, `InputOrRebuild`, `LayoutRewrite`,
-`ResizeMetrics`, `AnimPaint { layer }`, `AnimTick`, `CompositorPlan`,
-`ThemeOrFont`, `RetrySurface`. Decision flags record intent; rewrite+encode+present
-stay coupled on the content path. Single-`CachedScene` plans use full-window
-`render_frame`; multi-entry plans use ordered `render_ordered_frame` (encode only
-version/structure-dirty entries). Sticky content dirt (`resize_dirty`,
-`retry_dirty`, `theme_or_font_dirty`, entry dirty flags, …) is cleared **only after
-successful present**.
+#### Current end-state (P0–P3)
+
+Each window’s paint path runs through an internal `FrameDriver`
+(`picus_core::runtime::frame_driver`, not on the app facade):
+
+```text
+Last: paint_masonry_ui
+  → WindowRuntime::step_frame
+    → FrameDriver::decide_entry      # enter work? optional anim tick?
+    → (optional) AnimFrame tick      # timeline B; refresh post_dirty
+    → FrameDriver::decide_present    # G5 unthrottled vs diagnostic throttle
+                                     # may be anim_tick_only → no encode
+    → if do_encode:
+         selective G2 (pure AnimPaint):
+           sync Anim host scenes     # usually no CompositorPlan rebuild
+           encode dirty Anim entries
+           composite → present
+         content / resize / first-paint:
+           redraw → register External → rebuild CompositorPlan
+           sync hosts → encode dirty entries
+           composite → present       # timeline C+D; rewrite+encode+present coupled
+```
+
+There is no `FrameDriver::step`. `DirtyBudget` aggregates `FirstPaint`,
+`InputOrRebuild`, `LayoutRewrite`, `ResizeMetrics`, `AnimPaint { layer }`,
+`AnimTick`, `CompositorPlan`, `ThemeOrFont`, `RetrySurface`. Decision flags
+record intent. **`decide_present` runs after the optional anim tick** on the
+post-tick dirty set — not after plan rebuild. Plan rebuild is part of the
+**content** encode path only; pure-anim G2 steady-state ticks skip full-tree
+`redraw()` / base reassembly and typically **do not** rebuild
+`CompositorPlan`, encoding only dirty Anim host entries. Sticky content dirt
+(`resize_dirty`, `retry_dirty`, `theme_or_font_dirty`, entry dirty flags, …)
+is cleared **only after successful present**.
+
+#### Layer model (product path)
+
+```text
+Window (swapchain)
+├── CompositorPlan — Masonry painter order (not a fixed Base→Overlay→Anim stack)
+│   ├── CachedScene entry(s)   # chrome / page; dirty only when non-anim content changes
+│   ├── Anim entry(s)          # PaintIsolation::AnimEntry host scenes (Spinner, …)
+│   ├── Overlay entry(s)       # when present in VisualLayerPlan
+│   └── External placeholders  # not promoted to Anim stay transparent
+└── Present — ordered composite of encoded entry textures
+```
+
+- **Discovery / promotion:** allowlisted widgets report `PaintIsolation`; only
+  `AnimEntry` promotes External → Anim host. See
+  [guide/paint-isolation.md](../guide/paint-isolation.md).
+- **Anim target:** full-window transparent RT; only anim widgets paint (atlas is
+  optional P4).
+- **Pure AnimPaint (G2):** `encode_base` stays 0 when only Anim entries need
+  encode; Spinner 12-step phase gate and indeterminate ProgressBar phase advance
+  drive host version/dirty.
+- **Fallback:** single-`CachedScene` plans still use full-window `render_frame`
+  (no multi-entry composite).
+
+#### Scheduling rules
 
 **Hard rule (G5):** `ResizeMetrics`, `InputOrRebuild`, `FirstPaint`, and
-`RetrySurface` are **never** skipped by the anim present throttle. Continuous
-widgets (e.g. Spinner) may still full-window encode this phase; scheduling
-semantics are correct so interaction/resize redraws are not blocked.
+`RetrySurface` are **never** skipped by the anim present throttle.
+Interaction/resize redraws are not blocked by diagnostic caps.
 
 **Anim present throttle (G10 / P2e):** the product path has **no** default anim
 present interval. Unset `PICUS_ANIM_PRESENT_HZ` means unlimited anim-driven
-presents. The env var remains an **explicit diagnostic override**: positive Hz
-caps anim-only presents; `0` / `off` / `none` / `false` also mean no throttle.
+presents. The env var is an **explicit diagnostic override**: positive Hz caps
+anim-only presents; `0` / `off` / `none` / `false` also mean no throttle.
 Content / input / resize / first-paint / retry (G5) are **never** blocked by any
 throttle. Anim tick and present are **not** inseparably tied: pure `AnimTick`
 may skip encode/present while keeping the event loop awake. When a diagnostic
@@ -77,30 +123,32 @@ interval is set, non-G5 content co-occurring with the anim clock (e.g.
 `FifoBackpressure` (name covers FIFO / FifoRelaxed / AutoVsync / Immediate
 fallbacks that are *not* Mailbox; does not imply every non-mailbox mode is true
 FIFO queueing). `LatestReadyQueue` is a **helper** for CPU-side latest-only
-coalescing of *unsubmitted* frames (unit-tested; **not yet on the hot present
+coalescing of *unsubmitted* frames (unit-tested; **not on the hot present
 path** — present remains single in-flight submit). Submitted FIFO frames are
 **not** claimed withdrawable. There is no fake unified `drop_stale` boolean
 across modes. Runtime logs mode + strategy at surface init. Shared helper:
 `picus_surface::select_present_mode` / `PresentPolicy::negotiate`.
 
-**Observability:** set `PICUS_FRAME_TIMING=1` for per-window phase averages and a
-monotonic `frame_id` (`input_dispatch_ms`, `anim_tick_ms`,
-`scene_build_base_ms` / `scene_build_anim_ms`, `surface_acquire_ms`,
-`encode_*_ms`, `composite_ms`, `present_submit_ms`, `presented` /
-`anim_tick_only`). These are **CPU submit-path** times — not displayed-frame
-latency.
+#### Observability
 
-**Phase instrumentation honesty:** `anim_tick_ms` includes rewrite that Masonry
+Set `PICUS_FRAME_TIMING=1` for per-window phase averages and a monotonic
+`frame_id` (`input_dispatch_ms`, `anim_tick_ms`, `scene_build_base_ms` /
+`scene_build_anim_ms`, `surface_acquire_ms`, `encode_*_ms`, `composite_ms`,
+`present_submit_ms`, `presented` / `anim_tick_only`). These are **CPU
+submit-path** times — not displayed-frame latency.
+
+**Instrumentation honesty:** `anim_tick_ms` includes rewrite that Masonry
 performs inside `AnimFrame`. `scene_build_base_ms` is only the subsequent root
 `redraw()` call. Present-path averages (`encode_*`, `composite`,
 `present_submit`, …) and process `paint_ms` / `present_ms` are over **content
-paint attempts** (`frames − anim_tick_only`), not diluted by throttled
+paint attempts** (`frames − anim_tick_only`), not diluted by diagnostic-throttle
 anim-only zeros. Process log `frames` counts **per-window paint attempts**; ECS
 averages use `bevy_frames`. Idle pure-`Skipped` paint does not assign `frame_id`s
 but still flushes process summaries on a ~1s wall clock.
 
 Windows baselines require PresentMon/ETW; protocol and result template:
 [perf/frame-pipeline-baseline.md](../perf/frame-pipeline-baseline.md).
+G2 layer contracts are unit-tested; **do not invent** PresentMon G3/G4 numbers.
 
 ### Bevy redraw semantics (Phase 1b)
 
@@ -150,11 +198,11 @@ Implications:
 
 App public API remains `run_picus`; `FrameDriver` / `RedrawDemand` stay internal.
 
-### Masonry layer contract (Phase 2a hard gate)
+### Masonry layer contract (Phase 2a hard gate — closed)
 
-Before multi-texture composite (P2b), Picus freezes the Masonry boundary. Source of
-truth for the inventory and selected interface:
-`picus_core::runtime::layers` (crate-private; not on the app facade).
+Gate closed before multi-texture composite; inventory remains the pin-bump
+checklist. Source of truth: `picus_core::runtime::layers` (crate-private; not on
+the app facade).
 
 #### Gate questions and results (xilem rev `4b1922c`)
 
@@ -180,7 +228,7 @@ must be owned by Picus dirty sets, not by slicing the plan after the fact.
   (widget must call `set_paint_layer_mode(External)` **every paint** — mode is not sticky;
   host registration alone does not set mode).
 - **Picus host:** independent anim entry state (`AnimLayerId`, bounds, transform, version, dirty).
-- **Composite (P2b infrastructure):** exact painter-order composite of
+- **Composite (P2b+):** exact painter-order composite of
   `CompositorEntryKind::{CachedScene, Anim, Overlay, External}` via stable Picus
   `LayerId`s — **not** a fixed Base→Overlay→Anim stack. Cached segments may appear
   both before and after an anim/external slot.
@@ -191,17 +239,18 @@ layer redraw. If a future pin gains
 `MasonryLayerCapabilities::supports_upstream_only_anim_isolation()`, Picus may
 narrow the host; composite does not wait on that.
 
-**Failure fallback:** single-`CachedScene` plans still use the Phase 1 full-window
-encode path. Never claim VisualLayerPlan classification as isolation. Default
-product path no longer applies a ~30 Hz anim present throttle (G10); use
-`PICUS_ANIM_PRESENT_HZ` only for diagnosis.
+**Failure fallback:** single-`CachedScene` plans still use the full-window
+encode path. Never claim VisualLayerPlan classification as isolation. Product
+path has no default anim present throttle (G10); use `PICUS_ANIM_PRESENT_HZ`
+only for diagnosis.
 
-#### Ownership / lifecycle (P2b infrastructure)
+#### Ownership / lifecycle (layers)
 
-`LayerRegistry` (plan + `AnimLayerHost`) is a field on `WindowRuntime`.
-`step_frame` rebuilds a painter-order `CompositorPlan` from each
-`VisualLayerPlan`. GPU intermediate textures live in `picus_surface`
-(`render_ordered_frame`), keyed by `LayerId::raw` and gated by
+`LayerRegistry` (plan + `AnimLayerHost`) is a field on `WindowRuntime`. On the
+**content** encode path, `step_frame` rebuilds a painter-order `CompositorPlan`
+from each `VisualLayerPlan` after `redraw()`. Pure-anim selective encode reuses
+the existing plan and host slots. GPU intermediate textures live in
+`picus_surface` (`render_ordered_frame`), keyed by `LayerId::raw` and gated by
 `LayerMetricsGeneration` (resize/DPI drops all targets atomically — never mix
 old-size textures with a new plan).
 
@@ -218,7 +267,7 @@ flowchart TB
 ```
 
 ```text
-# Current P2b + P2c + P3 contract
+# End-state layer contract (P2b–P3)
 
 rebuild_from_visual_plan(plan)  → CompositorEntry[] in Masonry painter order
 register_external_widgets_from_visual → AnimLayerId when discovered isolation is AnimEntry
@@ -231,7 +280,7 @@ phase gate                      → 12-step visual phase only → request_paint 
 pure AnimPaint (G2)             → skip full redraw; sync host scenes; encode Anim only
 encode                          → only needs_encode entries; others reuse texture
 present success                 → mark_encoded + clear host dirty (sticky)
-present fail/retry              → retain dirty (no permanent spin beyond Phase 1 rules)
+present fail/retry              → retain dirty (retry rules; no permanent spin)
 resize/DPI                      → metrics_generation++ from surface.physical_size();
                                   drop all layer targets; FirstPaint-all
 alpha / Mica                    → layer targets straight-alpha; when present needs premul,
@@ -307,17 +356,18 @@ Anim widgets under a clipped portal/scroll may paint outside the ancestor clip
 on the FullWindowTransparent anim target until clip plumbing lands.
 
 **G10 / P2e (code path):** default anim present throttle removed; product path is
-unlimited; `PICUS_ANIM_PRESENT_HZ` is diagnostic opt-in only. Unit/integration
-**G2** contracts for Spinner + indeterminate ProgressBar passed on this stack;
+unlimited; `PICUS_ANIM_PRESENT_HZ` is diagnostic opt-in only. Unit **G2**
+contracts for Spinner + indeterminate ProgressBar passed on this stack;
 FIFO/Mailbox `PresentPolicy` unit tests exist.
 
-**Not yet (do not overclaim):**
+**Honest open items (do not overclaim):**
 
-- Full PresentMon/ETW G3/G4 numbers (tables in
+- Full PresentMon/ETW **G3/G4** numbers (tables in
   [perf/frame-pipeline-baseline.md](../perf/frame-pipeline-baseline.md) may still
   be placeholders — do not invent fake latency/present counts)
-- Claiming product G3/G4 complete without PresentMon data — layer-contract unit
-  tests cover Spinner + indeterminate ProgressBar host paths (G2 class)
+- Open third-party `AnimEntry` discovery (allowlist + type-dispatched host paint)
+- Ancestor clip/scroll packaging on anim host scenes (see known limitation above)
+- Optional P4 atlas / P5 async encode
 
 #### Anim target choice (size gate input)
 
@@ -340,7 +390,11 @@ is 0 and `scene_build_anim_ms` measures host scene sync; `encode_base` should
 stay 0 when only Anim entries `needs_encode`. These remain **CPU submit-path**
 times.
 
-### Frame pipeline evolution
+### Frame pipeline plan status
 
-Implementation plan and success metrics G1–G10:
+Required stack **P0–P3 + P6** is complete (FrameDriver, ordered layers,
+Spinner/ProgressBar G2, G10 unlimited product path, `PaintIsolation`, docs).
+Optional **P4** (anim dirty rect/atlas) and **P5** (async encode) are not
+started. PresentMon G3/G4 tables may still be placeholders — fill from real
+runs only. Plan and before/after summary:
 [plans/frame-pipeline.md](../plans/frame-pipeline.md).

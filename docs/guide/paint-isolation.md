@@ -5,7 +5,7 @@ base present path on every tick. Widgets declare a **painter slot** via
 `PaintIsolation` (in `picus_widget`; not a global top-most layer).
 
 Architecture detail: [architecture/runtime.md](../architecture/runtime.md).
-Plan: [plans/frame-pipeline.md](../plans/frame-pipeline.md) Phase 3.
+Plan: [plans/frame-pipeline.md](../plans/frame-pipeline.md) (Phase 3 delivered).
 Facade note: [reference/public-modules.md](../reference/public-modules.md)
 (`PaintIsolation` is **not** on `picus::prelude`).
 

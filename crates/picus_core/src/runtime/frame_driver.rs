@@ -333,8 +333,9 @@ impl FrameDriver {
     /// [`Self::decide_present`]). Host entry is [`super::WindowRuntime::step_frame`],
     /// not a `FrameDriver::step` method.
     ///
-    /// `do_rewrite` here is advisory only: Phase 1 keeps rewrite+encode+present
-    /// coupled on the content path. Pre-tick budgets never include `AnimPaint`
+    /// `do_rewrite` here is advisory only: the content path still couples
+    /// rewrite+encode+present; pure-anim selective encode is decided later in
+    /// `WindowRuntime::step_frame`. Pre-tick budgets never include `AnimPaint`
     /// (that reason is inserted post-tick).
     pub(crate) fn decide_entry(dirty: &DirtyBudget) -> FrameDecision {
         if dirty.is_empty() {
@@ -342,7 +343,7 @@ impl FrameDriver {
         }
         FrameDecision {
             do_anim_tick: dirty.needs_anim_tick(),
-            // Advisory: host still couples rewrite to encode in Phase 1.
+            // Advisory: content-path rewrite remains host-coupled to encode.
             do_rewrite: dirty.has(DirtyReason::LayoutRewrite)
                 || dirty.requires_unthrottled_present()
                 || dirty.has(DirtyReason::ThemeOrFont)
@@ -616,7 +617,7 @@ mod tests {
 
     #[test]
     fn anim_present_hz_unset_is_unlimited() {
-        // G10: product path has no transitional throttle when env is unset.
+        // G10: product path has no default anim present throttle when env is unset.
         assert_eq!(parse_anim_present_min_interval(None), None);
         assert_eq!(parse_anim_present_min_interval(Some("")), None);
         assert_eq!(parse_anim_present_min_interval(Some("   ")), None);

@@ -1,6 +1,6 @@
 # Frame pipeline baseline record
 
-> **Status**: protocol + template (Phase 0)  
+> **Status**: protocol + result template (architecture P0–P3 done; PresentMon tables may still be empty placeholders)  
 > **Related plan**: [plans/frame-pipeline.md](../plans/frame-pipeline.md)  
 > **Runtime narrative**: [architecture/runtime.md](../architecture/runtime.md)
 
@@ -174,15 +174,17 @@ Record both `presented` and `anim_tick_only` counters for the sample window.
 
 ## 4. Acceptance thresholds (campaign targets)
 
-Phase 0 only requires the **skeleton and protocol** (G1). Numeric gates for later
-phases (from the plan; refine when first real numbers exist):
+Protocol and G1 metrics skeleton are in tree. Unit G2 and G10 are architecture-done.
+Numeric display-path gates (G3/G4) still need PresentMon fills — refine thresholds
+when first real numbers exist:
 
 | Gate | Intent | Threshold (plan) | Status |
 |------|--------|------------------|--------|
-| G1 | Named phases + per-window `frame_id` | Metrics log + this protocol | Skeleton in tree |
-| G3 | Spinner still: design phases visible; indeterminate bar ≈ `0.9 × min(60, refresh_hz)` without permanent global throttle | PresentMon + content version | Pending architecture |
-| G4 | Spinner drag: displayed-frame latency p95 ≤ 2 refresh periods; ≥30% better than P0 baseline; default path not permanent fps cut | PresentMon ×3 debug/release | Needs filled §3 as P0 baseline |
-| G6 | Button idle present count = 0 in 30 s sample | Counter | Pending |
+| G1 | Named phases + per-window `frame_id` | Metrics log + this protocol | **Done** (skeleton + protocol in tree) |
+| G2 | Pure Spinner / indeterminate bar: `encode_base` ≈ 0; anim host only | Unit contracts + timing | **Done** (unit G2; not PresentMon) |
+| G3 | Spinner still: design phases visible; indeterminate bar ≈ `0.9 × min(60, refresh_hz)` without permanent global throttle | PresentMon + content version | Architecture done; **numbers placeholder** until measured |
+| G4 | Spinner drag: displayed-frame latency p95 ≤ 2 refresh periods; ≥30% better than P0 baseline; default path not permanent fps cut | PresentMon ×3 debug/release | Architecture done; **§3 tables still empty** — do not invent numbers |
+| G6 | Button idle present count = 0 in 30 s sample | Counter | Pending measurement |
 | G10 | Remove default 30 Hz anim throttle | Code review | **Done (P2e):** unset = unlimited; override opt-in |
 
 **P0 baseline freeze**: once §3 is first filled for a named commit, later PRs
@@ -197,8 +199,9 @@ compare against that row set (or a clearly marked newer baseline revision).
 | 2026-07-16 | Phase 0 PR | Created protocol + empty result tables |
 | 2026-07-16 | Phase 0 review fixes | Document present-path vs anim_tick denominators; full `PICUS_ANIM_PRESENT_HZ` disable set |
 | 2026-07-16 | Phase 2a layer gate | §6 anim target strategy + size-gate assumptions (no new PresentMon numbers yet) |
-| 2026-07-16 | Phase 2a review fixes | §6.3 explicit: assumptions ≠ G2 acceptance; G2 is P2b |
+| 2026-07-16 | Phase 2a review fixes | §6.3 explicit: size-budget assumptions ≠ display-path acceptance |
 | 2026-07-16 | Phase 2e / G10 | Default anim present throttle removed; `PICUS_ANIM_PRESENT_HZ` diagnostic opt-in only. Spinner + ProgressBar G2 unit contracts + PresentPolicy FIFO/Mailbox tests exist; PresentMon G3/G4 numbers remain placeholders |
+| 2026-07-16 | Phase 6 docs | Status + gate table honesty (G2 unit done; G3/G4 placeholders); plan marked complete for P0–P3+P6 |
 
 ---
 
@@ -231,21 +234,23 @@ target geometry.
 
 ### 6.3 Assumptions (until measured)
 
-These are **planning assumptions**, **not** acceptance claims and **not** “G2
-satisfied” today. G2 (`encode_base` → 0 on pure anim; host-only anim encode) is a
-**P2b** acceptance target. Fill §3 when P2b exists and re-state claims only with
-measured counters / PresentMon.
+**G2 unit contracts** (pure-anim `encode_base` → 0; host-only anim encode for
+Spinner + indeterminate ProgressBar) are **delivered in code**. The bullets
+below remain **planning assumptions for display-path cost** — they are **not**
+PresentMon G3/G4 acceptance. Fill §3 only with measured counters / PresentMon;
+do not invent numbers.
 
 1. **Full-window transparent anim RT cost** is dominated by Vello encode of a *sparse*
    anim scene plus a full-size clear/composite, not by re-recording the entire base
-   UI tree (**target:** base encode_count → 0 on pure anim ticks — G2 after P2b).
+   UI tree (unit G2: base encode → 0 on pure anim ticks; display-path cost still
+   measured separately).
 2. At **1080p**, full-window anim encode is expected to clear the 25% refresh budget
    for a single Spinner-class scene; at **4K** the clear+composite term grows with
-   pixel count and is the first risk for switching to atlas.
+   pixel count and is the first risk for switching to atlas (optional P4).
 3. **WidgetBoundsAtlas** reduces pixel work but requires reliable bounds under
    scroll/clip/transform and more composite rect bookkeeping; deferred until
    FullWindowTransparent fails §6.2 on real hardware.
-4. **Mailbox** present remains required for G4; target strategy does not replace
+4. **Mailbox** present remains preferred for G4; target strategy does not replace
    present-mode policy.
 5. **G10 done:** product path has **no** default anim present throttle. Optional
    `PICUS_ANIM_PRESENT_HZ` positive-Hz cap is diagnostic only (G5 still never
