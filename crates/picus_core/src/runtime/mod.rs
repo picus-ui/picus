@@ -1059,6 +1059,10 @@ impl WindowRuntime {
         // pre-tick InputOrRebuild. Content dirt is remembered in `snap`.
         self.needs_redraw = false;
 
+        // AnimFrame may complete rewrite that was already pending — base textures
+        // would go stale if we took the pure-anim selective path afterward (Issue 1).
+        let rewrite_pending_before_anim = self.render_root.needs_rewrite_passes();
+
         if entry.do_anim_tick {
             // AnimFrame may run rewrite and emit RequestRedraw when pixels change.
             // That rewrite cost is attributed to `phases.anim_tick` (perf honesty).
@@ -1107,7 +1111,12 @@ impl WindowRuntime {
             }
             self.needs_redraw = true;
         }
-        if self.render_root.needs_rewrite_passes() {
+        // Outstanding rewrite, or rewrite that completed during this AnimFrame
+        // (flag cleared) — both require full base reassembly, not selective anim.
+        let rewrite_pending_after_anim = self.render_root.needs_rewrite_passes();
+        let rewrite_completed_during_anim =
+            rewrite_pending_before_anim && !rewrite_pending_after_anim;
+        if rewrite_pending_after_anim || rewrite_completed_during_anim {
             post_dirty.insert(DirtyReason::LayoutRewrite);
         }
         if self.needs_anim_frame || self.render_root.needs_anim() {
@@ -1151,14 +1160,6 @@ impl WindowRuntime {
             logical_size.height.max(1) as f64,
         );
 
-        // P2c / G2: pure AnimPaint with a stable ordered plan → skip full-tree
-        // redraw and base reassembly; only host anim scenes + dirty encode.
-        let selective_anim = post_dirty.is_selective_anim_encode()
-            && self.has_painted_once
-            && self.layer_registry.has_anim_entries()
-            && self.layer_registry.prefers_ordered_composite()
-            && !self.render_root.needs_rewrite_passes();
-
         // Take surface so we can borrow registry/renderer disjointly (P2.6 path).
         let Some(mut surface) = self.window_surface.take() else {
             self.restore_sticky_snapshot(snap);
@@ -1177,12 +1178,27 @@ impl WindowRuntime {
 
         // Single source of truth for layer target size: surface physical config
         // (from Bevy metrics), not a recomputed logical*scale (Issue 8).
+        // **Must run before selective decision**: metrics invalidation dirties all
+        // entries; selective with visual=None must not encode empty base (Issue 2).
         let (physical_w, physical_h) = surface.physical_size();
         self.layer_registry
             .notify_metrics_changed(physical_w, physical_h);
         if first_paint {
             self.layer_registry.notify_first_paint();
         }
+
+        // P2c / G2: pure AnimPaint with a stable ordered plan → skip full-tree
+        // redraw and base reassembly; only host anim scenes + dirty encode.
+        // Guards (Issues 1–2):
+        // - LayoutRewrite in post_dirty if rewrite pending/completed during anim
+        // - No CachedScene/Overlay/External needs_encode after metrics notify
+        // - Prefer full path whenever non-anim structure/content is dirty
+        let selective_anim = post_dirty.is_selective_anim_encode()
+            && self.has_painted_once
+            && self.layer_registry.has_anim_entries()
+            && self.layer_registry.prefers_ordered_composite()
+            && !self.render_root.needs_rewrite_passes()
+            && !self.layer_registry.non_anim_needs_encode();
 
         let background = if self.window_transparent {
             Color::TRANSPARENT
@@ -1202,21 +1218,61 @@ impl WindowRuntime {
             phases.scene_build_anim = anim_started.elapsed();
             phases.scene_build_base = std::time::Duration::ZERO;
 
-            surface.sync_layer_metrics_generation(LayerMetricsGeneration(
-                self.layer_registry.metrics_generation(),
-            ));
-            surface.retain_layer_targets(&self.layer_registry.live_layer_id_raws());
+            // Defense: if sync/propagate somehow dirtied base, fall back to full path.
+            if self.layer_registry.non_anim_needs_encode() {
+                // Fall through by rebuilding with a full redraw instead of empty base.
+                let bound_ids: Vec<_> = self.layer_registry.host().widget_ids().collect();
+                for id in bound_ids {
+                    if !self.render_root.has_widget(id) {
+                        let _ = self.layer_registry.host_mut().remove_widget(id);
+                        continue;
+                    }
+                    self.render_root.edit_widget(id, |mut w| {
+                        w.ctx.request_paint_only();
+                    });
+                }
+                let scene_started = std::time::Instant::now();
+                let (visual_layers, _tree_update) = self.render_root.redraw();
+                phases.scene_build_base = scene_started.elapsed();
+                self.layer_registry
+                    .register_external_widgets_from_visual(&visual_layers, &self.render_root);
+                self.layer_registry
+                    .rebuild_from_visual_plan(&visual_layers, window_bounds);
+                self.layer_registry.mark_non_anim_content_dirty();
+                let _ = self
+                    .layer_registry
+                    .sync_anim_entries_from_widgets(&self.render_root);
+                surface.sync_layer_metrics_generation(LayerMetricsGeneration(
+                    self.layer_registry.metrics_generation(),
+                ));
+                surface.retain_layer_targets(&self.layer_registry.live_layer_id_raws());
+                encode_ordered_composite(
+                    &self.layer_registry,
+                    &mut self.renderer,
+                    &mut surface,
+                    Some(&visual_layers),
+                    background,
+                    frame_w,
+                    frame_h,
+                    scale,
+                )
+            } else {
+                surface.sync_layer_metrics_generation(LayerMetricsGeneration(
+                    self.layer_registry.metrics_generation(),
+                ));
+                surface.retain_layer_targets(&self.layer_registry.live_layer_id_raws());
 
-            encode_ordered_composite(
-                &self.layer_registry,
-                &mut self.renderer,
-                &mut surface,
-                None,
-                background,
-                frame_w,
-                frame_h,
-                scale,
-            )
+                encode_ordered_composite(
+                    &self.layer_registry,
+                    &mut self.renderer,
+                    &mut surface,
+                    None,
+                    background,
+                    frame_w,
+                    frame_h,
+                    scale,
+                )
+            }
         } else {
             // Content / first-paint / structure path: full Masonry redraw.
             // Re-request paint on bound External widgets so mode is re-set
@@ -1236,9 +1292,9 @@ impl WindowRuntime {
             let (visual_layers, _tree_update) = self.render_root.redraw();
             phases.scene_build_base = scene_started.elapsed();
 
-            // Auto-bind External painter slots → Anim entries (widget isolation).
+            // Bind Spinner External slots → Anim (type-gated host painter).
             self.layer_registry
-                .register_external_widgets_from_visual(&visual_layers);
+                .register_external_widgets_from_visual(&visual_layers, &self.render_root);
             self.layer_registry
                 .rebuild_from_visual_plan(&visual_layers, window_bounds);
             if self.layer_registry.plan_changed() {
@@ -1563,20 +1619,13 @@ fn encode_ordered_composite(
             Color::TRANSPARENT
         };
         let Some(visual) = visual_layers else {
-            // Pure-anim path must not dirt base segments.
-            debug_assert!(
-                false,
-                "CachedScene needs_encode without visual plan (G2 violation)"
+            // Selective path must never encode CachedScene without a visual plan
+            // (would wipe base with empty content in release). Caller should fall
+            // back to full redraw; fail closed here.
+            tracing::error!(
+                "CachedScene/Overlay needs_encode without visual plan; refusing empty base encode"
             );
-            prepared[i] = Some(PreparedFrame::new(
-                frame_w,
-                frame_h,
-                scale,
-                bg,
-                &empty_scene,
-                &[],
-            ));
-            continue;
+            return (RenderFrameResult::Failed, picus_surface::RenderFrameTimings::default());
         };
         match runs.get(i) {
             Some(VisualRun::Scenes(indices)) if !indices.is_empty() => {

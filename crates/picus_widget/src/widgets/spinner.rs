@@ -131,10 +131,11 @@ impl Widget for Spinner {
         }
         // Keep the anim clock scheduled at display rate (60–120Hz OK).
         ctx.request_anim_frame();
-        // Paint / host version only when the 12-step visual phase advances.
+        // Paint only when the 12-step visual phase advances. Do **not** advance
+        // `last_paint_phase` here — only `paint` does, so a throttled/skipped
+        // AnimPaint frame re-requests the same phase until host sync can run.
         let phase = Self::visual_phase(self.t);
         if self.last_paint_phase != Some(phase) {
-            self.last_paint_phase = Some(phase);
             ctx.request_paint_only();
         }
     }
@@ -177,21 +178,16 @@ impl Widget for Spinner {
     fn paint(
         &mut self,
         ctx: &mut PaintCtx<'_>,
-        props: &PropertiesRef<'_>,
-        painter: &mut Painter<'_>,
+        _props: &PropertiesRef<'_>,
+        _painter: &mut Painter<'_>,
     ) {
         // Anim isolation: External painter slot every paint (mode resets to Inline each pass).
-        // Pixels recorded here stay out of cached base segments; AnimLayerHost fills the slot.
+        // Masonry does not append External paint into VisualLayerPlan scene segments;
+        // Picus `AnimLayerHost` is authoritative via `Spinner::paint_arms`. Skip local
+        // strokes here to avoid wasted work and dual sources of truth.
         ctx.set_paint_layer_mode(PaintLayerMode::External);
-
-        let cache = ctx.property_cache();
-        let color = props.get::<ContentColor>(cache);
-        Self::paint_arms(
-            painter,
-            ctx.content_box().size(),
-            self.t,
-            color.color,
-        );
+        // Phase paint acknowledged only once paint actually runs (throttle-safe).
+        self.last_paint_phase = Some(Self::visual_phase(self.t));
     }
 
     fn accessibility_role(&self) -> Role {

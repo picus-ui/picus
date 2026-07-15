@@ -1133,14 +1133,25 @@ impl LayerRegistry {
                 .any(|e| !matches!(e.kind, CompositorEntryKind::CachedScene))
     }
 
-    /// Register every External placeholder widget as a host anim entry (P2c).
+    /// Bind External painter slots that have a host painter (P2c: Spinner only).
     ///
-    /// No gallery/entity hardcode: any widget that paints with
-    /// [`PaintLayerMode::External`] is bound. Spinner is the product path;
-    /// other External widgets get empty host scenes until specialized.
-    pub(crate) fn register_external_widgets_from_visual(&mut self, visual: &VisualLayerPlan) {
+    /// Unbound External widgets stay [`CompositorEntryKind::External`] (transparent
+    /// placeholder) — they are **not** promoted to Anim with an empty host scene.
+    /// No gallery/entity hardcode: promotion is type-based (`Spinner` downcast).
+    pub(crate) fn register_external_widgets_from_visual(
+        &mut self,
+        visual: &VisualLayerPlan,
+        render_root: &RenderRoot,
+    ) {
         for layer in &visual.layers {
-            if matches!(layer.kind, VisualLayerKind::External { .. }) {
+            if !matches!(layer.kind, VisualLayerKind::External { .. }) {
+                continue;
+            }
+            let is_spinner = render_root
+                .get_widget(layer.widget_id)
+                .and_then(|w| w.downcast::<Spinner>())
+                .is_some();
+            if is_spinner {
                 self.host.register_external_slot(layer.widget_id);
             }
         }
@@ -1170,7 +1181,19 @@ impl LayerRegistry {
     ///
     /// Returns `true` when any anim entry version advanced (needs encode).
     /// Safe on pure-anim frames without a full Masonry paint pass.
+    ///
+    /// Also prunes host entries whose widgets left the tree (selective-path
+    /// windows never hit the full-path orphan cleanup alone).
     pub(crate) fn sync_anim_entries_from_widgets(&mut self, render_root: &RenderRoot) -> bool {
+        let orphans: Vec<WidgetId> = self
+            .host
+            .widget_ids()
+            .filter(|&id| !render_root.has_widget(id))
+            .collect();
+        for id in orphans {
+            let _ = self.host.remove_widget(id);
+        }
+
         let pairs: Vec<(AnimLayerId, WidgetId)> = self
             .plan
             .entries()
@@ -1195,6 +1218,14 @@ impl LayerRegistry {
             .entries()
             .iter()
             .any(|e| e.kind == CompositorEntryKind::Anim)
+    }
+
+    /// True when any non-Anim entry needs encode (blocks pure-anim selective path).
+    pub(crate) fn non_anim_needs_encode(&self) -> bool {
+        self.plan.entries().iter().any(|e| {
+            e.needs_encode()
+                && !matches!(e.kind, CompositorEntryKind::Anim)
+        })
     }
 
     /// Encode-set for G2 assertion: only Anim kinds need encode (base clean).
@@ -2094,9 +2125,9 @@ mod tests {
     }
 
     #[test]
-    fn spinner_external_excludes_pixels_from_cached_segments() {
-        // Spinner paint sets External: plan has External placeholder; scene layers
-        // are only non-spinner content (cached segments exclude spinner pixels).
+    fn spinner_external_isolation_promotes_to_anim_entry() {
+        // Plan/isolation contract (not a pixel scan of CachedScene blobs):
+        // Spinner External slot + Spinner-typed host registration → Anim entry.
         let spinner = NewWidget::new(Spinner::new());
         let root_widget = NewWidget::new(
             Flex::row()
@@ -2113,8 +2144,7 @@ mod tests {
                 ))),
         );
         let mut root = test_root(root_widget);
-        // First redraw may not paint spinner if request_paint is false until anim;
-        // force a second anim frame then redraw so External is requested.
+        // AnimFrame then redraw so Spinner paint sets External.
         let _ = root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(
             100,
         )));
@@ -2130,22 +2160,58 @@ mod tests {
         );
 
         let mut registry = LayerRegistry::new(AnimTargetStrategy::FullWindowTransparent);
-        registry.register_external_widgets_from_visual(&plan);
+        registry.register_external_widgets_from_visual(&plan, &root);
         registry.rebuild_from_visual_plan(&plan, Rect::new(0.0, 0.0, 80.0, 40.0));
         let kinds: Vec<_> = registry.plan().entries().iter().map(|e| e.kind).collect();
         assert!(
             kinds.iter().any(|k| *k == CompositorEntryKind::Anim),
-            "auto-register External → Anim; kinds={kinds:?}"
+            "Spinner External → Anim; kinds={kinds:?}"
         );
         assert!(
-            registry.plan().has_anim_between_cached_segments()
-                || kinds
-                    .windows(2)
-                    .any(|w| w[0] == CompositorEntryKind::CachedScene
-                        && w[1] == CompositorEntryKind::Anim)
-                || kinds.contains(&CompositorEntryKind::Anim),
-            "anim entry present in painter order"
+            registry.has_anim_entries(),
+            "anim entry present in painter-order plan"
         );
+    }
+
+    #[test]
+    fn non_spinner_external_is_not_promoted_to_anim() {
+        // ModeBox External has no host painter — stays External, not empty Anim.
+        let root_widget = NewWidget::new(
+            Flex::row()
+                .with_fixed(NewWidget::new(ModeBox::new(
+                    PaintLayerMode::Inline,
+                    Color::from_rgb8(255, 0, 0),
+                )))
+                .with_fixed(NewWidget::new(ModeBox::new(
+                    PaintLayerMode::External,
+                    Color::TRANSPARENT,
+                )))
+                .with_fixed(NewWidget::new(ModeBox::new(
+                    PaintLayerMode::Inline,
+                    Color::from_rgb8(0, 0, 255),
+                ))),
+        );
+        let mut root = test_root(root_widget);
+        let (plan, _) = root.redraw();
+        assert!(
+            plan.layers
+                .iter()
+                .any(|l| matches!(l.kind, VisualLayerKind::External { .. }))
+        );
+
+        let mut registry = LayerRegistry::new(AnimTargetStrategy::FullWindowTransparent);
+        registry.register_external_widgets_from_visual(&plan, &root);
+        registry.rebuild_from_visual_plan(&plan, Rect::new(0.0, 0.0, 80.0, 40.0));
+        let kinds: Vec<_> = registry.plan().entries().iter().map(|e| e.kind).collect();
+        assert!(
+            kinds.iter().any(|k| *k == CompositorEntryKind::External),
+            "non-Spinner External stays External; kinds={kinds:?}"
+        );
+        assert!(
+            !kinds.iter().any(|k| *k == CompositorEntryKind::Anim),
+            "must not invent Anim with empty host scene for non-Spinner External"
+        );
+        assert_eq!(registry.host().len(), 0);
     }
 
     #[test]
@@ -2172,7 +2238,8 @@ mod tests {
     #[test]
     fn pure_anim_dirt_only_anim_entry_needs_encode_g2() {
         // G2 contract at the layer level: after a clean present, only host anim
-        // dirt marks Anim for encode — CachedScene stays clean (encode_base=0).
+        // dirt from a real phase advance marks Anim for encode — CachedScene stays
+        // clean (encode_base=0). No force-mark fallback; drive phase explicitly.
         let spinner = NewWidget::new(Spinner::new());
         let root_widget = NewWidget::new(
             Flex::row()
@@ -2189,43 +2256,52 @@ mod tests {
                 ))),
         );
         let mut root = test_root(root_widget);
+        // First phase paint + plan.
         let _ = root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(
-            100,
+            1,
         )));
         let (plan, _) = root.redraw();
 
         let mut registry = LayerRegistry::new(AnimTargetStrategy::FullWindowTransparent);
-        registry.register_external_widgets_from_visual(&plan);
+        registry.register_external_widgets_from_visual(&plan, &root);
         registry.rebuild_from_visual_plan(&plan, Rect::new(0.0, 0.0, 80.0, 40.0));
-        let _ = registry.sync_anim_entries_from_widgets(&root);
+        assert!(
+            registry.sync_anim_entries_from_widgets(&root),
+            "initial host scene build must dirty anim"
+        );
+        let version_after_first = registry
+            .plan()
+            .entries()
+            .iter()
+            .find_map(|e| e.anim_id.and_then(|id| registry.host().get(id).map(|h| h.version)))
+            .expect("host version");
         registry.clear_dirty_after_successful_present();
         assert_eq!(
             registry.plan().dirty_encode_ids().count(),
             0,
             "clean after present"
         );
+        assert!(!registry.non_anim_needs_encode());
 
-        // Advance spinner and sync host without rebuilding base plan (G2 path).
+        // Advance ≥1 visual phase (1/12 s ≈ 83.3ms). Do NOT redraw — G2 path.
         let _ = root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(
             100,
         )));
-        // Do NOT call root.redraw() — selective anim must not reassemble base.
         let dirtied = registry.sync_anim_entries_from_widgets(&root);
         assert!(
-            dirtied || registry.host().dirty_ids().count() > 0 || true,
-            "phase may or may not advance in 100ms; force mark if needed"
+            dirtied,
+            "100ms anim must advance Spinner visual phase and dirt host via sync"
         );
-        // Force a phase-visible host dirt if anim interval was too small.
-        if !registry.only_anim_needs_encode() {
-            let anim_id = registry
-                .plan()
-                .entries()
-                .iter()
-                .find_map(|e| e.anim_id)
-                .expect("anim id");
-            assert!(registry.host_mut().mark_anim_paint(anim_id));
-            registry.propagate_host_dirty_to_plan();
-        }
+        let version_after_phase = registry
+            .plan()
+            .entries()
+            .iter()
+            .find_map(|e| e.anim_id.and_then(|id| registry.host().get(id).map(|h| h.version)))
+            .expect("host version after phase");
+        assert!(
+            version_after_phase > version_after_first,
+            "host version must advance on phase change: {version_after_first} → {version_after_phase}"
+        );
 
         assert!(
             registry.only_anim_needs_encode(),
@@ -2238,13 +2314,8 @@ mod tests {
                 .map(|e| e.kind)
                 .collect::<Vec<_>>()
         );
-        let cached_dirty = registry
-            .plan()
-            .entries()
-            .iter()
-            .any(|e| e.kind == CompositorEntryKind::CachedScene && e.needs_encode());
         assert!(
-            !cached_dirty,
+            !registry.non_anim_needs_encode(),
             "base CachedScene must not re-encode on pure anim dirt"
         );
     }

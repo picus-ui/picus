@@ -218,7 +218,7 @@ flowchart TB
 # Current P2b + P2c contract
 
 rebuild_from_visual_plan(plan)  → CompositorEntry[] in Masonry painter order
-register_external_widgets_from_visual → bind External WidgetIds as AnimLayerId
+register_external_widgets_from_visual → AnimLayerId only for Spinner-typed External
 needs_encode                    → structure_dirty || encoded_version != content_version
 non-anim content dirt           → mark_non_anim_content_dirty bumps CachedScene/Overlay
                                   (InputOrRebuild/Theme/Layout/…; pure AnimPaint does not)
@@ -242,25 +242,34 @@ Product path for continuous spinner isolation (no gallery/entity hardcode):
 1. **`Spinner` paint** sets `PaintLayerMode::External` every paint (mode is not
    sticky). Masonry reserves a painter-order placeholder; spinner pixels are
    **not** folded into cached base scene segments.
-2. **`LayerRegistry::register_external_widgets_from_visual`** binds every
-   External `WidgetId` to an `AnimLayerId` (any External widget; Spinner is the
-   specialized paint path).
+2. **`LayerRegistry::register_external_widgets_from_visual`** promotes External
+   slots to Anim **only when a host painter exists** (today: `Spinner` downcast).
+   Non-Spinner External stays `CompositorEntryKind::External` (transparent
+   placeholder) — never an empty Anim with silent missing content.
 3. **Host scenes:** `AnimLayerHost::sync_spinner_scene` builds a window-space
    `Scene` via `Spinner::paint_arms` (FullWindowTransparent target). Content
    version / dirty advance only when the **12-step visual phase** changes (or
-   geometry/first build).
+   geometry/first build). Spinner widget paint only sets External (no local
+   strokes); host is authoritative.
 4. **Steady anim ticks (G2):** when dirty is only `AnimTick`/`AnimPaint`, the
-   window has already painted once, and the plan has Anim entries,
-   `step_frame` **skips** full-tree `redraw()` and base reassembly. Only host
-   anim scenes rebuild; encode dirties Anim entries only (`encode_base` stays
-   clean / 0 on that path). Phase-unchanged ticks still skip encode/present
-   entirely (Spinner does not `request_paint_only`).
+   window has already painted once, the plan has Anim entries, **no rewrite
+   completed/pending this tick**, and **no CachedScene/Overlay needs encode**
+   after metrics notify, `step_frame` **skips** full-tree `redraw()` and base
+   reassembly. Only host anim scenes rebuild; encode dirties Anim entries only.
+   Phase-unchanged ticks skip encode/present. Metrics/size changes force full
+   path (never encode empty base with `visual=None`).
 5. **Content / resize / first paint** still full-redraw; bound External widgets
    are re-`request_paint_only` so External mode sticks for the paint pass.
 
+**Known limitation (not G3 under scroll/clip):** host anim scenes use
+`AncestorClip::none` and do not yet re-apply ancestor clip/scroll packages.
+Spinner under a clipped portal/scroll may paint outside the ancestor clip on
+the FullWindowTransparent anim target until clip plumbing lands.
+
 **Not yet (do not overclaim):**
 
-- Indeterminate ProgressBar anim entry (P2d)
+- Indeterminate ProgressBar anim entry (P2d) — needs its own host painter before
+  External→Anim promotion
 - Removing transitional ~30 Hz anim present throttle (G10 / P2e)
 - Full PresentMon/ETW G4 drag protocol run (documented in
   [perf/frame-pipeline-baseline.md](../perf/frame-pipeline-baseline.md); not
