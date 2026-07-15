@@ -1,6 +1,6 @@
 # Picus 帧管线解耦完整计划
 
-> **状态**：进行中 — Phase 0（度量 / 文档 / 过渡节流策略）已落地骨架  
+> **状态**：进行中 — Phase 0 已交付；**Phase 1（FrameDriver + PresentPolicy）已交付**  
 > **范围**：动画时钟 / 内容脏区与层 encode / present 新鲜度 / 与 Bevy·DWM 边界  
 > **动机**：消除「动画帧率 vs 拖窗流畅度」假权衡；根因是架构耦合，不是单点旋钮。
 
@@ -8,20 +8,28 @@
 
 ## 0. 背景
 
-### 0.1 现状帧路径
+### 0.1 帧路径（历史 → 当前）
+
+**当前（Phase 1）**：
 
 ```text
 PreUpdate   input, retained routing, action dispatch
 Update      app systems, style, overlays, …
 PostUpdate  projection invalidation, synthesis, retained rebuild, IME
-Last        paint_masonry_ui → AnimFrame? → redraw? → Vello encode → present
+Last        paint_masonry_ui
+            → WindowRuntime::step_frame
+              → FrameDriver::decide_entry / decide_present
+              → (optional) AnimFrame tick
+              → (optional) full-window rewrite + encode + present
 ```
 
-`WindowRuntime::paint_frame` 大致把下列布尔 **OR** 成一条路径：
+决策表分离 `do_anim_tick` 与 encode/present；Phase 1 下 rewrite/encode/present 在内容路径上仍耦合（全窗 encode）。Sticky 脏标志仅在 **present 成功** 后清除。
+
+**历史（Phase 0 之前）**：`WindowRuntime::paint_frame` 把下列布尔 **OR** 成一条路径：
 
 - `needs_redraw` / `needs_anim_frame` / `render_root.needs_anim()` / `needs_rewrite_passes()`
 
-Spinner 等控件每 tick `request_anim_frame` + `request_paint_only` → **整窗** rewrite + encode + present。
+Spinner 等控件每 tick `request_anim_frame` + `request_paint_only` → **整窗** rewrite + encode + present（调度语义已由 FrameDriver 接管；分层纹理仍属 Phase 2）。
 
 ### 0.2 已落地的相关优化（勿回退语义）
 
@@ -143,7 +151,7 @@ swapchain 的帧无法由 Picus 撤回。运行时必须记录实际模式和生
 
 | 模块 | 路径（建议） | 职责 |
 |------|----------------|------|
-| FrameDriver | `picus_core::runtime::frame_driver` | 每窗 `step(delta)`：tick → 决策 → encode → present |
+| FrameDriver | `picus_core::runtime::frame_driver` | 决策表 `decide_entry` / `decide_present`；宿主 `WindowRuntime::step_frame` 执行 |
 | DirtyBudget / reasons | 同上或 `frame_dirty.rs` | 聚合本帧脏因 |
 | PresentPolicy | `picus_surface` + core 薄封装 | 模式协商、latency |
 | LayerRegistry | `picus_core::runtime::layers` | base/anim/overlay 层表与 texture |
@@ -182,18 +190,18 @@ swapchain 的帧无法由 Picus 撤回。运行时必须记录实际模式和生
 
 | 工作项 | 细节 |
 |--------|------|
-| P1.1 | 引入 `FrameDriver` / `FrameStepResult`；`paint_masonry_ui` 只调 `driver.step` |
-| P1.2 | 脏因枚举 + 从 Masonry 信号 / `incoming_redraw` / resize 填充 |
-| P1.3 | 决策表：`do_anim_tick` / `do_rewrite` / `do_encode` / `do_present` 分离 |
-| P1.4 | **硬规则**：`ResizeMetrics`、`InputOrRebuild`、`FirstPaint`、`RetrySurface` → 不得被 anim 节流跳过 present |
-| P1.5 | `PresentPolicy` 从 surface 创建路径抽出；与 core 共享选择逻辑（已有 `select_present_mode`） |
-| P1.6 | 单测：mock/轻量路径验证「仅 AnimTick 可不 present」「Resize 必 present」 |
-| P1.7 | 删除或旁路「anim 与 present 绑死」的隐式假设注释 |
+| P1.1 | 引入 `FrameDriver` / `FrameStepResult`；`paint_masonry_ui` → `WindowRuntime::step_frame` + `decide_*` | **已交付** |
+| P1.2 | 脏因枚举 + 从 Masonry 信号 / `incoming_redraw` / resize 填充 | **已交付** |
+| P1.3 | 决策表标志分离；Phase 1 执行仅分 anim-tick vs encode/present（rewrite 仍耦合） | **已交付** |
+| P1.4 | **硬规则**：`ResizeMetrics`、`InputOrRebuild`、`FirstPaint`、`RetrySurface` → 不得被 anim 节流跳过 present | **已交付** |
+| P1.5 | `PresentPolicy` 从 surface 创建路径抽出；与 core 共享 `select_present_mode` | **已交付** |
+| P1.6 | 单测：AnimTick skip / Resize 必 present / sticky restore / ready queue | **已交付** |
+| P1.7 | 删除或旁路「anim 与 present 绑死」的隐式假设注释 | **已交付** |
 
 **验收**：G5、G7；代码路径可读；Spinner 仍可能全窗 encode，但调度语义正确。  
-**风险**：回归漏画 → 保留 `has_painted_once` 与 Retry 路径测试。
+**风险**：回归漏画 → 保留 `has_painted_once` 与 Retry 路径测试；sticky 仅在 present 成功后清除。
 
-**建议 PR**：`PR1-frame-driver`（可拆 1a driver、1b policy 若 diff 过大）
+**建议 PR**：`PR1-frame-driver`（可拆 1a driver、1b policy 若 diff 过大） — **已合并到本分支**
 
 ---
 

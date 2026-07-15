@@ -134,6 +134,20 @@ enum RedrawSignal {
     AnimFrame,
 }
 
+/// Snapshot of content/scheduling stickies for restore on failed present.
+///
+/// Sticky content flags are cleared **only after successful present** so a
+/// Retry / Failed / missing-surface / throttle skip cannot drop resize,
+/// retry, or theme dirt (G5 defense-in-depth).
+#[derive(Debug, Clone, Copy, Default)]
+struct StickySnapshot {
+    needs_redraw: bool,
+    needs_anim_frame: bool,
+    resize_dirty: bool,
+    retry_dirty: bool,
+    theme_or_font_dirty: bool,
+}
+
 #[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PointerTraceEvent {
@@ -830,10 +844,68 @@ impl WindowRuntime {
         dirty
     }
 
-    /// Frame scheduling spine: [`FrameDriver`] decides; this method executes.
+    fn take_sticky_snapshot(&self) -> StickySnapshot {
+        StickySnapshot {
+            needs_redraw: self.needs_redraw,
+            needs_anim_frame: self.needs_anim_frame,
+            resize_dirty: self.resize_dirty,
+            retry_dirty: self.retry_dirty,
+            theme_or_font_dirty: self.theme_or_font_dirty,
+        }
+    }
+
+    /// Re-arm stickies that motivated this frame after a non-successful present.
     ///
-    /// Anim tick, rewrite/encode, and present are separate decision flags.
-    /// Full-window encode is still used (Phase 1); layered textures are Phase 2.
+    /// OR-merge so signals drained mid-frame are not clobbered.
+    fn restore_sticky_snapshot(&mut self, snap: StickySnapshot) {
+        self.needs_redraw |= snap.needs_redraw;
+        self.needs_anim_frame |= snap.needs_anim_frame;
+        self.resize_dirty |= snap.resize_dirty;
+        self.retry_dirty |= snap.retry_dirty;
+        self.theme_or_font_dirty |= snap.theme_or_font_dirty;
+    }
+
+    /// Clear only the stickies that this successful present fulfilled.
+    fn clear_sticky_snapshot(&mut self, snap: StickySnapshot) {
+        // New dirt raised after the snapshot (e.g. mid-frame resize signal) is
+        // kept; only bits that were set when we started are cleared.
+        if snap.needs_redraw {
+            self.needs_redraw = false;
+        }
+        if snap.needs_anim_frame {
+            // Anim may re-request during the tick; keep if still needed.
+            if !self.render_root.needs_anim() {
+                self.needs_anim_frame = false;
+            }
+        }
+        if snap.resize_dirty {
+            self.resize_dirty = false;
+        }
+        if snap.retry_dirty {
+            self.retry_dirty = false;
+        }
+        if snap.theme_or_font_dirty {
+            self.theme_or_font_dirty = false;
+        }
+    }
+
+    fn wants_redraw_after_work(&self) -> bool {
+        self.needs_redraw
+            || self.needs_anim_frame
+            || self.resize_dirty
+            || self.retry_dirty
+            || self.theme_or_font_dirty
+            || self.render_root.needs_anim()
+            || self.render_root.needs_rewrite_passes()
+    }
+
+    /// Frame scheduling spine: [`FrameDriver::decide_entry`] /
+    /// [`FrameDriver::decide_present`] decide; this method executes.
+    ///
+    /// Phase 1 execution split is **anim-tick vs encode/present** (full-window
+    /// rewrite+encode+present stay coupled when content present is required).
+    /// `FrameDecision::{do_rewrite,do_encode,do_present}` record intent; the
+    /// host only branches on `do_anim_tick` and `do_encode` until Phase 2 layers.
     ///
     /// Called from [`paint_masonry_ui`] as `window_runtime.step_frame(delta)`.
     fn step_frame(&mut self, delta: std::time::Duration) -> FrameStepResult {
@@ -851,19 +923,18 @@ impl WindowRuntime {
         }
         let mut phases = crate::perf::PaintPhaseTimings::default();
 
-        // Snapshot sticky flags before consuming them for this frame.
-        let incoming_redraw = self.needs_redraw;
+        // Snapshot stickies for decision + failed-path restore. Content stickies
+        // clear only after successful present (Issue 1).
+        let snap = self.take_sticky_snapshot();
         let first_paint = !self.has_painted_once;
-        let resize_dirty = self.resize_dirty;
-        let retry_dirty = self.retry_dirty;
-        let theme_or_font_dirty = self.theme_or_font_dirty;
         let had_unthrottled = pre_dirty.requires_unthrottled_present();
 
-        self.needs_redraw = false;
+        // Consume anim-frame request for this attempt; content stickies stay.
         self.needs_anim_frame = false;
-        self.resize_dirty = false;
-        self.retry_dirty = false;
-        self.theme_or_font_dirty = false;
+
+        // Temporarily clear redraw so post-tick AnimPaint is distinguishable from
+        // pre-tick InputOrRebuild. Content dirt is remembered in `snap`.
+        self.needs_redraw = false;
 
         if entry.do_anim_tick {
             // AnimFrame may run rewrite and emit RequestRedraw when pixels change.
@@ -876,28 +947,34 @@ impl WindowRuntime {
             self.drain_redraw_signals();
         }
 
+        let anim_raised_redraw = self.needs_redraw;
+        // Keep content sticky armed until present succeeds or restore on failure.
+        if snap.needs_redraw {
+            self.needs_redraw = true;
+        }
+
         // Post-tick dirty budget for encode/present decision.
         let mut post_dirty = DirtyBudget::new();
         if first_paint {
             post_dirty.insert(DirtyReason::FirstPaint);
         }
-        if resize_dirty {
+        if snap.resize_dirty {
             post_dirty.insert(DirtyReason::ResizeMetrics);
         }
-        if retry_dirty {
+        if snap.retry_dirty {
             post_dirty.insert(DirtyReason::RetrySurface);
         }
-        if theme_or_font_dirty {
+        if snap.theme_or_font_dirty {
             post_dirty.insert(DirtyReason::ThemeOrFont);
         }
-        if incoming_redraw {
+        if snap.needs_redraw {
             // Pre-tick redraw is content/input/rebuild (unthrottled).
             post_dirty.insert(DirtyReason::InputOrRebuild);
         }
-        if self.needs_redraw {
-            // Raised during AnimFrame (e.g. Spinner `request_paint_only`) → anim paint.
-            // Full-window encode still; layer isolation is Phase 2.
+        if anim_raised_redraw {
+            // Raised during AnimFrame (e.g. Spinner `request_paint_only`).
             post_dirty.insert(DirtyReason::AnimPaint { layer: 0 });
+            self.needs_redraw = true;
         }
         if self.render_root.needs_rewrite_passes() {
             post_dirty.insert(DirtyReason::LayoutRewrite);
@@ -913,16 +990,16 @@ impl WindowRuntime {
 
         if !present_decision.do_encode {
             paint_reasons |= crate::perf::PaintReason::AnimTickNoPresent as u32;
+            // Defense-in-depth: restore content stickies even though G5 reasons
+            // should always force encode (Issue 1).
+            self.restore_sticky_snapshot(snap);
             if present_decision.throttled_anim_present {
                 // Keep the anim clock scheduled; skip expensive encode/present.
                 self.needs_anim_frame = true;
             }
             return FrameStepResult {
                 painted: false,
-                wants_redraw: self.needs_redraw
-                    || self.needs_anim_frame
-                    || self.render_root.needs_anim()
-                    || self.render_root.needs_rewrite_passes()
+                wants_redraw: self.wants_redraw_after_work()
                     || present_decision.throttled_anim_present,
                 anim_tick_only: true,
                 paint_reasons,
@@ -931,17 +1008,16 @@ impl WindowRuntime {
             };
         }
 
-        // About to encode/present — clear pending paint flag from anim.
-        self.needs_redraw = false;
-
         let logical_size = self.render_root.size();
         // Root `redraw()` only. Rewrite inside AnimFrame is already in anim_tick.
         // `scene_build_anim` stays 0 until layered isolation (Phase 2).
+        // Phase 1: do_rewrite/do_encode/do_present stay coupled on this path.
         let scene_started = std::time::Instant::now();
         let (visual_layers, _tree_update) = self.render_root.redraw();
         phases.scene_build_base = scene_started.elapsed();
 
         let Some(surface) = self.window_surface.as_mut() else {
+            self.restore_sticky_snapshot(snap);
             self.needs_redraw = true;
             self.retry_dirty = true;
             return FrameStepResult {
@@ -967,10 +1043,13 @@ impl WindowRuntime {
             })
             .collect::<Vec<_>>();
         let Some(root_layer) = visual_layers.root_layer() else {
+            // Issue 2: re-arm stickies so FirstPaint/Resize/Retry cannot die here.
+            self.restore_sticky_snapshot(snap);
+            self.needs_redraw = true;
+            self.retry_dirty = true;
             return FrameStepResult {
                 painted: false,
-                wants_redraw: self.render_root.needs_anim()
-                    || self.render_root.needs_rewrite_passes(),
+                wants_redraw: self.wants_redraw_after_work(),
                 anim_tick_only: false,
                 paint_reasons,
                 phases,
@@ -1003,6 +1082,9 @@ impl WindowRuntime {
         let painted = matches!(render_result, RenderFrameResult::Presented);
         if painted {
             self.has_painted_once = true;
+            self.clear_sticky_snapshot(snap);
+            // Clear post-tick anim paint request fulfilled by this present.
+            self.needs_redraw = false;
             // Record anim-driven present for transitional throttle bookkeeping.
             if !had_unthrottled
                 && (entry.do_anim_tick
@@ -1012,18 +1094,25 @@ impl WindowRuntime {
             {
                 self.frame_driver.note_anim_present(now);
             }
-        } else if matches!(render_result, RenderFrameResult::Retry) {
-            // Retry retains dirty so the next frame is not anim-throttled away (P1.6).
+        } else {
+            // Retry / Failed: retain all content stickies that motivated the attempt.
+            self.restore_sticky_snapshot(snap);
             self.needs_redraw = true;
-            self.retry_dirty = true;
+            if matches!(render_result, RenderFrameResult::Retry) {
+                self.retry_dirty = true;
+            } else {
+                // Failed: still request another frame for content dirt.
+                self.retry_dirty |= snap.retry_dirty;
+            }
         }
         self.drain_redraw_signals();
 
         let decision = FrameDecision {
             do_anim_tick: entry.do_anim_tick,
-            do_rewrite: true,
-            do_encode: true,
-            do_present: painted || present_decision.do_present,
+            // Phase 1: rewrite+encode+present remain coupled when we enter this path.
+            do_rewrite: present_decision.do_rewrite,
+            do_encode: present_decision.do_encode,
+            do_present: painted,
             anim_tick_only: false,
             enter_work: true,
             throttled_anim_present: false,
@@ -1031,11 +1120,7 @@ impl WindowRuntime {
 
         FrameStepResult {
             painted,
-            wants_redraw: self.needs_redraw
-                || self.needs_anim_frame
-                || self.retry_dirty
-                || self.render_root.needs_anim()
-                || self.render_root.needs_rewrite_passes(),
+            wants_redraw: self.wants_redraw_after_work(),
             anim_tick_only: false,
             paint_reasons,
             phases,
@@ -3033,8 +3118,8 @@ mod tests {
 
     #[test]
     fn retry_dirty_appears_in_dirty_budget_as_unthrottled() {
-        // P1.6: RetrySurface is retained on WindowRuntime until step_frame
-        // consumes it; while set it must force unthrottled present (G5).
+        // P1.6: RetrySurface is retained on WindowRuntime until successful present;
+        // while set it must force unthrottled present (G5).
         let mut runtime = MasonryRuntime {
             windows: HashMap::new(),
             primary_window: None,
@@ -3061,6 +3146,46 @@ mod tests {
         assert!(
             decision.do_present,
             "RetrySurface must not be blocked by anim throttle"
+        );
+    }
+
+    #[test]
+    fn step_frame_missing_surface_restores_sticky_dirt() {
+        // Paint-path wiring: without a surface, step_frame must not drop
+        // resize/retry stickies and must keep wants_redraw (Issues 1–2 / 6).
+        let mut runtime = MasonryRuntime {
+            windows: HashMap::new(),
+            primary_window: None,
+            event_loop_proxy: Arc::new(Mutex::new(None)),
+            action_sink: InternalUiActionSink::default(),
+        };
+        let entity = Entity::from_bits(100);
+        let window = runtime.ensure_window(entity, true);
+        window.has_painted_once = true;
+        window.resize_dirty = true;
+        window.retry_dirty = true;
+        window.needs_redraw = true;
+        window.frame_driver.note_anim_present(std::time::Instant::now());
+
+        let result = window.step_frame(std::time::Duration::from_millis(16));
+        assert!(!result.painted, "no surface ⇒ cannot paint");
+        assert!(result.wants_redraw, "must request another frame");
+        assert!(
+            window.resize_dirty,
+            "resize_dirty must survive missing-surface early return"
+        );
+        assert!(
+            window.retry_dirty,
+            "retry_dirty must survive missing-surface early return"
+        );
+        assert!(
+            window.needs_redraw,
+            "needs_redraw must survive missing-surface early return"
+        );
+        // G5: decision still wanted encode/present (not throttled away).
+        assert!(
+            result.decision.do_encode || !result.anim_tick_only,
+            "content dirt must not be treated as pure anim skip: {result:?}"
         );
     }
 }

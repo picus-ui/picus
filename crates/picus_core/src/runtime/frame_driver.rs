@@ -217,22 +217,25 @@ impl FrameDriver {
 
     /// Entry decision from pre-tick dirty signals.
     ///
-    /// Separates `do_anim_tick` from encode/present (filled after tick).
+    /// Separates `do_anim_tick` from encode/present (filled after tick via
+    /// [`Self::decide_present`]). Host entry is [`super::WindowRuntime::step_frame`],
+    /// not a `FrameDriver::step` method.
+    ///
+    /// `do_rewrite` here is advisory only: Phase 1 keeps rewrite+encode+present
+    /// coupled on the content path. Pre-tick budgets never include `AnimPaint`
+    /// (that reason is inserted post-tick).
     pub(crate) fn decide_entry(dirty: &DirtyBudget) -> FrameDecision {
         if dirty.is_empty() {
             return FrameDecision::default();
         }
         FrameDecision {
             do_anim_tick: dirty.needs_anim_tick(),
-            // Rewrite is decided post-tick once Masonry may have dirtied layout.
+            // Advisory: host still couples rewrite to encode in Phase 1.
             do_rewrite: dirty.has(DirtyReason::LayoutRewrite)
                 || dirty.requires_unthrottled_present()
                 || dirty.has(DirtyReason::ThemeOrFont)
                 || dirty.has(DirtyReason::CompositorPlan)
-                || dirty.has(DirtyReason::AnimPaint { layer: 0 })
-                || dirty
-                    .iter()
-                    .any(|r| matches!(r, DirtyReason::AnimPaint { .. })),
+                || dirty.has(DirtyReason::InputOrRebuild),
             do_encode: false,
             do_present: false,
             anim_tick_only: false,
@@ -294,6 +297,12 @@ impl FrameDriver {
     }
 
     /// Whether the transitional pure-anim present throttle may skip this frame.
+    ///
+    /// Matches Phase 0 `anim_driven_present = should_tick && !incoming_redraw &&
+    /// !first_paint`: any non-G5 content present that co-occurs with the anim
+    /// clock (including **LayoutRewrite + AnimTick** without Input/Resize/etc.)
+    /// may be delayed. Pure `LayoutRewrite` without anim is never throttled.
+    /// G5 reasons and ThemeOrFont / CompositorPlan always present immediately.
     fn should_apply_anim_present_throttle(dirty: &DirtyBudget) -> bool {
         if dirty.requires_unthrottled_present() {
             return false;
@@ -302,7 +311,8 @@ impl FrameDriver {
         if dirty.has(DirtyReason::ThemeOrFont) || dirty.has(DirtyReason::CompositorPlan) {
             return false;
         }
-        // Only anim-driven pixel updates are throttled.
+        // AnimPaint alone, or any content present while the anim clock is active
+        // (e.g. LayoutRewrite + AnimTick after spinner rewrite).
         dirty
             .iter()
             .any(|r| matches!(r, DirtyReason::AnimPaint { .. }))
@@ -514,6 +524,24 @@ mod tests {
         assert!(
             decision.do_present,
             "LayoutRewrite without anim path must present: {decision:?}"
+        );
+    }
+
+    #[test]
+    fn layout_rewrite_plus_anim_tick_may_be_throttled() {
+        // Explicit Phase-0-compatible behavior: non-G5 content co-occurring with
+        // the anim clock is treated as anim-driven present and may skip under
+        // the transitional interval (not a G5 violation).
+        let mut dirty = DirtyBudget::new();
+        dirty.insert(DirtyReason::LayoutRewrite);
+        dirty.insert(DirtyReason::AnimTick);
+        let mut driver = FrameDriver::new();
+        let t0 = Instant::now();
+        driver.note_anim_present(t0);
+        let decision = driver.decide_present(&dirty, Some(interval_33ms()), t0);
+        assert!(
+            decision.throttled_anim_present && !decision.do_present,
+            "LayoutRewrite+AnimTick under throttle pressure may skip: {decision:?}"
         );
     }
 }

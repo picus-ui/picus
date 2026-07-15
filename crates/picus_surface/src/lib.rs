@@ -291,16 +291,21 @@ pub enum NegotiatedPresentCapability {
     /// Mailbox present mode: intermediate queued frames may be replaced
     /// (true drop-stale at the display path).
     MailboxLatest,
-    /// FIFO / FifoRelaxed / AutoVsync / Immediate fallback: only CPU-side
-    /// [`LatestReadyQueue`] coalescing of *unsubmitted* frames; submitted
-    /// frames are not withdrawable. Prefer backpressure over false drop-stale.
+    /// Non-mailbox negotiated mode (FIFO, FifoRelaxed, AutoVsync, Immediate, …).
+    ///
+    /// Name is historical for the common FIFO fallback path. **Not** every
+    /// non-mailbox mode is true FIFO queue backpressure (e.g. Immediate may tear).
+    /// Phase 1 honesty: this means “not MailboxLatest”; prefer CPU-side
+    /// unsubmitted coalescing helpers over a fake unified drop-stale promise.
+    /// Submitted frames are never claimed withdrawable.
     FifoBackpressure,
 }
 
 /// CPU-side policy for unsubmitted ready frames before `present()`.
 ///
-/// Applies to both mailbox and FIFO paths for work that Picus still owns.
-/// Once a frame is submitted to the swapchain, only mailbox can replace it.
+/// Helper policy type for future multi-buffer coalescing. **Not yet wired** into
+/// [`ExternalWindowSurface::render_frame`] (present remains single in-flight
+/// submit). Once a frame is submitted to the swapchain, only mailbox can replace it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum ReadyQueuePolicy {
     /// Keep only the latest unsubmitted ready frame; older unsubmitted frames
@@ -399,10 +404,12 @@ pub struct NegotiatedPresent {
 
 /// Single-slot ready queue for unsubmitted frames (LatestOnly).
 ///
-/// Used by FIFO fallback (and as a CPU-side coalescer generally): only the
-/// newest unsubmitted frame is retained. Calling [`take_for_submit`](Self::take_for_submit)
-/// moves the frame out for present; after that it is no longer in the queue and
-/// **cannot** be withdrawn through this API (G7 honesty for FIFO).
+/// Scaffolding for CPU-side coalescing (G7): only the newest unsubmitted frame
+/// is retained. **Not yet used on the hot present path** — unit-tested helper
+/// for Phase 2+ multi-buffer work. Calling [`take_for_submit`](Self::take_for_submit)
+/// moves the frame out for submit; after that it is no longer in the queue and
+/// **cannot** be withdrawn through this API (submitted FIFO frames are not
+/// claimed withdrawable).
 #[derive(Debug, Default)]
 pub struct LatestReadyQueue<T> {
     pending: Option<T>,
