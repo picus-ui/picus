@@ -220,10 +220,15 @@ flowchart TB
 rebuild_from_visual_plan(plan)  → CompositorEntry[] in Masonry painter order
 register_external_slot(widget)  → AnimLayerId; External→Anim when bound
 needs_encode                    → structure_dirty || encoded_version != content_version
+non-anim content dirt           → mark_non_anim_content_dirty bumps CachedScene/Overlay
+                                  (InputOrRebuild/Theme/Layout/…; pure AnimPaint does not)
 encode                          → only needs_encode entries; others reuse texture
 present success                 → mark_encoded + clear host dirty (sticky)
 present fail/retry              → retain dirty (no permanent spin beyond Phase 1 rules)
-resize/DPI                      → metrics_generation++; drop all layer targets; FirstPaint-all
+resize/DPI                      → metrics_generation++ from surface.physical_size();
+                                  drop all layer targets; FirstPaint-all
+alpha / Mica                    → layer targets straight-alpha; intermediate stack is
+                                  replace + straight-alpha over; present blitter premuls once
 ```
 
 **Not yet (do not overclaim):**

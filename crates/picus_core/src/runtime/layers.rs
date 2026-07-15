@@ -437,6 +437,10 @@ pub(crate) enum EntryIdentity {
 ///
 /// Upstream `VisualLayer` does not supply clip chains; Picus stores the package
 /// on the entry. Empty means “no additional clip beyond the render target”.
+///
+/// **P2b status:** always [`AncestorClip::none`] at rebuild — intentionally
+/// unpopulated until host/scene isolation supplies real clip chains (P2c+).
+/// Encode/composite do not yet apply this field.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub(crate) struct AncestorClip {
     /// Clip rects in window space, outer → inner.
@@ -463,6 +467,10 @@ impl AncestorClip {
 }
 
 /// Opacity / effect package carried with each entry (self-contained encode).
+///
+/// **P2b status:** always [`LayerEffect::OPAQUE`] at rebuild — intentionally
+/// unpopulated until isolation supplies per-entry opacity. Composite does not
+/// yet modulate by this field (would require blend-factor or Vello params).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct LayerEffect {
     pub opacity: f32,
@@ -632,6 +640,35 @@ impl CompositorPlan {
     }
 }
 
+/// Coalesced visual-plan run used by both plan rebuild and ordered encode.
+///
+/// Scene layers coalesce; each External is a singleton. Shared so
+/// `rebuild_from_visual_plan` and `encode_ordered_composite` cannot drift.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum VisualRun {
+    /// Indices into `VisualLayerPlan::layers` (all Scene).
+    Scenes(Vec<usize>),
+    /// Index of a single External layer.
+    External(usize),
+}
+
+/// Split a Masonry visual plan into painter-order runs (Issue 3: single source).
+pub(crate) fn coalesce_visual_runs(visual: &VisualLayerPlan) -> Vec<VisualRun> {
+    let mut runs: Vec<VisualRun> = Vec::new();
+    for (idx, layer) in visual.layers.iter().enumerate() {
+        match &layer.kind {
+            VisualLayerKind::External { .. } => {
+                runs.push(VisualRun::External(idx));
+            }
+            VisualLayerKind::Scene(_) => match runs.last_mut() {
+                Some(VisualRun::Scenes(indices)) => indices.push(idx),
+                _ => runs.push(VisualRun::Scenes(vec![idx])),
+            },
+        }
+    }
+    runs
+}
+
 /// Per-window layer plan + anim host (CPU-side; textures in `picus_surface`).
 #[derive(Debug)]
 pub(crate) struct LayerRegistry {
@@ -777,24 +814,7 @@ impl LayerRegistry {
             .map(|layer| layer.widget_id)
             .collect();
 
-        // Build ordered runs: Scene runs coalesce; External is a singleton run.
-        enum Run {
-            Scenes(Vec<usize>),
-            External(usize),
-        }
-        let mut runs: Vec<Run> = Vec::new();
-        for (idx, layer) in visual.layers.iter().enumerate() {
-            match &layer.kind {
-                VisualLayerKind::External { .. } => {
-                    runs.push(Run::External(idx));
-                }
-                VisualLayerKind::Scene(_) => match runs.last_mut() {
-                    Some(Run::Scenes(indices)) => indices.push(idx),
-                    _ => runs.push(Run::Scenes(vec![idx])),
-                },
-            }
-        }
-
+        let runs = coalesce_visual_runs(visual);
         let mut cached_seg = 0u32;
         let mut overlay_seg = 0u32;
         let mut next_entries: Vec<CompositorEntry> = Vec::with_capacity(runs.len());
@@ -802,7 +822,7 @@ impl LayerRegistry {
 
         for run in runs {
             match run {
-                Run::External(idx) => {
+                VisualRun::External(idx) => {
                     saw_external = true;
                     let layer = &visual.layers[idx];
                     let bounds = match &layer.kind {
@@ -829,6 +849,7 @@ impl LayerRegistry {
                             .host
                             .update_slot_geometry(aid, bounds, layer.transform);
                     }
+                    // Clip/effect intentionally none/opaque until P2c isolation.
                     next_entries.push(self.make_entry(
                         identity,
                         kind,
@@ -840,22 +861,29 @@ impl LayerRegistry {
                         Some(layer.widget_id),
                     ));
                 }
-                Run::Scenes(indices) => {
+                VisualRun::Scenes(indices) => {
                     let first = &visual.layers[indices[0]];
-                    // Classify as Overlay only when every widget in the run is an
-                    // overlay root and we are past content (or no External split).
+                    // Masonry `overlay_layers()` treats every Scene after the first as an
+                    // "overlay", including content that sits after an External slot. That
+                    // is a flatten-helper artifact — not a true tooltip/popup overlay.
+                    // Rule:
+                    // - With External in the plan: all Scene runs are CachedScene segments
+                    //   (anim sits between base content; trailing content is not Overlay).
+                    // - Without External: first Scene run = CachedScene; later Scene runs
+                    //   that overlay_layers would yield = Overlay.
                     let all_overlay = indices.iter().all(|&i| {
                         overlay_widget_ids.contains(&visual.layers[i].widget_id)
                     });
-                    let (kind, identity) = if all_overlay && (saw_external || cached_seg > 0) {
-                        let id = EntryIdentity::OverlaySegment(overlay_seg);
-                        overlay_seg = overlay_seg.saturating_add(1);
-                        (CompositorEntryKind::Overlay, id)
-                    } else {
-                        let id = EntryIdentity::CachedSegment(cached_seg);
-                        cached_seg = cached_seg.saturating_add(1);
-                        (CompositorEntryKind::CachedScene, id)
-                    };
+                    let (kind, identity) =
+                        if !saw_external && all_overlay && cached_seg > 0 {
+                            let id = EntryIdentity::OverlaySegment(overlay_seg);
+                            overlay_seg = overlay_seg.saturating_add(1);
+                            (CompositorEntryKind::Overlay, id)
+                        } else {
+                            let id = EntryIdentity::CachedSegment(cached_seg);
+                            cached_seg = cached_seg.saturating_add(1);
+                            (CompositorEntryKind::CachedScene, id)
+                        };
                     // Union bounds of scenes in the run (window-space estimate).
                     let mut bounds = layer_bounds_estimate(first, window_bounds);
                     for &i in indices.iter().skip(1) {
@@ -979,6 +1007,28 @@ impl LayerRegistry {
             anim_id,
             widget_id,
         }
+    }
+
+    /// Bump content version on CachedScene/Overlay when Masonry content may have
+    /// changed without geometry/order change (Issue 2).
+    ///
+    /// Call on `InputOrRebuild` / `ThemeOrFont` / `LayoutRewrite` / etc. before
+    /// encode. Pure `AnimPaint` must **not** call this — anim-only ticks leave
+    /// base segments clean for future G2.
+    pub(crate) fn mark_non_anim_content_dirty(&mut self) {
+        for e in self.plan.entries_mut() {
+            if matches!(
+                e.kind,
+                CompositorEntryKind::CachedScene | CompositorEntryKind::Overlay
+            ) {
+                e.bump_content();
+            }
+        }
+    }
+
+    /// Live compositor layer ids (for surface `retain_layer_targets`).
+    pub(crate) fn live_layer_id_raws(&self) -> Vec<u64> {
+        self.plan.entries.iter().map(|e| e.id.raw()).collect()
     }
 
     /// Mark successful encode/present for dirty entries; clear host dirty (sticky present).
@@ -1638,31 +1688,108 @@ mod tests {
         registry.rebuild_from_visual_plan(&plan, window_bounds);
 
         let kinds: Vec<_> = registry.plan().entries().iter().map(|e| e.kind).collect();
-        assert!(
-            kinds.len() >= 3,
-            "expected cached|anim|cached-style split, got {kinds:?}"
+        // Flex Inline|External|Inline must produce Cached|Anim|Cached (Issue 6).
+        assert_eq!(
+            kinds,
+            vec![
+                CompositorEntryKind::CachedScene,
+                CompositorEntryKind::Anim,
+                CompositorEntryKind::CachedScene,
+            ],
+            "painter-order split for Inline|External|Inline; plan layers={:?}",
+            plan.layers.len()
         );
-        // Painter order: first not Anim-only stack top; anim not forced last.
-        let anim_pos = kinds
-            .iter()
-            .position(|k| *k == CompositorEntryKind::Anim)
-            .expect("Anim entry");
-        assert!(anim_pos > 0, "anim should not swallow leading cached: {kinds:?}");
         assert!(
-            kinds.iter().any(|k| *k == CompositorEntryKind::CachedScene),
-            "cached segments required: {kinds:?}"
+            registry.plan().has_anim_between_cached_segments(),
+            "anim must sit between cached segments"
         );
-        // After anim there should still be a trailing cached/overlay segment when
-        // Masonry emitted scenes on both sides of External.
-        if registry.plan().has_anim_between_cached_segments() {
-            assert!(anim_pos + 1 < kinds.len(), "cached after anim: {kinds:?}");
-        }
+        // Shared coalesce must match plan entry count.
+        let runs = coalesce_visual_runs(&plan);
+        assert_eq!(runs.len(), kinds.len());
 
         // Stable LayerId across rebuild.
         let ids_before: Vec<_> = registry.plan().entries().iter().map(|e| e.id).collect();
         registry.rebuild_from_visual_plan(&plan, window_bounds);
         let ids_after: Vec<_> = registry.plan().entries().iter().map(|e| e.id).collect();
         assert_eq!(ids_before, ids_after, "LayerId stable across identical rebuild");
+    }
+
+    #[test]
+    fn non_anim_content_dirt_bumps_cached_after_present_without_geometry_change() {
+        // Issue 2 regression: after successful present, InputOrRebuild-class dirt
+        // must re-encode CachedScene even when bounds/order are unchanged.
+        let root_widget = NewWidget::new(
+            Flex::row()
+                .with_fixed(NewWidget::new(ModeBox::new(
+                    PaintLayerMode::Inline,
+                    Color::from_rgb8(255, 0, 0),
+                )))
+                .with_fixed(NewWidget::new(ModeBox::new(
+                    PaintLayerMode::External,
+                    Color::TRANSPARENT,
+                )))
+                .with_fixed(NewWidget::new(ModeBox::new(
+                    PaintLayerMode::Inline,
+                    Color::from_rgb8(0, 0, 255),
+                ))),
+        );
+        let mut root = test_root(root_widget);
+        let (plan, _) = root.redraw();
+        let ext_wid = plan
+            .layers
+            .iter()
+            .find(|l| matches!(l.kind, VisualLayerKind::External { .. }))
+            .map(|l| l.widget_id)
+            .expect("external");
+
+        let mut registry = LayerRegistry::new(AnimTargetStrategy::FIRST_COMPOSITE);
+        let anim_id = registry.host_mut().register_external_slot(ext_wid);
+        registry.host_mut().clear_dirty_after_encode(anim_id);
+        let bounds = Rect::new(0.0, 0.0, 80.0, 40.0);
+        registry.rebuild_from_visual_plan(&plan, bounds);
+        registry.clear_dirty_after_successful_present();
+        assert_eq!(
+            registry.plan().dirty_encode_ids().count(),
+            0,
+            "clean after present"
+        );
+
+        // Rebuild with same geometry (no structure change).
+        registry.rebuild_from_visual_plan(&plan, bounds);
+        assert_eq!(
+            registry.plan().dirty_encode_ids().count(),
+            0,
+            "geometry-stable rebuild alone must not dirty"
+        );
+
+        // Simulate InputOrRebuild / theme content dirt without AnimPaint.
+        registry.mark_non_anim_content_dirty();
+        let dirty_kinds: Vec<_> = registry
+            .plan()
+            .entries()
+            .iter()
+            .filter(|e| e.needs_encode())
+            .map(|e| e.kind)
+            .collect();
+        assert!(
+            dirty_kinds
+                .iter()
+                .all(|k| matches!(k, CompositorEntryKind::CachedScene | CompositorEntryKind::Overlay)),
+            "only CachedScene/Overlay dirtied, got {dirty_kinds:?}"
+        );
+        assert!(
+            dirty_kinds
+                .iter()
+                .any(|k| *k == CompositorEntryKind::CachedScene),
+            "CachedScene must need re-encode after content dirt"
+        );
+        // Anim entry stays clean when only non-anim content dirt is marked.
+        let anim_dirty = registry
+            .plan()
+            .entries()
+            .iter()
+            .any(|e| e.kind == CompositorEntryKind::Anim && e.needs_encode());
+        assert!(!anim_dirty, "Anim must not bump from mark_non_anim_content_dirty");
     }
 
     #[test]

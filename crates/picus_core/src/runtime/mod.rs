@@ -22,7 +22,7 @@ use self::frame_driver::{
     DirtyBudget, DirtyReason, FrameDecision, FrameDriver, FrameStepResult, RedrawDemand,
     anim_present_min_interval,
 };
-use self::layers::{CompositorEntryKind, LayerRegistry};
+use self::layers::{CompositorEntryKind, LayerRegistry, VisualRun, coalesce_visual_runs};
 
 use crate::masonry_core::{
     app::{RenderRoot, RenderRootOptions, RenderRootSignal, VisualLayerKind, WindowSizePolicy},
@@ -1148,23 +1148,6 @@ impl WindowRuntime {
             logical_size.width.max(1) as f64,
             logical_size.height.max(1) as f64,
         );
-        // Physical target size for FullWindowTransparent intermediate textures.
-        let physical_w = (logical_size.width.max(1) as f64 * self.window_scale_factor)
-            .round()
-            .max(1.0) as u32;
-        let physical_h = (logical_size.height.max(1) as f64 * self.window_scale_factor)
-            .round()
-            .max(1.0) as u32;
-        self.layer_registry
-            .notify_metrics_changed(physical_w, physical_h);
-        if first_paint {
-            self.layer_registry.notify_first_paint();
-        }
-        self.layer_registry
-            .rebuild_from_visual_plan(&visual_layers, window_bounds);
-        if self.layer_registry.plan_changed() {
-            post_dirty.insert(DirtyReason::CompositorPlan);
-        }
 
         // Take surface so we can borrow registry/renderer disjointly (P2.6 path).
         let Some(mut surface) = self.window_surface.take() else {
@@ -1181,9 +1164,43 @@ impl WindowRuntime {
                 decision: present_decision,
             };
         };
+
+        // Single source of truth for layer target size: surface physical config
+        // (from Bevy metrics), not a recomputed logical*scale (Issue 8).
+        let (physical_w, physical_h) = surface.physical_size();
+        self.layer_registry
+            .notify_metrics_changed(physical_w, physical_h);
+        if first_paint {
+            self.layer_registry.notify_first_paint();
+        }
+        self.layer_registry
+            .rebuild_from_visual_plan(&visual_layers, window_bounds);
+        if self.layer_registry.plan_changed() {
+            post_dirty.insert(DirtyReason::CompositorPlan);
+        }
+
+        // Issue 2: ordinary content dirt must bump CachedScene/Overlay versions.
+        // Pure AnimPaint alone leaves base clean for future G2 selective encode.
+        let non_anim_content_dirt = post_dirty.iter().any(|r| {
+            matches!(
+                r,
+                DirtyReason::FirstPaint
+                    | DirtyReason::InputOrRebuild
+                    | DirtyReason::LayoutRewrite
+                    | DirtyReason::ResizeMetrics
+                    | DirtyReason::ThemeOrFont
+                    | DirtyReason::RetrySurface
+                    | DirtyReason::CompositorPlan
+            )
+        });
+        if non_anim_content_dirt {
+            self.layer_registry.mark_non_anim_content_dirty();
+        }
+
         surface.sync_layer_metrics_generation(LayerMetricsGeneration(
             self.layer_registry.metrics_generation(),
         ));
+        surface.retain_layer_targets(&self.layer_registry.live_layer_id_raws());
 
         let background = if self.window_transparent {
             Color::TRANSPARENT
@@ -1368,20 +1385,16 @@ fn encode_ordered_composite(
 ) -> (RenderFrameResult, picus_surface::RenderFrameTimings) {
     use crate::masonry_core::imaging::record::Scene;
 
-    enum RunRef<'a> {
-        Scenes(Vec<&'a crate::masonry_core::app::VisualLayer>),
-        External,
-    }
-    let mut runs: Vec<RunRef<'_>> = Vec::new();
-    for layer in &visual_layers.layers {
-        match &layer.kind {
-            VisualLayerKind::External { .. } => runs.push(RunRef::External),
-            VisualLayerKind::Scene(_) => match runs.last_mut() {
-                Some(RunRef::Scenes(v)) => v.push(layer),
-                _ => runs.push(RunRef::Scenes(vec![layer])),
-            },
-        }
-    }
+    // Same run coalescing as LayerRegistry::rebuild_from_visual_plan (Issue 3).
+    let runs = coalesce_visual_runs(visual_layers);
+    debug_assert!(
+        runs.is_empty()
+            || runs.len() == registry.plan().len()
+            || (runs.is_empty() && registry.plan().len() == 1),
+        "compositor plan / visual runs length mismatch: runs={} plan={}",
+        runs.len(),
+        registry.plan().len()
+    );
 
     #[derive(Clone, Copy)]
     struct EntryMeta {
@@ -1423,10 +1436,11 @@ fn encode_ordered_composite(
                 )));
             }
             CompositorEntryKind::CachedScene | CompositorEntryKind::Overlay => {
-                // Overlays filled in second pass once storage is stable.
+                // Overlay ImagingLayers filled in second pass once storage is stable.
                 let mut overlays = Vec::new();
-                if let Some(RunRef::Scenes(scene_layers)) = runs.get(i) {
-                    for layer in scene_layers.iter().skip(1) {
+                if let Some(VisualRun::Scenes(indices)) = runs.get(i) {
+                    for &idx in indices.iter().skip(1) {
+                        let layer = &visual_layers.layers[idx];
                         if let VisualLayerKind::Scene(scene) = &layer.kind {
                             overlays.push(ImagingLayer {
                                 scene,
@@ -1459,8 +1473,9 @@ fn encode_ordered_composite(
             Color::TRANSPARENT
         };
         match runs.get(i) {
-            Some(RunRef::Scenes(scene_layers)) if !scene_layers.is_empty() => {
-                let VisualLayerKind::Scene(base_scene) = &scene_layers[0].kind else {
+            Some(VisualRun::Scenes(indices)) if !indices.is_empty() => {
+                let base_layer = &visual_layers.layers[indices[0]];
+                let VisualLayerKind::Scene(base_scene) = &base_layer.kind else {
                     prepared[i] = Some(PreparedFrame::new(
                         frame_w,
                         frame_h,

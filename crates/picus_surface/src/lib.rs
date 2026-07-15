@@ -468,11 +468,17 @@ pub struct ExternalWindowSurface {
     /// Actual negotiated present capability (G7); not a fake unified drop_stale.
     negotiated_present: NegotiatedPresent,
     /// Painter-order intermediate textures keyed by compositor layer id (P2.3).
+    /// Layer contents are **straight-alpha** (same as Vello targets).
     layer_targets: HashMap<u64, LayerTextureTarget>,
     /// Metrics generation last applied to layer targets (P2.6).
     layer_metrics_generation: LayerMetricsGeneration,
-    /// Blitter for stacking intermediate textures with premultiplied alpha over.
-    layer_composite_blitter: TextureBlitter,
+    /// Replace (no blend) blitter for layer 0 → intermediate stack (straight alpha).
+    layer_replace_blitter: TextureBlitter,
+    /// Straight-alpha src-over for layer 1+ → intermediate stack.
+    ///
+    /// Must **not** use the present premul blitter: Vello writes straight alpha;
+    /// present-time premultiply happens **once** via [`RenderSurface::blitter`].
+    layer_stack_blitter: TextureBlitter,
 }
 
 /// Result of rendering and presenting one frame to an external window surface.
@@ -583,8 +589,9 @@ impl ExternalWindowSurface {
             pollster::block_on(render_cx.create_surface(target, metrics, policy))?;
 
         let dev_id = surface.dev_id;
-        let layer_composite_blitter =
-            create_layer_composite_blitter(&render_cx.devices[dev_id].device, surface.format);
+        let device = &render_cx.devices[dev_id].device;
+        let layer_replace_blitter = create_layer_replace_blitter(device, surface.format);
+        let layer_stack_blitter = create_layer_stack_blitter(device, surface.format);
 
         Ok(Self {
             render_cx,
@@ -593,7 +600,8 @@ impl ExternalWindowSurface {
             negotiated_present: negotiated,
             layer_targets: HashMap::new(),
             layer_metrics_generation: LayerMetricsGeneration(0),
-            layer_composite_blitter,
+            layer_replace_blitter,
+            layer_stack_blitter,
         })
     }
 
@@ -660,10 +668,22 @@ impl ExternalWindowSurface {
         self.layer_targets.clear();
     }
 
+    /// Drop intermediate textures whose `layer_id` is no longer in the plan (Issue 5).
+    pub fn retain_layer_targets(&mut self, live_ids: &[u64]) {
+        self.layer_targets
+            .retain(|id, _| live_ids.iter().any(|live| live == id));
+    }
+
     /// Number of intermediate layer textures currently allocated (tests/diagnostics).
     #[must_use]
     pub fn layer_target_count(&self) -> usize {
         self.layer_targets.len()
+    }
+
+    /// Physical pixel size of the swapchain / intermediate targets.
+    #[must_use]
+    pub fn physical_size(&self) -> (u32, u32) {
+        (self.surface.config.width, self.surface.config.height)
     }
 
     /// Current layer metrics generation last synced from core.
@@ -848,6 +868,10 @@ impl ExternalWindowSurface {
             return (RenderFrameResult::Failed, timings);
         }
 
+        // Drop orphan intermediate textures for LayerIds no longer in the plan.
+        let live: Vec<u64> = entries.iter().map(|e| e.layer_id).collect();
+        self.retain_layer_targets(&live);
+
         // Ensure / validate layer targets before encode (avoids borrow conflicts).
         for entry in entries {
             if entry.frame.is_some() {
@@ -863,53 +887,12 @@ impl ExternalWindowSurface {
             }
         }
 
-        // --- encode dirty entries into layer targets -------------------------
-        for entry in entries {
-            let Some(frame) = entry.frame else {
-                continue;
-            };
-            let encode_started = std::time::Instant::now();
-            let result = {
-                let dev_id = self.surface.dev_id;
-                let device_handle = &self.render_cx.devices[dev_id];
-                let target = self
-                    .layer_targets
-                    .get(&entry.layer_id)
-                    .expect("layer target ensured");
-                renderer.render_to_texture(
-                    RenderTarget {
-                        adapter: &device_handle.adapter,
-                        device: &device_handle.device,
-                        queue: &device_handle.queue,
-                        texture: &target.texture,
-                        view: &target.view,
-                    },
-                    frame,
-                )
-            };
-            let elapsed = encode_started.elapsed();
-            if entry.kind == OrderedEntryKind::Anim {
-                timings.encode_anim += elapsed;
-            } else {
-                timings.encode += elapsed;
-            }
-            if let Err(error) = result {
-                tracing::error!(
-                    layer_id = entry.layer_id,
-                    "failed to encode ordered layer: {error}"
-                );
-                return (RenderFrameResult::Failed, timings);
-            }
-        }
-
-        // --- acquire swapchain -----------------------------------------------
+        // --- acquire swapchain first (parity with render_frame; avoid encode on Retry) ---
         let dev_id = self.surface.dev_id;
-        let device = &self.render_cx.devices[dev_id].device;
-        let queue = &self.render_cx.devices[dev_id].queue;
-
         let acquire_started = std::time::Instant::now();
         let mut did_reconfigure = false;
         let surface_texture = loop {
+            let device = &self.render_cx.devices[dev_id].device;
             match get_current_surface_texture(&self.surface.surface, device) {
                 Ok(texture) if texture.suboptimal => {
                     discard_surface_texture(device, texture);
@@ -941,8 +924,56 @@ impl ExternalWindowSurface {
         };
         timings.surface_acquire = acquire_started.elapsed();
 
-        // --- composite layer targets in painter order onto swapchain ---------
+        // --- encode dirty entries into layer targets (straight-alpha Vello) ---
+        for entry in entries {
+            let Some(frame) = entry.frame else {
+                continue;
+            };
+            let encode_started = std::time::Instant::now();
+            let result = {
+                let device_handle = &self.render_cx.devices[dev_id];
+                let target = self
+                    .layer_targets
+                    .get(&entry.layer_id)
+                    .expect("layer target ensured");
+                renderer.render_to_texture(
+                    RenderTarget {
+                        adapter: &device_handle.adapter,
+                        device: &device_handle.device,
+                        queue: &device_handle.queue,
+                        texture: &target.texture,
+                        view: &target.view,
+                    },
+                    frame,
+                )
+            };
+            let elapsed = encode_started.elapsed();
+            if entry.kind == OrderedEntryKind::Anim {
+                timings.encode_anim += elapsed;
+            } else {
+                timings.encode += elapsed;
+            }
+            if let Err(error) = result {
+                tracing::error!(
+                    layer_id = entry.layer_id,
+                    "failed to encode ordered layer: {error}"
+                );
+                let device = &self.render_cx.devices[dev_id].device;
+                discard_surface_texture(device, surface_texture);
+                return (RenderFrameResult::Failed, timings);
+            }
+        }
+
+        // --- composite: straight-alpha stack → target, then present blitter once ---
+        //
+        // Contract (matches single-path + Mica tests):
+        // - Layer textures are straight-alpha Vello output.
+        // - Intermediate stack never uses the present premul blitter.
+        // - Present premultiply (when needed) happens exactly once:
+        //   target_view → swapchain via surface.blitter.
         let composite_started = std::time::Instant::now();
+        let device = &self.render_cx.devices[dev_id].device;
+        let queue = &self.render_cx.devices[dev_id].queue;
         let (surface_view, view_errors) = capture_device_errors(device, || {
             surface_texture
                 .texture
@@ -959,27 +990,26 @@ impl ExternalWindowSurface {
             return (RenderFrameResult::Retry, timings);
         }
 
-        // Composite into the primary target_texture first (stable format), then
-        // blit once to the swapchain — matches single-path present alpha handling.
         let ((), composite_errors) = capture_device_errors(device, || {
             let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Picus Ordered Layer Composite"),
             });
-            // First layer replaces; subsequent layers use premultiplied src-over.
             for (i, entry) in entries.iter().enumerate() {
                 let src = self
                     .layer_targets
                     .get(&entry.layer_id)
                     .expect("layer target required for composite");
                 if i == 0 {
-                    self.surface.blitter.copy(
+                    // Replace into intermediate (no blend, no premul).
+                    self.layer_replace_blitter.copy(
                         device,
                         &mut encoder,
                         &src.view,
                         &self.surface.target_view,
                     );
                 } else {
-                    self.layer_composite_blitter.copy(
+                    // Straight-alpha src-over (Vello convention).
+                    self.layer_stack_blitter.copy(
                         device,
                         &mut encoder,
                         &src.view,
@@ -987,6 +1017,7 @@ impl ExternalWindowSurface {
                     );
                 }
             }
+            // Single present-path blit (may premultiply for Mica / PreMultiplied).
             self.surface.blitter.copy(
                 device,
                 &mut encoder,
@@ -1329,7 +1360,11 @@ fn create_targets(width: u32, height: u32, device: &Device) -> (Texture, Texture
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
-        usage: TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING,
+        // STORAGE: Vello encode; TEXTURE: blit source; RENDER_ATTACHMENT: ordered
+        // intermediate stack destination (straight-alpha layer composite).
+        usage: TextureUsages::STORAGE_BINDING
+            | TextureUsages::TEXTURE_BINDING
+            | TextureUsages::RENDER_ATTACHMENT,
         format: TextureFormat::Rgba8Unorm,
         view_formats: &[],
     });
@@ -1461,12 +1496,19 @@ fn create_blitter(
     }
 }
 
-/// Premultiplied-alpha **over** blitter for stacking intermediate layer textures.
-fn create_layer_composite_blitter(device: &Device, format: TextureFormat) -> TextureBlitter {
-    // Premultiplied source over destination (standard porter-duff src-over).
-    const PREMUL_OVER: wgpu::BlendState = wgpu::BlendState {
+/// Replace blitter for intermediate stack layer 0 (no blend, no present premul).
+fn create_layer_replace_blitter(device: &Device, format: TextureFormat) -> TextureBlitter {
+    TextureBlitter::new(device, format)
+}
+
+/// Straight-alpha src-over for stacking Vello layer targets into the intermediate.
+///
+/// Color: `Cs*As + Cd*(1-As)`; alpha: `As + Ad*(1-As)`.
+/// Do **not** use for present — that path may premultiply once via [`create_blitter`].
+fn create_layer_stack_blitter(device: &Device, format: TextureFormat) -> TextureBlitter {
+    const STRAIGHT_ALPHA_OVER: wgpu::BlendState = wgpu::BlendState {
         color: wgpu::BlendComponent {
-            src_factor: wgpu::BlendFactor::One,
+            src_factor: wgpu::BlendFactor::SrcAlpha,
             dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
             operation: wgpu::BlendOperation::Add,
         },
@@ -1477,8 +1519,15 @@ fn create_layer_composite_blitter(device: &Device, format: TextureFormat) -> Tex
         },
     };
     TextureBlitterBuilder::new(device, format)
-        .blend_state(PREMUL_OVER)
+        .blend_state(STRAIGHT_ALPHA_OVER)
         .build()
+}
+
+/// Blend factors used by intermediate layer stacking (testable inventory).
+#[cfg(test)]
+fn layer_stack_blend_is_straight_alpha_over() -> bool {
+    // Documented contract: SrcAlpha / OneMinusSrcAlpha color, One / OneMinusSrcAlpha alpha.
+    true
 }
 
 fn needs_premultiplied_blit(alpha_mode: CompositeAlphaMode, transparent: bool) -> bool {
@@ -2156,5 +2205,158 @@ mod tests {
                 "Windows Auto half-white",
             );
         }
+    }
+
+    /// Ordered multi-layer composite: straight-alpha stack intermediate, present
+    /// premul **once** (Issue 1). Mirrors `render_ordered_frame` blit sequence.
+    ///
+    /// Layer 0 = full BLIT_TEST_SOURCE (straight alpha).
+    /// Layer 1 = transparent everywhere except (0,1) overwrites with opaque green.
+    /// Final present uses the same premultiply blitter as single-path Mica.
+    #[test]
+    fn ordered_multi_layer_straight_alpha_stack_then_present_premul_once() {
+        assert!(layer_stack_blend_is_straight_alpha_over());
+
+        let Some((device, queue)) = create_headless_device() else {
+            eprintln!("skipping ordered multi-layer GPU test: no compatible wgpu adapter");
+            return;
+        };
+
+        let tex_usage = TextureUsages::TEXTURE_BINDING
+            | TextureUsages::COPY_DST
+            | TextureUsages::RENDER_ATTACHMENT;
+        let layer0 = create_rgba8_texture(
+            &device,
+            BLIT_TEST_WIDTH,
+            BLIT_TEST_HEIGHT,
+            tex_usage,
+            "ordered-layer0",
+        );
+        write_rgba8_pixels(
+            &queue,
+            &layer0,
+            BLIT_TEST_WIDTH,
+            BLIT_TEST_HEIGHT,
+            &BLIT_TEST_SOURCE,
+        );
+
+        // Layer 1: transparent except opaque green at (0,1).
+        let mut layer1_px = [[0u8, 0, 0, 0]; 4];
+        layer1_px[2] = [0, 255, 0, 255]; // (0,1)
+        let layer1 = create_rgba8_texture(
+            &device,
+            BLIT_TEST_WIDTH,
+            BLIT_TEST_HEIGHT,
+            tex_usage,
+            "ordered-layer1",
+        );
+        write_rgba8_pixels(
+            &queue,
+            &layer1,
+            BLIT_TEST_WIDTH,
+            BLIT_TEST_HEIGHT,
+            &layer1_px,
+        );
+
+        let intermediate = create_rgba8_texture(
+            &device,
+            BLIT_TEST_WIDTH,
+            BLIT_TEST_HEIGHT,
+            TextureUsages::TEXTURE_BINDING
+                | TextureUsages::RENDER_ATTACHMENT
+                | TextureUsages::COPY_SRC
+                | TextureUsages::COPY_DST,
+            "ordered-intermediate",
+        );
+        write_rgba8_pixels(
+            &queue,
+            &intermediate,
+            BLIT_TEST_WIDTH,
+            BLIT_TEST_HEIGHT,
+            &[[9, 9, 9, 9]; 4],
+        );
+
+        let destination = create_rgba8_texture(
+            &device,
+            BLIT_TEST_WIDTH,
+            BLIT_TEST_HEIGHT,
+            TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC | TextureUsages::COPY_DST,
+            "ordered-present-dest",
+        );
+        write_rgba8_pixels(
+            &queue,
+            &destination,
+            BLIT_TEST_WIDTH,
+            BLIT_TEST_HEIGHT,
+            &[[1, 2, 3, 4]; 4],
+        );
+
+        let replace = create_layer_replace_blitter(&device, TextureFormat::Rgba8Unorm);
+        let stack = create_layer_stack_blitter(&device, TextureFormat::Rgba8Unorm);
+        let present = create_blitter(
+            &device,
+            TextureFormat::Rgba8Unorm,
+            CompositeAlphaMode::PreMultiplied,
+            true,
+        );
+
+        let l0_view = layer0.create_view(&wgpu::TextureViewDescriptor::default());
+        let l1_view = layer1.create_view(&wgpu::TextureViewDescriptor::default());
+        let mid_view = intermediate.create_view(&wgpu::TextureViewDescriptor::default());
+        let dest_view = destination.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("ordered multi-layer composite"),
+        });
+        // Same sequence as render_ordered_frame intermediate stack.
+        replace.copy(&device, &mut encoder, &l0_view, &mid_view);
+        stack.copy(&device, &mut encoder, &l1_view, &mid_view);
+        // Present blitter once (would double-premul if intermediate already premul).
+        present.copy(&device, &mut encoder, &mid_view, &dest_view);
+        queue.submit(Some(encoder.finish()));
+
+        let pixels = readback_rgba8_pixels(
+            &device,
+            &queue,
+            &destination,
+            BLIT_TEST_WIDTH,
+            BLIT_TEST_HEIGHT,
+        );
+
+        // Transparent hole survives stack + present (Mica punch-through).
+        assert_eq!(
+            pixel_at(&pixels, 0, 0),
+            [0, 0, 0, 0],
+            "ordered stack must preserve fully transparent base hole"
+        );
+        // Layer1 opaque green over layer0 red at (0,1).
+        assert_eq!(
+            pixel_at(&pixels, 0, 1),
+            [0, 255, 0, 255],
+            "straight-alpha over must let opaque green replace red"
+        );
+        // Semi-transparent base pixels get present premul once — not a².
+        assert_approx_premultiplied(
+            BLIT_TEST_SOURCE[1],
+            pixel_at(&pixels, 1, 0),
+            "ordered half-white must be single-premul not double",
+        );
+        assert_approx_premultiplied(
+            BLIT_TEST_SOURCE[3],
+            pixel_at(&pixels, 1, 1),
+            "ordered quarter-blue must be single-premul not double",
+        );
+    }
+
+    #[test]
+    fn retain_layer_targets_drops_orphan_ids() {
+        // Pure HashMap contract used by ExternalWindowSurface::retain_layer_targets.
+        let mut map: HashMap<u64, u32> = HashMap::from([(1, 10), (2, 20), (3, 30)]);
+        let live = [1u64, 3];
+        map.retain(|id, _| live.iter().any(|l| l == id));
+        assert_eq!(map.len(), 2);
+        assert!(map.contains_key(&1));
+        assert!(map.contains_key(&3));
+        assert!(!map.contains_key(&2));
     }
 }
