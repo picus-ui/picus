@@ -44,17 +44,18 @@ path. Full plan: [plans/frame-pipeline.md](../plans/frame-pipeline.md).
 | **C Scene build** | Rewrite + build/encode scene (today: full window; target: painter-order entries) | Only when corresponding content changes | Uncommitted work may merge |
 | **D Present** | Submit the latest ready composite | Display path | Mailbox drops stale; FIFO may only backpressure |
 
-**Today (Phase 1 / 1b)** each window’s paint path runs through an internal
-`FrameDriver` (`picus_core::runtime::frame_driver`, not on the app facade).
+**Today (Phase 1 / 1b + P2b infrastructure)** each window's paint path runs through an
+internal `FrameDriver` (`picus_core::runtime::frame_driver`, not on the app facade).
 `paint_masonry_ui` → `WindowRuntime::step_frame`, which uses
 `FrameDriver::decide_entry` / `decide_present` (there is no `FrameDriver::step`).
 `DirtyBudget` aggregates `FirstPaint`, `InputOrRebuild`, `LayoutRewrite`,
 `ResizeMetrics`, `AnimPaint { layer }`, `AnimTick`, `CompositorPlan`,
-`ThemeOrFont`, `RetrySurface`. Decision flags record intent; **Phase 1
-execution only splits anim-tick vs full-window encode/present** —
-`do_rewrite` / `do_encode` / `do_present` stay coupled on the content path until
-layered textures (Phase 2). Sticky content dirt (`resize_dirty`, `retry_dirty`,
-`theme_or_font_dirty`, …) is cleared **only after successful present**.
+`ThemeOrFont`, `RetrySurface`. Decision flags record intent; rewrite+encode+present
+stay coupled on the content path. Single-`CachedScene` plans use full-window
+`render_frame`; multi-entry plans use ordered `render_ordered_frame` (encode only
+version/structure-dirty entries). Sticky content dirt (`resize_dirty`,
+`retry_dirty`, `theme_or_font_dirty`, entry dirty flags, …) is cleared **only after
+successful present**.
 
 **Hard rule (G5):** `ResizeMetrics`, `InputOrRebuild`, `FirstPaint`, and
 `RetrySurface` are **never** skipped by the anim present throttle. Continuous
@@ -176,62 +177,79 @@ must be owned by Picus dirty sets, not by slicing the plan after the fact.
 - **Masonry:** layout, hit-test, painter-order **`PaintLayerMode::External`** placeholders
   (widget must call `set_paint_layer_mode(External)` **every paint** — mode is not sticky;
   host registration alone does not set mode).
-- **Picus host:** independent anim entry state (`AnimLayerId`, bounds, transform, version, dirty); P2b builds anim scenes/textures only for dirty entries.
-- **Composite (P2b, not this PR):** exact painter-order composite of base segment(s) + host anim textures + overlays.
+- **Picus host:** independent anim entry state (`AnimLayerId`, bounds, transform, version, dirty).
+- **Composite (P2b infrastructure):** exact painter-order composite of
+  `CompositorEntryKind::{CachedScene, Anim, Overlay, External}` via stable Picus
+  `LayerId`s — **not** a fixed Base→Overlay→Anim stack. Cached segments may appear
+  both before and after an anim/external slot.
 
 **Upstream revision strategy (parallel, non-blocking):** track/contribute persistent
-`LayerId`, sticky isolation, self-contained clip/effect on isolated layers, and selective
+upstream `LayerId`, sticky isolation, self-contained clip/effect on isolated layers, and selective
 layer redraw. If a future pin gains
 `MasonryLayerCapabilities::supports_upstream_only_anim_isolation()`, Picus may
-narrow the host; P2b does not wait on that.
+narrow the host; composite does not wait on that.
 
-**Failure fallback:** keep Phase 1 full-window encode + transitional anim present
-throttle until host+composite land; never claim VisualLayerPlan classification as
-isolation.
+**Failure fallback:** single-`CachedScene` plans still use the Phase 1 full-window
+encode path; transitional anim present throttle remains until G2 vertical slices
+pass (P2c+). Never claim VisualLayerPlan classification as isolation.
 
-#### Ownership / lifecycle
+#### Ownership / lifecycle (P2b infrastructure)
 
-**P2a status:** `AnimLayerHost` is a free-standing scaffold in
-`picus_core::runtime::layers`. It is **not** a `WindowRuntime` field and is **not**
-used by `step_frame` / paint. Current product path remains full-window encode with
-`AnimPaint { layer: 0 }`.
-
-**Planned ownership (P2b target)** — diagram below is aspirational:
+`LayerRegistry` (plan + `AnimLayerHost`) is a field on `WindowRuntime`.
+`step_frame` rebuilds a painter-order `CompositorPlan` from each
+`VisualLayerPlan`. GPU intermediate textures live in `picus_surface`
+(`render_ordered_frame`), keyed by `LayerId::raw` and gated by
+`LayerMetricsGeneration` (resize/DPI drops all targets atomically — never mix
+old-size textures with a new plan).
 
 ```mermaid
 flowchart TB
-  subgraph window["WindowRuntime (planned P2b)"]
+  subgraph window["WindowRuntime"]
     RR["RenderRoot / Masonry<br/>layout · hit-test · External slots"]
-    Host["AnimLayerHost (Picus)<br/>AnimLayerId · dirty · version"]
-    Surf["LayerSurfaces<br/>base + anim textures"]
+    Reg["LayerRegistry<br/>CompositorPlan · AnimLayerHost"]
+    Surf["ExternalWindowSurface<br/>layer targets + ordered composite"]
   end
-  RR -->|"painter-order External placeholder"| Host
-  Host -->|"dirty anim entries only"| Surf
-  RR -->|"base plan when base_dirty"| Surf
-  Surf -->|"exact-order composite"| Present["swapchain present"]
+  RR -->|"VisualLayerPlan painter order"| Reg
+  Reg -->|"dirty entries only (version/structure)"| Surf
+  Surf -->|"entry-order composite"| Present["swapchain present"]
 ```
 
 ```text
-# P2b target contract (not current behavior)
+# Current P2b contract
 
-register_external_slot(widget_id)  → AnimLayerId in host maps only
-  (widget path must set_paint_layer_mode(External) every paint — not sticky)
-layout/compose                     → update bounds/transform; CompositorPlan if plan changes
-AnimFrame tick                     → host.mark_anim_paint(id)
-                                     [target] skip base rewrite when only anim dirty
-encode                             → [target] dirty host entries only; base if base_dirty
-unmount                            → host.remove_widget; External slot drops on next plan
+rebuild_from_visual_plan(plan)  → CompositorEntry[] in Masonry painter order
+register_external_slot(widget)  → AnimLayerId; External→Anim when bound
+needs_encode                    → structure_dirty || encoded_version != content_version
+encode                          → only needs_encode entries; others reuse texture
+present success                 → mark_encoded + clear host dirty (sticky)
+present fail/retry              → retain dirty (no permanent spin beyond Phase 1 rules)
+resize/DPI                      → metrics_generation++; drop all layer targets; FirstPaint-all
 ```
+
+**Not yet (do not overclaim):**
+
+- Spinner / indeterminate ProgressBar product anim content (P2c/P2d)
+- Skipping base rewrite on pure anim ticks (G2 still open)
+- Widgets auto-calling `set_paint_layer_mode(External)` every paint
 
 #### Anim target choice (size gate input)
 
-| Strategy | Encode shape | First P2b? |
-|----------|--------------|------------|
-| **Full-window transparent** anim target; only anim widgets paint | Full-window clear of anim RT; sparse scene | **Yes** (plan §2.0) |
+| Strategy | Encode shape | First composite? |
+|----------|--------------|------------------|
+| **Full-window transparent** anim target; only anim widgets paint | Full-window clear of anim RT; sparse scene | **Yes** (selected) |
 | Widget-bounds / atlas | Smaller encode; more bookkeeping | Deferred (P4 / if G3·G4 fail) |
 
 Rationale and budget assumptions:
 [perf/frame-pipeline-baseline.md](../perf/frame-pipeline-baseline.md) §6.
+
+#### Timing (P2.5)
+
+`PICUS_FRAME_TIMING=1` continues to report per-window `frame_id` with
+`scene_build_base_ms` / `scene_build_anim_ms` / `encode_base_ms` /
+`encode_anim_ms` / `composite_ms`. Ordered path attributes non-anim entry
+encodes to `encode_base` and `OrderedEntryKind::Anim` to `encode_anim`.
+`scene_build_anim_ms` stays 0 until host scene builders land (P2c). These remain
+**CPU submit-path** times.
 
 ### Frame pipeline evolution
 

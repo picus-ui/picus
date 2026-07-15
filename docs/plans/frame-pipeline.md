@@ -472,7 +472,8 @@ PR6-docs-cleanup
 | P1 | **完成**（FrameDriver + PresentPolicy + 决策表 / G5） |
 | P1b | **完成**（`RedrawDemand` 分类 + reactive 文档；无 paint-only Bevy 捷径） |
 | P2a | **完成**（Masonry 层契约硬门禁 + `AnimLayerHost` scaffold + 目标策略文档） |
-| P2b+ | 未开始（多 texture composite / Spinner anim 层） |
+| P2b | **完成基础设施**（`CompositorEntryKind` + 稳定 `LayerId`、painter-order plan、dirty/version、`render_ordered_frame` 多 texture composite、resize metrics generation、timing 分桶）；**未**做 Spinner 垂直切片（P2c） |
+| P2c+ | 未开始（Spinner anim entry / ProgressBar / 去 throttle） |
 | P3 | 未开始 |
 | P4 | 可选·未开始 |
 | P5 | 可选·未开始 |

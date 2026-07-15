@@ -5,8 +5,9 @@
 //! (anim tick, encode, present) remains on [`WindowRuntime`]; Bevy still receives
 //! a single `RequestRedraw` when demand is non-empty.
 //!
-//! [`layers`] holds the Phase 2a Masonry layer-contract gate and [`AnimLayerHost`]
-//! scaffold (not yet wired into the paint path; multi-texture composite is P2b).
+//! [`layers`] holds the Phase 2a Masonry layer-contract gate, [`AnimLayerHost`],
+//! and the P2b painter-order [`LayerRegistry`] / [`CompositorPlan`] used by
+//! ordered multi-texture composite.
 
 pub(crate) mod frame_driver;
 pub(crate) mod layers;
@@ -21,6 +22,7 @@ use self::frame_driver::{
     DirtyBudget, DirtyReason, FrameDecision, FrameDriver, FrameStepResult, RedrawDemand,
     anim_present_min_interval,
 };
+use self::layers::{CompositorEntryKind, LayerRegistry};
 
 use crate::masonry_core::{
     app::{RenderRoot, RenderRootOptions, RenderRootSignal, VisualLayerKind, WindowSizePolicy},
@@ -57,7 +59,8 @@ use bevy_window::{
 use bevy_winit::{EventLoopProxy, EventLoopProxyWrapper, WinitUserEvent};
 use picus_imaging::{Layer as ImagingLayer, PreparedFrame, texture_render::Renderer};
 use picus_surface::{
-    ExistingWindowMetrics, ExternalWindowSurface, PresentPolicy, RenderFrameResult,
+    ExistingWindowMetrics, ExternalWindowSurface, LayerMetricsGeneration, OrderedEntryKind,
+    OrderedLayerEncode, PresentPolicy, RenderFrameResult,
 };
 use picus_view::{
     ViewCtx,
@@ -199,6 +202,8 @@ pub struct WindowRuntime {
     theme_or_font_dirty: bool,
     /// Per-window frame scheduler (decision table + transitional anim throttle).
     frame_driver: FrameDriver,
+    /// Painter-order compositor plan + anim host (P2b infrastructure).
+    layer_registry: LayerRegistry,
     viewport_width: f64,
     viewport_height: f64,
     window_surface: Option<ExternalWindowSurface>,
@@ -319,6 +324,7 @@ impl WindowRuntime {
             retry_dirty: false,
             theme_or_font_dirty: false,
             frame_driver: FrameDriver::new(),
+            layer_registry: LayerRegistry::default(),
             viewport_width: initial_viewport.0,
             viewport_height: initial_viewport.1,
             window_surface: None,
@@ -822,7 +828,7 @@ impl WindowRuntime {
         }
     }
 
-    /// Collect Phase-1 dirty reasons from sticky flags + Masonry signals.
+    /// Collect dirty reasons from sticky flags + Masonry signals + layer registry.
     fn collect_dirty_budget(&self) -> DirtyBudget {
         let mut dirty = DirtyBudget::new();
         if !self.has_painted_once {
@@ -846,6 +852,12 @@ impl WindowRuntime {
         }
         if self.render_root.needs_rewrite_passes() {
             dirty.insert(DirtyReason::LayoutRewrite);
+        }
+        if self.layer_registry.plan_changed() {
+            dirty.insert(DirtyReason::CompositorPlan);
+        }
+        for layer in self.layer_registry.host().dirty_anim_paint_layers() {
+            dirty.insert(DirtyReason::AnimPaint { layer });
         }
         dirty
     }
@@ -1123,13 +1135,39 @@ impl WindowRuntime {
 
         let logical_size = self.render_root.size();
         // Root `redraw()` only. Rewrite inside AnimFrame is already in anim_tick.
-        // `scene_build_anim` stays 0 until layered isolation (Phase 2).
         // Phase 1: do_rewrite/do_encode/do_present stay coupled on this path.
+        // P2b: rebuild compositor plan; ordered multi-texture composite when the
+        // plan is not a single CachedScene.
         let scene_started = std::time::Instant::now();
         let (visual_layers, _tree_update) = self.render_root.redraw();
         phases.scene_build_base = scene_started.elapsed();
 
-        let Some(surface) = self.window_surface.as_mut() else {
+        let window_bounds = crate::masonry_core::kurbo::Rect::new(
+            0.0,
+            0.0,
+            logical_size.width.max(1) as f64,
+            logical_size.height.max(1) as f64,
+        );
+        // Physical target size for FullWindowTransparent intermediate textures.
+        let physical_w = (logical_size.width.max(1) as f64 * self.window_scale_factor)
+            .round()
+            .max(1.0) as u32;
+        let physical_h = (logical_size.height.max(1) as f64 * self.window_scale_factor)
+            .round()
+            .max(1.0) as u32;
+        self.layer_registry
+            .notify_metrics_changed(physical_w, physical_h);
+        if first_paint {
+            self.layer_registry.notify_first_paint();
+        }
+        self.layer_registry
+            .rebuild_from_visual_plan(&visual_layers, window_bounds);
+        if self.layer_registry.plan_changed() {
+            post_dirty.insert(DirtyReason::CompositorPlan);
+        }
+
+        // Take surface so we can borrow registry/renderer disjointly (P2.6 path).
+        let Some(mut surface) = self.window_surface.take() else {
             self.restore_sticky_snapshot(snap);
             self.needs_redraw = true;
             self.retry_dirty = true;
@@ -1143,57 +1181,86 @@ impl WindowRuntime {
                 decision: present_decision,
             };
         };
+        surface.sync_layer_metrics_generation(LayerMetricsGeneration(
+            self.layer_registry.metrics_generation(),
+        ));
 
-        let overlays = visual_layers
-            .overlay_layers()
-            .map(|layer| {
-                let VisualLayerKind::Scene(scene) = &layer.kind else {
-                    unreachable!("overlay_layers only returns scene layers");
-                };
-                ImagingLayer {
-                    scene,
-                    transform: layer.transform,
-                }
-            })
-            .collect::<Vec<_>>();
-        let Some(root_layer) = visual_layers.root_layer() else {
-            // Issue 2: re-arm stickies so FirstPaint/Resize/Retry cannot die here.
-            self.restore_sticky_snapshot(snap);
-            self.needs_redraw = true;
-            self.retry_dirty = true;
-            return FrameStepResult {
-                painted: false,
-                redraw_demand: self.redraw_demand_force_content_present(),
-                anim_tick_only: false,
-                paint_reasons,
-                phases,
-                decision: present_decision,
-            };
-        };
-        let VisualLayerKind::Scene(root_scene) = &root_layer.kind else {
-            unreachable!("root_layer always returns a scene layer");
-        };
         let background = if self.window_transparent {
             Color::TRANSPARENT
         } else {
             Color::BLACK
         };
-        let frame = PreparedFrame::new(
-            logical_size.width.max(1),
-            logical_size.height.max(1),
-            self.window_scale_factor,
-            background,
-            root_scene,
-            &overlays,
-        );
+        let frame_w = logical_size.width.max(1);
+        let frame_h = logical_size.height.max(1);
+        let scale = self.window_scale_factor;
+        let prefer_ordered = self.layer_registry.prefers_ordered_composite();
 
-        let (render_result, surface_timings) = surface.render_frame(&mut self.renderer, frame);
+        let (render_result, surface_timings) = if prefer_ordered {
+            // Multi-entry ordered path (P2.3): encode version-dirty entries only.
+            // Anim/External host scenes land in P2c; until then empty transparent.
+            encode_ordered_composite(
+                &self.layer_registry,
+                &mut self.renderer,
+                &mut surface,
+                &visual_layers,
+                background,
+                frame_w,
+                frame_h,
+                scale,
+            )
+        } else {
+            // Single CachedScene path: existing full-window flatten encode.
+            let overlays = visual_layers
+                .overlay_layers()
+                .map(|layer| {
+                    let VisualLayerKind::Scene(scene) = &layer.kind else {
+                        unreachable!("overlay_layers only returns scene layers");
+                    };
+                    ImagingLayer {
+                        scene,
+                        transform: layer.transform,
+                    }
+                })
+                .collect::<Vec<_>>();
+            let Some(root_layer) = visual_layers.root_layer() else {
+                self.window_surface = Some(surface);
+                self.restore_sticky_snapshot(snap);
+                self.needs_redraw = true;
+                self.retry_dirty = true;
+                return FrameStepResult {
+                    painted: false,
+                    redraw_demand: self.redraw_demand_force_content_present(),
+                    anim_tick_only: false,
+                    paint_reasons,
+                    phases,
+                    decision: present_decision,
+                };
+            };
+            let VisualLayerKind::Scene(root_scene) = &root_layer.kind else {
+                unreachable!("root_layer always returns a scene layer");
+            };
+            let frame =
+                PreparedFrame::new(frame_w, frame_h, scale, background, root_scene, &overlays);
+            let result = surface.render_frame(&mut self.renderer, frame);
+            result
+        };
+
+        self.window_surface = Some(surface);
+
         phases.surface_acquire = surface_timings.surface_acquire;
-        // Full-window encode maps to base until layered anim encode exists.
         phases.encode_base = surface_timings.encode;
+        phases.encode_anim = surface_timings.encode_anim;
         phases.composite = surface_timings.composite;
         phases.present_submit = surface_timings.present_submit;
+
         let painted = matches!(render_result, RenderFrameResult::Presented);
+        if painted {
+            // Sticky: clear entry/host dirty only after successful present.
+            self.layer_registry.clear_dirty_after_successful_present();
+        } else {
+            self.layer_registry.retain_dirty_after_failed_present();
+        }
+
         let anim_driven_present = !had_unthrottled
             && (entry.do_anim_tick
                 || post_dirty
@@ -1257,6 +1324,11 @@ impl WindowRuntime {
                 )));
             self.needs_redraw = true;
             self.resize_dirty = true;
+            // P2.6: atomic metrics generation — drop old-size textures on next paint.
+            self.layer_registry.notify_metrics_changed(
+                metrics.physical_width.max(1),
+                metrics.physical_height.max(1),
+            );
         }
 
         if transparency_changed {
@@ -1281,6 +1353,163 @@ impl WindowRuntime {
         self.needs_redraw = true;
         true
     }
+}
+
+/// Encode dirty painter-order entries and composite (multi-entry path, P2.3–P2.4).
+fn encode_ordered_composite(
+    registry: &LayerRegistry,
+    renderer: &mut Renderer,
+    surface: &mut ExternalWindowSurface,
+    visual_layers: &crate::masonry_core::app::VisualLayerPlan,
+    background: Color,
+    frame_w: u32,
+    frame_h: u32,
+    scale: f64,
+) -> (RenderFrameResult, picus_surface::RenderFrameTimings) {
+    use crate::masonry_core::imaging::record::Scene;
+
+    enum RunRef<'a> {
+        Scenes(Vec<&'a crate::masonry_core::app::VisualLayer>),
+        External,
+    }
+    let mut runs: Vec<RunRef<'_>> = Vec::new();
+    for layer in &visual_layers.layers {
+        match &layer.kind {
+            VisualLayerKind::External { .. } => runs.push(RunRef::External),
+            VisualLayerKind::Scene(_) => match runs.last_mut() {
+                Some(RunRef::Scenes(v)) => v.push(layer),
+                _ => runs.push(RunRef::Scenes(vec![layer])),
+            },
+        }
+    }
+
+    #[derive(Clone, Copy)]
+    struct EntryMeta {
+        id: u64,
+        kind: CompositorEntryKind,
+        needs_encode: bool,
+    }
+    let metas: Vec<EntryMeta> = registry
+        .plan()
+        .entries()
+        .iter()
+        .map(|e| EntryMeta {
+            id: e.id.raw(),
+            kind: e.kind,
+            needs_encode: e.needs_encode(),
+        })
+        .collect();
+
+    let empty_scene = Scene::new();
+    let mut overlay_storage: Vec<Vec<ImagingLayer<'_>>> = Vec::with_capacity(metas.len());
+    let mut prepared: Vec<Option<PreparedFrame<'_>>> = Vec::with_capacity(metas.len());
+
+    for (i, meta) in metas.iter().enumerate() {
+        if !meta.needs_encode {
+            overlay_storage.push(Vec::new());
+            prepared.push(None);
+            continue;
+        }
+        match meta.kind {
+            CompositorEntryKind::Anim | CompositorEntryKind::External => {
+                overlay_storage.push(Vec::new());
+                prepared.push(Some(PreparedFrame::new(
+                    frame_w,
+                    frame_h,
+                    scale,
+                    Color::TRANSPARENT,
+                    &empty_scene,
+                    &[],
+                )));
+            }
+            CompositorEntryKind::CachedScene | CompositorEntryKind::Overlay => {
+                // Overlays filled in second pass once storage is stable.
+                let mut overlays = Vec::new();
+                if let Some(RunRef::Scenes(scene_layers)) = runs.get(i) {
+                    for layer in scene_layers.iter().skip(1) {
+                        if let VisualLayerKind::Scene(scene) = &layer.kind {
+                            overlays.push(ImagingLayer {
+                                scene,
+                                transform: layer.transform,
+                            });
+                        }
+                    }
+                }
+                overlay_storage.push(overlays);
+                prepared.push(None);
+            }
+        }
+    }
+
+    for (i, meta) in metas.iter().enumerate() {
+        if !meta.needs_encode
+            || !matches!(
+                meta.kind,
+                CompositorEntryKind::CachedScene | CompositorEntryKind::Overlay
+            )
+        {
+            continue;
+        }
+        if prepared[i].is_some() {
+            continue;
+        }
+        let bg = if i == 0 {
+            background
+        } else {
+            Color::TRANSPARENT
+        };
+        match runs.get(i) {
+            Some(RunRef::Scenes(scene_layers)) if !scene_layers.is_empty() => {
+                let VisualLayerKind::Scene(base_scene) = &scene_layers[0].kind else {
+                    prepared[i] = Some(PreparedFrame::new(
+                        frame_w,
+                        frame_h,
+                        scale,
+                        bg,
+                        &empty_scene,
+                        &[],
+                    ));
+                    continue;
+                };
+                prepared[i] = Some(PreparedFrame::new(
+                    frame_w,
+                    frame_h,
+                    scale,
+                    bg,
+                    base_scene,
+                    &overlay_storage[i],
+                ));
+            }
+            _ => {
+                prepared[i] = Some(PreparedFrame::new(
+                    frame_w,
+                    frame_h,
+                    scale,
+                    bg,
+                    &empty_scene,
+                    &[],
+                ));
+            }
+        }
+    }
+
+    let ordered: Vec<OrderedLayerEncode<'_>> = metas
+        .iter()
+        .zip(prepared.iter())
+        .map(|(meta, frame)| OrderedLayerEncode {
+            layer_id: meta.id,
+            kind: match meta.kind {
+                CompositorEntryKind::Anim => OrderedEntryKind::Anim,
+                CompositorEntryKind::External => OrderedEntryKind::External,
+                CompositorEntryKind::CachedScene | CompositorEntryKind::Overlay => {
+                    OrderedEntryKind::Cached
+                }
+            },
+            frame: *frame,
+        })
+        .collect();
+
+    surface.render_ordered_frame(renderer, &ordered)
 }
 
 fn focus_fallback_widget(render_root: &RenderRoot) -> Option<WidgetId> {

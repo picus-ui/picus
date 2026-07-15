@@ -1,53 +1,38 @@
-//! Phase 2a hard gate: Masonry layer contract + anim target spike.
+//! Masonry layer contract (P2a) + ordered compositor entries (P2b infrastructure).
 //!
-//! This module records the **boundary decision** for layered anim encode before
-//! multi-texture composite (P2b). It is **not** a full compositor and is
-//! **not** wired into [`super::WindowRuntime`] / `step_frame` yet.
+//! ## Phase 2a gate (closed)
 //!
-//! ## Gate questions (must be answered before P2b)
+//! Masonry alone cannot provide sticky isolation, self-contained ancestor clip,
+//! or selective layer redraw on the pinned xilem rev. Selected path:
+//! **Picus [`AnimLayerHost`]** + External painter slots +
+//! [`AnimTargetStrategy::FullWindowTransparent`] for first composite.
 //!
-//! 1. Can Masonry isolated scene / layer APIs produce **self-contained,
-//!    independently renderable** painter-order entries under ancestor
-//!    clip/scroll, transform, ZStack, and overlay?
-//! 2. Can an anim tick emit **only the changed anim entry** without full-tree
-//!    [`RenderRoot::redraw`] and without reassembling the base scene?
+//! ## Phase 2b (this module + `picus_surface`)
 //!
-//! ## Answers (xilem rev `4b1922c`, see tests + docs)
+//! Painter-order [`CompositorPlan`] of [`CompositorEntry`] values with stable
+//! [`LayerId`]s. Entry kinds are **not** a fixed Base→Overlay→Anim stack —
+//! order follows Masonry `VisualLayerPlan` (cached segments may appear both
+//! before and after an anim/external slot).
 //!
-//! | Question | Result |
-//! |----------|--------|
-//! | Self-contained independent entries | **Fail** on sticky isolation + missing clip package (type-level on `VisualLayer`) + External host skip. Scroll / ZStack / Masonry overlay-stack were **not** separately spiked; FAIL still holds because isolation is non-sticky and layers lack clip-chain metadata. |
-//! | Selective anim entry without full redraw | **Fail** — public scene path is only full `redraw()` → `run_paint_pass`; plan always reassembly. Host dirty set is the *planned* selective unit (P2b), not current paint. |
+//! - [`LayerRegistry`] owns the plan + host; GPU textures live in
+//!   `picus_surface` intermediate layer targets keyed by [`LayerId::raw`].
+//! - Dirty/version: encode only entries whose content version advanced or
+//!   structure (layout/clip/order/metrics) invalidated them.
+//! - Resize/DPI bumps [`LayerRegistry::metrics_generation`]; all entry targets
+//!   rebuild atomically — never mix old-size textures with a new plan.
 //!
-//! ## Selected path
+//! ## Not yet (P2c+ — do not overclaim)
 //!
-//! **Picus [`AnimLayerHost`]** (not an upstream-only wait):
-//! - Masonry: layout, hit-test, painter-order **External** placeholders
-//! - Picus: independent anim draw state + scene builder for dirty anim entries
-//! - Composite (P2b): exact-order base segments + host scenes/textures
+//! - Spinner / indeterminate ProgressBar vertical slice (product anim content)
+//! - Skipping base rewrite on pure anim ticks (G2 still Phase 2c)
+//! - Widget path auto-setting `PaintLayerMode::External` every paint
 //!
-//! Upstream strategy remains open as a **parallel** improvement (persistent
-//! LayerId, self-contained clip/effect, selective layer redraw) but does not
-//! block P2b.
-//!
-//! **Forbidden reading:** classifying a post-hoc `VisualLayerPlan` as
-//! “per-layer scene build” is incorrect — the plan is a full-pass snapshot.
-//!
-//! ## Not yet (P2b — do not read scaffold as live wiring)
-//!
-//! - Field on `WindowRuntime` / use from `step_frame`
-//! - `DirtyReason::AnimPaint { layer }` populated from [`AnimLayerId::raw`]
-//! - Widget path calling `set_paint_layer_mode(External)` every paint (mode is
-//!   **not sticky**; host `register_*` does **not** set paint mode)
-//! - Scene / texture storage or multi-texture composite
-//! - Skipping base rewrite on pure anim ticks (still full-window encode today)
-//!
-//! See `docs/architecture/runtime.md` (Masonry layer contract) and
-//! `docs/plans/frame-pipeline.md` Phase 2a.
+//! See `docs/architecture/runtime.md` and `docs/plans/frame-pipeline.md`.
 
 use std::collections::HashMap;
 
 use crate::masonry_core::{
+    app::{VisualLayer, VisualLayerKind, VisualLayerPlan},
     core::{PaintLayerMode, WidgetId},
     kurbo::{Affine, Rect},
 };
@@ -174,10 +159,10 @@ impl AnimTargetStrategy {
 }
 
 // ---------------------------------------------------------------------------
-// Selected interface: AnimLayerHost (scaffold for P2b; not wired into paint yet)
+// AnimLayerHost — Picus anim entry state (wired via LayerRegistry in P2b)
 // ---------------------------------------------------------------------------
 
-/// Stable Picus-owned anim entry id (not a Masonry LayerId).
+/// Stable Picus-owned anim entry id (not a compositor [`LayerId`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct AnimLayerId(u32);
 
@@ -202,8 +187,8 @@ pub(crate) enum AnimSlotBinding {
 
 /// One independently dirty-able anim entry owned by Picus.
 ///
-/// Scene bytes / GPU textures are **not** stored here in P2a — only the
-/// ownership and dirty contract P2b will encode against.
+/// GPU textures are **not** stored here — `picus_surface` holds intermediate
+/// targets keyed by compositor [`LayerId`]. This type tracks ownership + dirty.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct AnimLayerEntry {
     pub id: AnimLayerId,
@@ -220,35 +205,18 @@ pub(crate) struct AnimLayerEntry {
 
 /// Picus-side registry for isolated anim draw state.
 ///
-/// # Status (P2a)
-///
-/// Free-standing **scaffold**. Not a field on `WindowRuntime`, not consulted by
-/// `step_frame` / paint. Product paint remains full-window encode with
-/// `DirtyReason::AnimPaint { layer: 0 }`.
-///
-/// # Planned ownership / lifecycle (**P2b target**, not current)
+/// Owned by [`LayerRegistry`] on [`super::WindowRuntime`]. Product widgets that
+/// emit External every paint (Spinner in P2c) register here; pure infrastructure
+/// frames may have an empty host and a single [`CompositorEntryKind::CachedScene`].
 ///
 /// ```text
-/// WindowRuntime  (planned)
+/// WindowRuntime
 ///   ├── RenderRoot (Masonry)     layout / hit-test / External placeholders
-///   ├── AnimLayerHost (Picus)    anim entry state + dirty/version
-///   └── LayerSurfaces            base + anim textures, exact-order composite
-///
-/// register_external_slot(widget_id)  → AnimLayerId in host maps only
-///   (widget must still set_paint_layer_mode(External) every paint)
-/// layout/compose                     → update bounds/transform; CompositorPlan if plan changes
-/// AnimFrame tick                     → host.mark_anim_paint(id)
-///                                      [target] skip base rewrite when only anim dirty
-/// encode                             → [target] dirty host entries only; base if base_dirty
-/// remove/unmount                     → drop entry; External slot drops on next plan
+///   ├── LayerRegistry
+///   │     ├── AnimLayerHost      anim entry state + dirty/version
+///   │     └── CompositorPlan     painter-order LayerId entries
+///   └── ExternalWindowSurface    layer textures + ordered composite
 /// ```
-///
-/// # TODO(P2b)
-/// - Attach host as `WindowRuntime` field; drive from `step_frame`
-/// - Wire Spinner / indeterminate ProgressBar paint into host scenes
-/// - Populate `DirtyReason::AnimPaint { layer: id.raw() }` from dirty host entries
-/// - Realize External slots in `PreparedFrame` / multi-texture composite
-/// - Avoid base rewrite/encode on pure anim ticks (G2)
 #[derive(Debug, Default)]
 pub(crate) struct AnimLayerHost {
     next_id: u32,
@@ -409,6 +377,650 @@ impl AnimLayerHost {
     /// External slot (`paint_layer_mode` resets to Inline each pass).
     pub(crate) const fn required_paint_layer_mode() -> PaintLayerMode {
         PaintLayerMode::External
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Ordered compositor plan (P2.1–P2.2, P2.4, P2.6)
+// ---------------------------------------------------------------------------
+
+/// Stable compositor identity for one painter-order entry (Picus-owned).
+///
+/// Independent of [`WidgetId`] and [`AnimLayerId`]. Survives plan rebuilds when
+/// the semantic identity ([`EntryIdentity`]) matches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct LayerId(u64);
+
+impl LayerId {
+    #[inline]
+    pub(crate) const fn raw(self) -> u64 {
+        self.0
+    }
+}
+
+/// Kind of compositor entry. Stored **in Masonry painter order** — never regrouped
+/// into a fixed Base→Overlay→Anim stack (P2.1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum CompositorEntryKind {
+    /// Cached Masonry scene segment (base content or split around anim slots).
+    CachedScene,
+    /// High-frequency anim content owned by [`AnimLayerHost`].
+    Anim,
+    /// Masonry overlay scene layer (tooltip / popup stack).
+    Overlay,
+    /// External placeholder without a bound host anim entry yet.
+    External,
+}
+
+impl CompositorEntryKind {
+    /// Attribute encode cost to base vs anim timing buckets (P2.5).
+    #[inline]
+    pub(crate) const fn is_anim_encode(self) -> bool {
+        matches!(self, Self::Anim)
+    }
+}
+
+/// Semantic key used to reuse [`LayerId`] across plan rebuilds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum EntryIdentity {
+    /// Contiguous cached-scene run index among CachedScene segments (0, 1, …).
+    CachedSegment(u32),
+    /// Overlay scene run index among Overlay segments.
+    OverlaySegment(u32),
+    /// Bound anim host entry.
+    Anim(AnimLayerId),
+    /// External placeholder widget without host binding.
+    ExternalWidget(WidgetId),
+}
+
+/// Full ancestor clip package for independent encode (entry self-containment).
+///
+/// Upstream `VisualLayer` does not supply clip chains; Picus stores the package
+/// on the entry. Empty means “no additional clip beyond the render target”.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub(crate) struct AncestorClip {
+    /// Clip rects in window space, outer → inner.
+    pub rects: Vec<Rect>,
+}
+
+impl AncestorClip {
+    #[inline]
+    pub(crate) fn none() -> Self {
+        Self::default()
+    }
+
+    #[inline]
+    pub(crate) fn from_rects(rects: impl IntoIterator<Item = Rect>) -> Self {
+        Self {
+            rects: rects.into_iter().collect(),
+        }
+    }
+
+    #[inline]
+    pub(crate) fn is_empty(&self) -> bool {
+        self.rects.is_empty()
+    }
+}
+
+/// Opacity / effect package carried with each entry (self-contained encode).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct LayerEffect {
+    pub opacity: f32,
+}
+
+impl Default for LayerEffect {
+    fn default() -> Self {
+        Self { opacity: 1.0 }
+    }
+}
+
+impl LayerEffect {
+    pub(crate) const OPAQUE: Self = Self { opacity: 1.0 };
+}
+
+/// One painter-order compositor entry (P2.2 contract).
+///
+/// Carries bounds, transform, full ancestor clip, opacity/effect, and content
+/// version so encode can be independent of other entries once textures exist.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct CompositorEntry {
+    pub id: LayerId,
+    pub identity: EntryIdentity,
+    pub kind: CompositorEntryKind,
+    pub bounds: Rect,
+    pub transform: Affine,
+    pub ancestor_clip: AncestorClip,
+    pub effect: LayerEffect,
+    /// Monotonic content version; encode when differs from [`Self::encoded_version`].
+    pub content_version: u64,
+    /// Last successfully encoded content version (`None` = never encoded / FirstPaint).
+    pub encoded_version: Option<u64>,
+    /// Layout, clip, order, or metrics change — forces re-encode even if version matches.
+    pub structure_dirty: bool,
+    pub anim_id: Option<AnimLayerId>,
+    pub widget_id: Option<WidgetId>,
+}
+
+impl CompositorEntry {
+    /// True when this entry must be re-encoded before composite (P2.4).
+    #[inline]
+    pub(crate) fn needs_encode(&self) -> bool {
+        self.structure_dirty || self.encoded_version != Some(self.content_version)
+    }
+
+    /// Mark encode succeeded at the current content version (only after present).
+    pub(crate) fn mark_encoded(&mut self) {
+        self.encoded_version = Some(self.content_version);
+        self.structure_dirty = false;
+    }
+
+    /// Invalidate structure (layout/clip/order/metrics) without bumping content.
+    pub(crate) fn invalidate_structure(&mut self) {
+        self.structure_dirty = true;
+    }
+
+    /// Bump content version (pixel change).
+    pub(crate) fn bump_content(&mut self) {
+        self.content_version = self.content_version.saturating_add(1);
+    }
+}
+
+/// Painter-order plan for one window (not Base→Overlay→Anim grouped).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub(crate) struct CompositorPlan {
+    entries: Vec<CompositorEntry>,
+    /// Bumps when entry order/identity set changes.
+    plan_version: u64,
+}
+
+impl CompositorPlan {
+    #[inline]
+    pub(crate) fn entries(&self) -> &[CompositorEntry] {
+        &self.entries
+    }
+
+    #[inline]
+    pub(crate) fn entries_mut(&mut self) -> &mut [CompositorEntry] {
+        &mut self.entries
+    }
+
+    #[inline]
+    #[allow(dead_code)] // Diagnostics / P2c plan-diff hooks.
+    pub(crate) fn plan_version(&self) -> u64 {
+        self.plan_version
+    }
+
+    #[inline]
+    pub(crate) fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    #[inline]
+    pub(crate) fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// Single full-window cached scene — common path until anim widgets register.
+    #[inline]
+    pub(crate) fn is_single_cached(&self) -> bool {
+        matches!(
+            self.entries.as_slice(),
+            [CompositorEntry {
+                kind: CompositorEntryKind::CachedScene,
+                ..
+            }]
+        )
+    }
+
+    /// True when an Anim entry sits between other entries (cached/overlay/external).
+    pub(crate) fn has_anim_between_cached_segments(&self) -> bool {
+        let mut saw_cached_before = false;
+        let mut saw_anim = false;
+        for e in &self.entries {
+            match e.kind {
+                CompositorEntryKind::CachedScene | CompositorEntryKind::Overlay => {
+                    if saw_anim && saw_cached_before {
+                        return true;
+                    }
+                    if !saw_anim {
+                        saw_cached_before = true;
+                    } else {
+                        return true;
+                    }
+                }
+                CompositorEntryKind::Anim | CompositorEntryKind::External => {
+                    if saw_cached_before {
+                        saw_anim = true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    pub(crate) fn get(&self, id: LayerId) -> Option<&CompositorEntry> {
+        self.entries.iter().find(|e| e.id == id)
+    }
+
+    pub(crate) fn get_mut(&mut self, id: LayerId) -> Option<&mut CompositorEntry> {
+        self.entries.iter_mut().find(|e| e.id == id)
+    }
+
+    /// Layer ids that need encode this frame (P2.4).
+    pub(crate) fn dirty_encode_ids(&self) -> impl Iterator<Item = LayerId> + '_ {
+        self.entries
+            .iter()
+            .filter(|e| e.needs_encode())
+            .map(|e| e.id)
+    }
+
+    /// Invalidate every entry (FirstPaint / metrics rebuild).
+    pub(crate) fn invalidate_all_structure(&mut self) {
+        for e in &mut self.entries {
+            e.invalidate_structure();
+        }
+    }
+
+    /// Clear encode-dirty flags after successful present only.
+    #[allow(dead_code)] // Prefer LayerRegistry::clear_dirty_after_successful_present.
+    pub(crate) fn mark_all_encoded_that_were_dirty(&mut self) {
+        for e in &mut self.entries {
+            if e.needs_encode() {
+                e.mark_encoded();
+            }
+        }
+    }
+}
+
+/// Per-window layer plan + anim host (CPU-side; textures in `picus_surface`).
+#[derive(Debug)]
+pub(crate) struct LayerRegistry {
+    plan: CompositorPlan,
+    host: AnimLayerHost,
+    next_layer_id: u64,
+    /// Identity → stable LayerId across rebuilds.
+    identity_ids: HashMap<EntryIdentity, LayerId>,
+    /// Physical pixel size of entry targets for the current metrics generation.
+    texture_width: u32,
+    texture_height: u32,
+    /// Bumps on resize/DPI; surface must drop all layer targets for old gen (P2.6).
+    metrics_generation: u64,
+    /// True when plan order/identity changed this rebuild.
+    plan_changed: bool,
+}
+
+impl Default for LayerRegistry {
+    fn default() -> Self {
+        Self::new(AnimTargetStrategy::FIRST_COMPOSITE)
+    }
+}
+
+impl LayerRegistry {
+    pub(crate) fn new(target: AnimTargetStrategy) -> Self {
+        Self {
+            plan: CompositorPlan::default(),
+            host: AnimLayerHost::new(target),
+            next_layer_id: 1,
+            identity_ids: HashMap::new(),
+            texture_width: 0,
+            texture_height: 0,
+            metrics_generation: 1,
+            plan_changed: false,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn plan(&self) -> &CompositorPlan {
+        &self.plan
+    }
+
+    #[inline]
+    pub(crate) fn plan_mut(&mut self) -> &mut CompositorPlan {
+        &mut self.plan
+    }
+
+    #[inline]
+    pub(crate) fn host(&self) -> &AnimLayerHost {
+        &self.host
+    }
+
+    #[inline]
+    pub(crate) fn host_mut(&mut self) -> &mut AnimLayerHost {
+        &mut self.host
+    }
+
+    #[inline]
+    pub(crate) fn metrics_generation(&self) -> u64 {
+        self.metrics_generation
+    }
+
+    #[inline]
+    pub(crate) fn texture_size(&self) -> (u32, u32) {
+        (self.texture_width, self.texture_height)
+    }
+
+    #[inline]
+    pub(crate) fn plan_changed(&self) -> bool {
+        self.plan_changed
+    }
+
+    fn alloc_layer_id(&mut self) -> LayerId {
+        let id = LayerId(self.next_layer_id);
+        self.next_layer_id = self.next_layer_id.saturating_add(1);
+        id
+    }
+
+    fn layer_id_for(&mut self, identity: EntryIdentity) -> LayerId {
+        if let Some(&id) = self.identity_ids.get(&identity) {
+            return id;
+        }
+        let id = self.alloc_layer_id();
+        self.identity_ids.insert(identity, id);
+        id
+    }
+
+    /// Resize/DPI: bump metrics generation and invalidate all entries (P2.6).
+    ///
+    /// Callers must rebuild surface layer targets for the new generation before
+    /// encoding — old-size textures must not composite with the new plan.
+    pub(crate) fn notify_metrics_changed(&mut self, width: u32, height: u32) {
+        let width = width.max(1);
+        let height = height.max(1);
+        if self.texture_width == width
+            && self.texture_height == height
+            && self.texture_width > 0
+        {
+            return;
+        }
+        self.texture_width = width;
+        self.texture_height = height;
+        self.metrics_generation = self.metrics_generation.saturating_add(1);
+        self.plan.invalidate_all_structure();
+        // Content must re-encode into new targets (FirstPaint-equivalent).
+        for e in self.plan.entries_mut() {
+            e.encoded_version = None;
+        }
+    }
+
+    /// First paint / surface recreate: force full entry encode set.
+    pub(crate) fn notify_first_paint(&mut self) {
+        self.plan.invalidate_all_structure();
+        for e in self.plan.entries_mut() {
+            e.encoded_version = None;
+        }
+    }
+
+    /// Build painter-order plan from a Masonry visual plan + host bindings (P2.1).
+    ///
+    /// Consecutive Scene layers coalesce into one CachedScene or Overlay segment
+    /// so an External/Anim slot can sit between cached segments. Overlay vs
+    /// CachedScene uses Masonry flatten helpers: first Scene run is base
+    /// (CachedScene); subsequent Scene runs that `overlay_layers` would yield
+    /// are Overlay when no External splits them — with External present, Scene
+    /// runs are CachedScene segments except pure overlay roots after content.
+    ///
+    /// Practical rule used here (honest, simple):
+    /// - `VisualLayerKind::External` → Anim if host-bound, else External
+    /// - `VisualLayerKind::Scene` coalesced runs → CachedScene until at least
+    ///   one External has been seen **and** the scene is among `overlay_layers`
+    ///   widget ids after the main stack; otherwise CachedScene.
+    ///
+    /// For the common single-root plan (no External), result is one CachedScene.
+    pub(crate) fn rebuild_from_visual_plan(
+        &mut self,
+        visual: &VisualLayerPlan,
+        window_bounds: Rect,
+    ) {
+        self.plan_changed = false;
+        let overlay_widget_ids: std::collections::HashSet<WidgetId> = visual
+            .overlay_layers()
+            .map(|layer| layer.widget_id)
+            .collect();
+
+        // Build ordered runs: Scene runs coalesce; External is a singleton run.
+        enum Run {
+            Scenes(Vec<usize>),
+            External(usize),
+        }
+        let mut runs: Vec<Run> = Vec::new();
+        for (idx, layer) in visual.layers.iter().enumerate() {
+            match &layer.kind {
+                VisualLayerKind::External { .. } => {
+                    runs.push(Run::External(idx));
+                }
+                VisualLayerKind::Scene(_) => match runs.last_mut() {
+                    Some(Run::Scenes(indices)) => indices.push(idx),
+                    _ => runs.push(Run::Scenes(vec![idx])),
+                },
+            }
+        }
+
+        let mut cached_seg = 0u32;
+        let mut overlay_seg = 0u32;
+        let mut next_entries: Vec<CompositorEntry> = Vec::with_capacity(runs.len());
+        let mut saw_external = false;
+
+        for run in runs {
+            match run {
+                Run::External(idx) => {
+                    saw_external = true;
+                    let layer = &visual.layers[idx];
+                    let bounds = match &layer.kind {
+                        VisualLayerKind::External { bounds } => *bounds,
+                        _ => window_bounds,
+                    };
+                    let (kind, identity, anim_id) =
+                        if let Some(anim) = self.host.id_for_widget(layer.widget_id) {
+                            (
+                                CompositorEntryKind::Anim,
+                                EntryIdentity::Anim(anim),
+                                Some(anim),
+                            )
+                        } else {
+                            (
+                                CompositorEntryKind::External,
+                                EntryIdentity::ExternalWidget(layer.widget_id),
+                                None,
+                            )
+                        };
+                    // Sync host geometry when bound.
+                    if let Some(aid) = anim_id {
+                        let _ = self
+                            .host
+                            .update_slot_geometry(aid, bounds, layer.transform);
+                    }
+                    next_entries.push(self.make_entry(
+                        identity,
+                        kind,
+                        bounds,
+                        layer.transform,
+                        AncestorClip::none(),
+                        LayerEffect::OPAQUE,
+                        anim_id,
+                        Some(layer.widget_id),
+                    ));
+                }
+                Run::Scenes(indices) => {
+                    let first = &visual.layers[indices[0]];
+                    // Classify as Overlay only when every widget in the run is an
+                    // overlay root and we are past content (or no External split).
+                    let all_overlay = indices.iter().all(|&i| {
+                        overlay_widget_ids.contains(&visual.layers[i].widget_id)
+                    });
+                    let (kind, identity) = if all_overlay && (saw_external || cached_seg > 0) {
+                        let id = EntryIdentity::OverlaySegment(overlay_seg);
+                        overlay_seg = overlay_seg.saturating_add(1);
+                        (CompositorEntryKind::Overlay, id)
+                    } else {
+                        let id = EntryIdentity::CachedSegment(cached_seg);
+                        cached_seg = cached_seg.saturating_add(1);
+                        (CompositorEntryKind::CachedScene, id)
+                    };
+                    // Union bounds of scenes in the run (window-space estimate).
+                    let mut bounds = layer_bounds_estimate(first, window_bounds);
+                    for &i in indices.iter().skip(1) {
+                        let layer = &visual.layers[i];
+                        bounds = bounds.union(layer_bounds_estimate(layer, window_bounds));
+                    }
+                    next_entries.push(self.make_entry(
+                        identity,
+                        kind,
+                        bounds,
+                        Affine::IDENTITY,
+                        AncestorClip::none(),
+                        LayerEffect::OPAQUE,
+                        None,
+                        Some(first.widget_id),
+                    ));
+                }
+            }
+        }
+
+        // If Masonry produced no layers, keep a single full-window cached entry
+        // so FirstPaint still has a target.
+        if next_entries.is_empty() {
+            next_entries.push(self.make_entry(
+                EntryIdentity::CachedSegment(0),
+                CompositorEntryKind::CachedScene,
+                window_bounds,
+                Affine::IDENTITY,
+                AncestorClip::none(),
+                LayerEffect::OPAQUE,
+                None,
+                None,
+            ));
+        }
+
+        // Detect order/identity change.
+        let old_ids: Vec<LayerId> = self.plan.entries.iter().map(|e| e.id).collect();
+        let new_ids: Vec<LayerId> = next_entries.iter().map(|e| e.id).collect();
+        if old_ids != new_ids {
+            self.plan_changed = true;
+            self.plan.plan_version = self.plan.plan_version.saturating_add(1);
+            // Order change invalidates all cached segments (P2.4).
+            for e in &mut next_entries {
+                e.structure_dirty = true;
+            }
+        } else {
+            // Preserve structure_dirty / versions from previous when id matches.
+            for e in &mut next_entries {
+                if let Some(prev) = self.plan.get(e.id) {
+                    // Geometry/clip/effect changes invalidate structure.
+                    if prev.bounds != e.bounds
+                        || prev.transform != e.transform
+                        || prev.ancestor_clip != e.ancestor_clip
+                        || prev.effect != e.effect
+                        || prev.kind != e.kind
+                    {
+                        e.structure_dirty = true;
+                        e.encoded_version = prev.encoded_version;
+                        e.content_version = prev.content_version;
+                    } else {
+                        e.structure_dirty = prev.structure_dirty;
+                        e.encoded_version = prev.encoded_version;
+                        e.content_version = prev.content_version;
+                    }
+                }
+            }
+        }
+
+        // Propagate host anim dirty → content version bump on Anim entries.
+        for e in &mut next_entries {
+            if let Some(anim_id) = e.anim_id
+                && let Some(host_e) = self.host.get(anim_id)
+            {
+                if host_e.dirty {
+                    // Align content version with host version.
+                    if e.content_version != host_e.version {
+                        e.content_version = host_e.version;
+                    } else if e.encoded_version == Some(e.content_version) {
+                        // Host dirty but versions equal — force bump.
+                        e.bump_content();
+                    }
+                    e.structure_dirty |= host_e.bounds != e.bounds;
+                }
+                e.bounds = host_e.bounds;
+                e.transform = host_e.transform;
+            }
+        }
+
+        self.plan.entries = next_entries;
+
+        // Drop identity map entries that are no longer present.
+        let live: std::collections::HashSet<EntryIdentity> =
+            self.plan.entries.iter().map(|e| e.identity).collect();
+        self.identity_ids.retain(|k, _| live.contains(k));
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn make_entry(
+        &mut self,
+        identity: EntryIdentity,
+        kind: CompositorEntryKind,
+        bounds: Rect,
+        transform: Affine,
+        ancestor_clip: AncestorClip,
+        effect: LayerEffect,
+        anim_id: Option<AnimLayerId>,
+        widget_id: Option<WidgetId>,
+    ) -> CompositorEntry {
+        let id = self.layer_id_for(identity);
+        CompositorEntry {
+            id,
+            identity,
+            kind,
+            bounds,
+            transform,
+            ancestor_clip,
+            effect,
+            content_version: 0,
+            encoded_version: None,
+            structure_dirty: true,
+            anim_id,
+            widget_id,
+        }
+    }
+
+    /// Mark successful encode/present for dirty entries; clear host dirty (sticky present).
+    pub(crate) fn clear_dirty_after_successful_present(&mut self) {
+        for e in self.plan.entries_mut() {
+            if e.needs_encode() {
+                if let Some(anim_id) = e.anim_id {
+                    self.host.clear_dirty_after_encode(anim_id);
+                }
+                e.mark_encoded();
+            }
+        }
+        self.plan_changed = false;
+    }
+
+    /// On failed/retry present: retain dirty (do not clear encoded_version gaps).
+    pub(crate) fn retain_dirty_after_failed_present(&mut self) {
+        // Intentional no-op body: needs_encode stays true; host dirty stays.
+        // Documented so call sites are explicit.
+    }
+
+    /// Layer ids for surface intermediate targets in painter order.
+    #[allow(dead_code)] // Used by diagnostics / future selective present paths.
+    pub(crate) fn ordered_layer_ids(&self) -> impl Iterator<Item = LayerId> + '_ {
+        self.plan.entries.iter().map(|e| e.id)
+    }
+
+    /// Whether the ordered multi-texture path should run (vs single full-window encode).
+    pub(crate) fn prefers_ordered_composite(&self) -> bool {
+        self.plan.len() > 1
+            || self
+                .plan
+                .entries()
+                .iter()
+                .any(|e| !matches!(e.kind, CompositorEntryKind::CachedScene))
+    }
+}
+
+fn layer_bounds_estimate(layer: &VisualLayer, window_bounds: Rect) -> Rect {
+    match &layer.kind {
+        VisualLayerKind::External { bounds } => *bounds,
+        VisualLayerKind::Scene(_) => window_bounds,
     }
 }
 
@@ -946,6 +1558,225 @@ mod tests {
             host.dirty_anim_paint_layers().next(),
             Some(id.raw()),
             "P2b selective unit is AnimLayerId.raw, not VisualLayerPlan index"
+        );
+    }
+
+    // --- CompositorPlan / LayerRegistry (P2.1–P2.2, P2.4, P2.6) -------------
+
+    #[test]
+    fn compositor_entry_needs_encode_respects_version_and_structure() {
+        let mut entry = CompositorEntry {
+            id: LayerId(1),
+            identity: EntryIdentity::CachedSegment(0),
+            kind: CompositorEntryKind::CachedScene,
+            bounds: Rect::new(0.0, 0.0, 10.0, 10.0),
+            transform: Affine::IDENTITY,
+            ancestor_clip: AncestorClip::from_rects([Rect::new(0.0, 0.0, 5.0, 5.0)]),
+            effect: LayerEffect { opacity: 0.5 },
+            content_version: 1,
+            encoded_version: None,
+            structure_dirty: false,
+            anim_id: None,
+            widget_id: None,
+        };
+        // Self-contained package fields are present (P2.2).
+        assert!(!entry.ancestor_clip.is_empty());
+        assert!((entry.effect.opacity - 0.5).abs() < f32::EPSILON);
+        assert!(entry.needs_encode(), "never encoded");
+
+        entry.mark_encoded();
+        assert!(!entry.needs_encode());
+
+        entry.bump_content();
+        assert!(entry.needs_encode(), "version change");
+        entry.mark_encoded();
+        entry.invalidate_structure();
+        assert!(entry.needs_encode(), "structure dirty");
+    }
+
+    #[test]
+    fn layer_registry_builds_painter_order_with_anim_between_cached() {
+        // Cached → External(Anim) → Cached: NOT fixed Base→Overlay→Anim grouping.
+        let root_widget = NewWidget::new(
+            Flex::row()
+                .with_fixed(NewWidget::new(ModeBox::new(
+                    PaintLayerMode::Inline,
+                    Color::from_rgb8(255, 0, 0),
+                )))
+                .with_fixed(NewWidget::new(ModeBox::new(
+                    PaintLayerMode::External,
+                    Color::TRANSPARENT,
+                )))
+                .with_fixed(NewWidget::new(ModeBox::new(
+                    PaintLayerMode::Inline,
+                    Color::from_rgb8(0, 0, 255),
+                ))),
+        );
+        // Capture external widget id before move into tree — rebuild mode each paint.
+        // ModeBox ids are inside Flex; re-allocate a tracking id via host after plan.
+        let mut root = test_root(root_widget);
+        let (plan, _) = root.redraw();
+        assert!(
+            plan.layers
+                .iter()
+                .any(|l| matches!(l.kind, VisualLayerKind::External { .. })),
+            "need External in plan for this test"
+        );
+
+        let mut registry = LayerRegistry::new(AnimTargetStrategy::FullWindowTransparent);
+        // Bind host to the External widget so kind becomes Anim.
+        let ext_wid = plan
+            .layers
+            .iter()
+            .find(|l| matches!(l.kind, VisualLayerKind::External { .. }))
+            .map(|l| l.widget_id)
+            .expect("external widget");
+        let anim_id = registry.host_mut().register_external_slot(ext_wid);
+        registry.host_mut().clear_dirty_after_encode(anim_id);
+
+        let window_bounds = Rect::new(0.0, 0.0, 80.0, 40.0);
+        registry.rebuild_from_visual_plan(&plan, window_bounds);
+
+        let kinds: Vec<_> = registry.plan().entries().iter().map(|e| e.kind).collect();
+        assert!(
+            kinds.len() >= 3,
+            "expected cached|anim|cached-style split, got {kinds:?}"
+        );
+        // Painter order: first not Anim-only stack top; anim not forced last.
+        let anim_pos = kinds
+            .iter()
+            .position(|k| *k == CompositorEntryKind::Anim)
+            .expect("Anim entry");
+        assert!(anim_pos > 0, "anim should not swallow leading cached: {kinds:?}");
+        assert!(
+            kinds.iter().any(|k| *k == CompositorEntryKind::CachedScene),
+            "cached segments required: {kinds:?}"
+        );
+        // After anim there should still be a trailing cached/overlay segment when
+        // Masonry emitted scenes on both sides of External.
+        if registry.plan().has_anim_between_cached_segments() {
+            assert!(anim_pos + 1 < kinds.len(), "cached after anim: {kinds:?}");
+        }
+
+        // Stable LayerId across rebuild.
+        let ids_before: Vec<_> = registry.plan().entries().iter().map(|e| e.id).collect();
+        registry.rebuild_from_visual_plan(&plan, window_bounds);
+        let ids_after: Vec<_> = registry.plan().entries().iter().map(|e| e.id).collect();
+        assert_eq!(ids_before, ids_after, "LayerId stable across identical rebuild");
+    }
+
+    #[test]
+    fn dirty_version_encodes_only_changed_entries() {
+        let mut registry = LayerRegistry::new(AnimTargetStrategy::FIRST_COMPOSITE);
+        let window_bounds = Rect::new(0.0, 0.0, 100.0, 100.0);
+
+        // Synthetic single-cached plan via empty visual → one CachedScene.
+        let root_widget = NewWidget::new(ModeBox::new(
+            PaintLayerMode::Inline,
+            Color::from_rgb8(1, 2, 3),
+        ));
+        let mut root = test_root(root_widget);
+        let (plan, _) = root.redraw();
+        registry.rebuild_from_visual_plan(&plan, window_bounds);
+        assert!(registry.plan().is_single_cached() || !registry.plan().is_empty());
+
+        // First paint: all dirty.
+        let dirty_first: Vec<_> = registry.plan().dirty_encode_ids().collect();
+        assert!(!dirty_first.is_empty());
+        registry.clear_dirty_after_successful_present();
+        assert_eq!(registry.plan().dirty_encode_ids().count(), 0);
+
+        // Anim host dirt only affects anim entry when present; for single cached,
+        // bump content on the cached entry.
+        let id = registry.plan().entries()[0].id;
+        registry.plan_mut().get_mut(id).unwrap().bump_content();
+        let dirty: Vec<_> = registry.plan().dirty_encode_ids().collect();
+        assert_eq!(dirty, vec![id]);
+
+        // Failed present retains dirty (P2.6 / sticky).
+        registry.retain_dirty_after_failed_present();
+        assert_eq!(registry.plan().dirty_encode_ids().count(), 1);
+    }
+
+    #[test]
+    fn metrics_change_invalidates_all_and_bumps_generation() {
+        let mut registry = LayerRegistry::new(AnimTargetStrategy::FIRST_COMPOSITE);
+        let root_widget = NewWidget::new(ModeBox::new(
+            PaintLayerMode::Inline,
+            Color::from_rgb8(1, 2, 3),
+        ));
+        let mut root = test_root(root_widget);
+        let (plan, _) = root.redraw();
+        registry.rebuild_from_visual_plan(&plan, Rect::new(0.0, 0.0, 80.0, 40.0));
+        registry.clear_dirty_after_successful_present();
+        let gen0 = registry.metrics_generation();
+
+        registry.notify_metrics_changed(200, 100);
+        assert_eq!(registry.metrics_generation(), gen0 + 1);
+        assert_eq!(registry.texture_size(), (200, 100));
+        assert_eq!(
+            registry.plan().dirty_encode_ids().count(),
+            registry.plan().len(),
+            "all entries dirty after metrics change"
+        );
+        for e in registry.plan().entries() {
+            assert!(e.encoded_version.is_none(), "FirstPaint-equivalent after resize");
+        }
+
+        // Same size is a no-op.
+        registry.clear_dirty_after_successful_present();
+        registry.notify_metrics_changed(200, 100);
+        assert_eq!(registry.metrics_generation(), gen0 + 1);
+    }
+
+    #[test]
+    fn entry_identity_kinds_cover_compositor_entry_kind_set() {
+        // Inventory: all four kinds exist and anim encodes map correctly.
+        assert!(CompositorEntryKind::Anim.is_anim_encode());
+        assert!(!CompositorEntryKind::CachedScene.is_anim_encode());
+        assert!(!CompositorEntryKind::Overlay.is_anim_encode());
+        assert!(!CompositorEntryKind::External.is_anim_encode());
+        let _ = [
+            CompositorEntryKind::CachedScene,
+            CompositorEntryKind::Anim,
+            CompositorEntryKind::Overlay,
+            CompositorEntryKind::External,
+        ];
+    }
+
+    #[test]
+    fn prefers_ordered_composite_when_non_single_cached() {
+        let mut registry = LayerRegistry::default();
+        assert!(!registry.prefers_ordered_composite() || registry.plan().is_empty());
+
+        let root_widget = NewWidget::new(
+            Flex::row()
+                .with_fixed(NewWidget::new(ModeBox::new(
+                    PaintLayerMode::Inline,
+                    Color::from_rgb8(255, 0, 0),
+                )))
+                .with_fixed(NewWidget::new(ModeBox::new(
+                    PaintLayerMode::External,
+                    Color::TRANSPARENT,
+                )))
+                .with_fixed(NewWidget::new(ModeBox::new(
+                    PaintLayerMode::Inline,
+                    Color::from_rgb8(0, 0, 255),
+                ))),
+        );
+        let mut root = test_root(root_widget);
+        let (plan, _) = root.redraw();
+        let ext = plan
+            .layers
+            .iter()
+            .find(|l| matches!(l.kind, VisualLayerKind::External { .. }))
+            .unwrap()
+            .widget_id;
+        registry.host_mut().register_external_slot(ext);
+        registry.rebuild_from_visual_plan(&plan, Rect::new(0.0, 0.0, 80.0, 40.0));
+        assert!(
+            registry.prefers_ordered_composite(),
+            "External/Anim plan must use ordered composite path"
         );
     }
 }

@@ -6,6 +6,8 @@
 #[cfg(windows)]
 mod win32_create_window_hook;
 
+use std::collections::HashMap;
+
 use bevy_window::{CompositeAlphaMode as BevyCompositeAlphaMode, RawHandleWrapper};
 use picus_imaging::{
     PreparedFrame,
@@ -449,6 +451,15 @@ impl<T> LatestReadyQueue<T> {
     }
 }
 
+/// Intermediate GPU target for one compositor [`OrderedLayerEncode::layer_id`].
+struct LayerTextureTarget {
+    texture: Texture,
+    view: TextureView,
+    width: u32,
+    height: u32,
+    generation: LayerMetricsGeneration,
+}
+
 /// A Vello surface context attached to an externally owned Bevy window.
 pub struct ExternalWindowSurface {
     render_cx: RenderContext,
@@ -456,6 +467,12 @@ pub struct ExternalWindowSurface {
     scale_factor: f64,
     /// Actual negotiated present capability (G7); not a fake unified drop_stale.
     negotiated_present: NegotiatedPresent,
+    /// Painter-order intermediate textures keyed by compositor layer id (P2.3).
+    layer_targets: HashMap<u64, LayerTextureTarget>,
+    /// Metrics generation last applied to layer targets (P2.6).
+    layer_metrics_generation: LayerMetricsGeneration,
+    /// Blitter for stacking intermediate textures with premultiplied alpha over.
+    layer_composite_blitter: TextureBlitter,
 }
 
 /// Result of rendering and presenting one frame to an external window surface.
@@ -481,13 +498,49 @@ pub enum RenderFrameResult {
 pub struct RenderFrameTimings {
     /// Time spent acquiring the swapchain texture (including reconfigure attempts).
     pub surface_acquire: std::time::Duration,
-    /// Time spent in Vello `render_to_texture` (full-window encode today).
+    /// Time spent in Vello `render_to_texture` (full-window / base encode).
+    ///
+    /// On the ordered multi-texture path this is the sum of non-anim entry encodes.
     pub encode: std::time::Duration,
-    /// Time spent blitting the rendered texture into the swapchain view.
+    /// Anim-entry encode wall time (0 on single full-window path).
+    pub encode_anim: std::time::Duration,
+    /// Time spent blitting/compositing into the swapchain view.
     pub composite: std::time::Duration,
     /// Time spent in the CPU `present()` call (submit, not vsync wait).
     pub present_submit: std::time::Duration,
 }
+
+/// Kind of ordered compositor entry for encode timing attribution (P2.5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum OrderedEntryKind {
+    /// Cached Masonry scene segment or overlay (counts as base encode).
+    Cached,
+    /// High-frequency anim layer (counts as anim encode).
+    Anim,
+    /// External placeholder without host content (transparent clear / skip).
+    External,
+}
+
+/// One painter-order encode unit for [`ExternalWindowSurface::render_ordered_frame`].
+///
+/// Entries are submitted in Masonry painter order. `frame: None` reuses the
+/// cached intermediate texture for `layer_id` (encode skipped — P2.4).
+#[derive(Clone, Copy)]
+pub struct OrderedLayerEncode<'a> {
+    /// Stable compositor layer id (`LayerId::raw` from picus_core).
+    pub layer_id: u64,
+    pub kind: OrderedEntryKind,
+    /// When `Some`, encode this prepared frame into the layer target.
+    /// When `None`, composite reuses the last successful encode for `layer_id`.
+    pub frame: Option<PreparedFrame<'a>>,
+}
+
+/// Metrics generation token for atomic layer-target rebuild (P2.6).
+///
+/// Surfaces drop all intermediate textures when generation changes so old-size
+/// textures never composite with a new plan.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub struct LayerMetricsGeneration(pub u64);
 
 impl ExternalWindowSurface {
     /// Create an attached Vello surface from a Bevy-owned raw-handle wrapper.
@@ -529,11 +582,18 @@ impl ExternalWindowSurface {
         let (surface, negotiated) =
             pollster::block_on(render_cx.create_surface(target, metrics, policy))?;
 
+        let dev_id = surface.dev_id;
+        let layer_composite_blitter =
+            create_layer_composite_blitter(&render_cx.devices[dev_id].device, surface.format);
+
         Ok(Self {
             render_cx,
             surface,
             scale_factor: metrics.scale_factor,
             negotiated_present: negotiated,
+            layer_targets: HashMap::new(),
+            layer_metrics_generation: LayerMetricsGeneration(0),
+            layer_composite_blitter,
         })
     }
 
@@ -547,6 +607,11 @@ impl ExternalWindowSurface {
     ///
     /// Returns `true` when the backing surface textures were resized and the
     /// caller should schedule a fresh paint.
+    ///
+    /// On size change, **all** intermediate layer targets are dropped so they
+    /// cannot be composited at a stale size (P2.6). Callers must pass a new
+    /// [`LayerMetricsGeneration`] via [`Self::sync_layer_metrics_generation`]
+    /// before the next ordered encode.
     pub fn sync_window_metrics(&mut self, metrics: ExistingWindowMetrics) -> bool {
         self.scale_factor = metrics.scale_factor;
         let mut changed = false;
@@ -559,6 +624,8 @@ impl ExternalWindowSurface {
                 metrics.physical_width.max(1),
                 metrics.physical_height.max(1),
             );
+            // Atomic invalidation: never mix old-size layer textures with a new plan.
+            self.drop_all_layer_targets();
             changed = true;
         }
 
@@ -575,6 +642,60 @@ impl ExternalWindowSurface {
         }
 
         changed
+    }
+
+    /// Align intermediate layer targets with the core [`LayerMetricsGeneration`].
+    ///
+    /// When generation changes, all layer textures are dropped and rebuilt on
+    /// demand at the current surface size (P2.6 atomic rebuild).
+    pub fn sync_layer_metrics_generation(&mut self, generation: LayerMetricsGeneration) {
+        if self.layer_metrics_generation != generation {
+            self.drop_all_layer_targets();
+            self.layer_metrics_generation = generation;
+        }
+    }
+
+    /// Drop every intermediate layer texture (resize / plan metrics change).
+    pub fn drop_all_layer_targets(&mut self) {
+        self.layer_targets.clear();
+    }
+
+    /// Number of intermediate layer textures currently allocated (tests/diagnostics).
+    #[must_use]
+    pub fn layer_target_count(&self) -> usize {
+        self.layer_targets.len()
+    }
+
+    /// Current layer metrics generation last synced from core.
+    #[must_use]
+    pub fn layer_metrics_generation(&self) -> LayerMetricsGeneration {
+        self.layer_metrics_generation
+    }
+
+    fn ensure_layer_target(&mut self, layer_id: u64) -> Result<(), ()> {
+        let width = self.surface.config.width.max(1);
+        let height = self.surface.config.height.max(1);
+        let metrics_gen = self.layer_metrics_generation;
+        if let Some(existing) = self.layer_targets.get(&layer_id)
+            && existing.width == width
+            && existing.height == height
+            && existing.generation == metrics_gen
+        {
+            return Ok(());
+        }
+        let device = &self.render_cx.devices[self.surface.dev_id].device;
+        let (texture, view) = create_targets(width, height, device);
+        self.layer_targets.insert(
+            layer_id,
+            LayerTextureTarget {
+                texture,
+                view,
+                width,
+                height,
+                generation: metrics_gen,
+            },
+        );
+        Ok(())
     }
 
     /// Render a prepared Masonry frame and present it to the attached window surface.
@@ -700,6 +821,200 @@ impl ExternalWindowSurface {
 
         if let Err(error) = device.poll(wgpu::PollType::Poll) {
             tracing::trace!("non-blocking GPU poll after present returned: {error}");
+        }
+
+        (RenderFrameResult::Presented, timings)
+    }
+
+    /// Encode dirty painter-order entries into intermediate textures, composite
+    /// in entry order, and present (P2.3).
+    ///
+    /// - `entries` must be in Masonry painter order (cached segments may appear
+    ///   both before and after an anim entry).
+    /// - `frame: None` reuses the last encoded texture for that `layer_id`.
+    /// - On any encode/composite/present failure, intermediate dirty state is
+    ///   retained by the caller (this method does not clear core dirty flags).
+    /// - Call [`Self::sync_layer_metrics_generation`] before this when resize/DPI
+    ///   changed so old-size textures are not mixed with the new plan (P2.6).
+    #[must_use]
+    pub fn render_ordered_frame(
+        &mut self,
+        renderer: &mut Renderer,
+        entries: &[OrderedLayerEncode<'_>],
+    ) -> (RenderFrameResult, RenderFrameTimings) {
+        let mut timings = RenderFrameTimings::default();
+        if entries.is_empty() {
+            tracing::error!("render_ordered_frame called with no entries");
+            return (RenderFrameResult::Failed, timings);
+        }
+
+        // Ensure / validate layer targets before encode (avoids borrow conflicts).
+        for entry in entries {
+            if entry.frame.is_some() {
+                if self.ensure_layer_target(entry.layer_id).is_err() {
+                    return (RenderFrameResult::Failed, timings);
+                }
+            } else if !self.layer_targets.contains_key(&entry.layer_id) {
+                tracing::error!(
+                    layer_id = entry.layer_id,
+                    "ordered encode skip requested but no cached layer texture"
+                );
+                return (RenderFrameResult::Failed, timings);
+            }
+        }
+
+        // --- encode dirty entries into layer targets -------------------------
+        for entry in entries {
+            let Some(frame) = entry.frame else {
+                continue;
+            };
+            let encode_started = std::time::Instant::now();
+            let result = {
+                let dev_id = self.surface.dev_id;
+                let device_handle = &self.render_cx.devices[dev_id];
+                let target = self
+                    .layer_targets
+                    .get(&entry.layer_id)
+                    .expect("layer target ensured");
+                renderer.render_to_texture(
+                    RenderTarget {
+                        adapter: &device_handle.adapter,
+                        device: &device_handle.device,
+                        queue: &device_handle.queue,
+                        texture: &target.texture,
+                        view: &target.view,
+                    },
+                    frame,
+                )
+            };
+            let elapsed = encode_started.elapsed();
+            if entry.kind == OrderedEntryKind::Anim {
+                timings.encode_anim += elapsed;
+            } else {
+                timings.encode += elapsed;
+            }
+            if let Err(error) = result {
+                tracing::error!(
+                    layer_id = entry.layer_id,
+                    "failed to encode ordered layer: {error}"
+                );
+                return (RenderFrameResult::Failed, timings);
+            }
+        }
+
+        // --- acquire swapchain -----------------------------------------------
+        let dev_id = self.surface.dev_id;
+        let device = &self.render_cx.devices[dev_id].device;
+        let queue = &self.render_cx.devices[dev_id].queue;
+
+        let acquire_started = std::time::Instant::now();
+        let mut did_reconfigure = false;
+        let surface_texture = loop {
+            match get_current_surface_texture(&self.surface.surface, device) {
+                Ok(texture) if texture.suboptimal => {
+                    discard_surface_texture(device, texture);
+                    self.render_cx.configure_surface(&self.surface);
+                    tracing::debug!("swap chain texture was suboptimal; surface reconfigured");
+                    timings.surface_acquire = acquire_started.elapsed();
+                    return (RenderFrameResult::Retry, timings);
+                }
+                Ok(texture) => break texture,
+                Err(error) => match surface_recovery_action(&error) {
+                    SurfaceRecoveryAction::Reconfigure if !did_reconfigure => {
+                        did_reconfigure = true;
+                        self.render_cx.configure_surface(&self.surface);
+                    }
+                    SurfaceRecoveryAction::Reconfigure | SurfaceRecoveryAction::Retry => {
+                        tracing::warn!(
+                            "couldn't acquire swap chain texture; retrying next frame: {error}"
+                        );
+                        timings.surface_acquire = acquire_started.elapsed();
+                        return (RenderFrameResult::Retry, timings);
+                    }
+                    SurfaceRecoveryAction::Fail => {
+                        tracing::error!("couldn't acquire swap chain texture: {error}");
+                        timings.surface_acquire = acquire_started.elapsed();
+                        return (RenderFrameResult::Failed, timings);
+                    }
+                },
+            }
+        };
+        timings.surface_acquire = acquire_started.elapsed();
+
+        // --- composite layer targets in painter order onto swapchain ---------
+        let composite_started = std::time::Instant::now();
+        let (surface_view, view_errors) = capture_device_errors(device, || {
+            surface_texture
+                .texture
+                .create_view(&wgpu::TextureViewDescriptor {
+                    label: Some("Picus Ordered Composite Swap Chain View"),
+                    ..Default::default()
+                })
+        });
+        if !view_errors.is_empty() {
+            log_device_errors("creating the swap chain texture view", view_errors);
+            discard_surface_texture(device, surface_texture);
+            self.render_cx.configure_surface(&self.surface);
+            timings.composite = composite_started.elapsed();
+            return (RenderFrameResult::Retry, timings);
+        }
+
+        // Composite into the primary target_texture first (stable format), then
+        // blit once to the swapchain — matches single-path present alpha handling.
+        let ((), composite_errors) = capture_device_errors(device, || {
+            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Picus Ordered Layer Composite"),
+            });
+            // First layer replaces; subsequent layers use premultiplied src-over.
+            for (i, entry) in entries.iter().enumerate() {
+                let src = self
+                    .layer_targets
+                    .get(&entry.layer_id)
+                    .expect("layer target required for composite");
+                if i == 0 {
+                    self.surface.blitter.copy(
+                        device,
+                        &mut encoder,
+                        &src.view,
+                        &self.surface.target_view,
+                    );
+                } else {
+                    self.layer_composite_blitter.copy(
+                        device,
+                        &mut encoder,
+                        &src.view,
+                        &self.surface.target_view,
+                    );
+                }
+            }
+            self.surface.blitter.copy(
+                device,
+                &mut encoder,
+                &self.surface.target_view,
+                &surface_view,
+            );
+            queue.submit([encoder.finish()]);
+        });
+        if !composite_errors.is_empty() {
+            log_device_errors("submitting ordered layer composite", composite_errors);
+            discard_surface_texture(device, surface_texture);
+            self.render_cx.configure_surface(&self.surface);
+            timings.composite = composite_started.elapsed();
+            return (RenderFrameResult::Retry, timings);
+        }
+        timings.composite = composite_started.elapsed();
+
+        let present_started = std::time::Instant::now();
+        let ((), present_errors) = capture_device_errors(device, || surface_texture.present());
+        timings.present_submit = present_started.elapsed();
+        if !present_errors.is_empty() {
+            log_device_errors("presenting the swap chain texture", present_errors);
+            self.render_cx.configure_surface(&self.surface);
+            return (RenderFrameResult::Retry, timings);
+        }
+
+        if let Err(error) = device.poll(wgpu::PollType::Poll) {
+            tracing::trace!("non-blocking GPU poll after ordered present returned: {error}");
         }
 
         (RenderFrameResult::Presented, timings)
@@ -1146,6 +1461,26 @@ fn create_blitter(
     }
 }
 
+/// Premultiplied-alpha **over** blitter for stacking intermediate layer textures.
+fn create_layer_composite_blitter(device: &Device, format: TextureFormat) -> TextureBlitter {
+    // Premultiplied source over destination (standard porter-duff src-over).
+    const PREMUL_OVER: wgpu::BlendState = wgpu::BlendState {
+        color: wgpu::BlendComponent {
+            src_factor: wgpu::BlendFactor::One,
+            dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+            operation: wgpu::BlendOperation::Add,
+        },
+        alpha: wgpu::BlendComponent {
+            src_factor: wgpu::BlendFactor::One,
+            dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+            operation: wgpu::BlendOperation::Add,
+        },
+    };
+    TextureBlitterBuilder::new(device, format)
+        .blend_state(PREMUL_OVER)
+        .build()
+}
+
 fn needs_premultiplied_blit(alpha_mode: CompositeAlphaMode, transparent: bool) -> bool {
     matches!(alpha_mode, CompositeAlphaMode::PreMultiplied) || (cfg!(windows) && transparent)
 }
@@ -1364,6 +1699,25 @@ mod tests {
         // A newly ready frame after submit does not resurrect the submitted one.
         q.push_ready(4);
         assert_eq!(q.take_for_submit(), Some(4));
+    }
+
+    #[test]
+    fn ordered_entry_kinds_cover_cached_anim_external() {
+        // P2.3 inventory: multi-texture path attributes encode cost by kind.
+        let _ = [
+            OrderedEntryKind::Cached,
+            OrderedEntryKind::Anim,
+            OrderedEntryKind::External,
+        ];
+        assert_ne!(OrderedEntryKind::Cached, OrderedEntryKind::Anim);
+    }
+
+    #[test]
+    fn layer_metrics_generation_is_stable_token() {
+        let g0 = LayerMetricsGeneration(0);
+        let g1 = LayerMetricsGeneration(1);
+        assert_ne!(g0, g1);
+        assert_eq!(g1.0, 1);
     }
 
     #[test]
