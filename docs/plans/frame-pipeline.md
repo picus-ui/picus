@@ -301,11 +301,11 @@ contract」；代码：`picus_core::runtime::layers`；目标尺寸决策：
 |--------|------|------|
 | P3.1 | `PaintIsolation::{Inline, AnimEntry}` 在 `picus_widget`（painter slot，非全局顶层；facade 不进 prelude） | **已交付** |
 | P3.2 | `Spinner` / indeterminate `ProgressBar` 默认 `AnimEntry`；determinate `Inline` | **已交付** |
-| P3.3 | Host `register_external_widgets_from_visual` 按 isolation 提升 External→Anim，稳定 layer id；clip/order/layout 仍走既有 invalidation | **已交付** |
-| P3.4 | 文档：[`docs/guide/paint-isolation.md`](../guide/paint-isolation.md) + runtime 交叉引用 | **已交付** |
+| P3.3 | Host：discovery 仍为已知类型 allowlist；**promotion** 按 isolation 提升 External→Anim；稳定 layer id | **已交付** |
+| P3.4 | 文档：[`docs/guide/paint-isolation.md`](../guide/paint-isolation.md)（含 discovery 限制 + path forward）+ runtime / public-modules | **已交付** |
 | P3.5 | AGENTS 硬规则：持续 ~60Hz 视觉动画不得默认脏整窗 base present 路径 | **已交付** |
 
-**验收**：新控件有明确约定；gallery 无 hardcode 特例；Spinner/ProgressBar 走公共 isolation（host 场景绘制仍 type-dispatch）。  
+**验收**：新控件有明确约定；gallery 无 hardcode 特例；Spinner/ProgressBar 走公共 isolation（discovery + host 场景绘制仍 type-dispatch；自定义仅 `apply` 不提升）。  
 **建议 PR**：`PR3-paint-isolation-api`
 
 ---

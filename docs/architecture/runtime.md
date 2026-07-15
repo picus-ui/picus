@@ -221,7 +221,8 @@ flowchart TB
 # Current P2b + P2c + P3 contract
 
 rebuild_from_visual_plan(plan)  → CompositorEntry[] in Masonry painter order
-register_external_widgets_from_visual → AnimLayerId when PaintIsolation::AnimEntry
+register_external_widgets_from_visual → AnimLayerId when discovered isolation is AnimEntry
+                                        (allowlist: Spinner / indeterminate ProgressBar)
 needs_encode                    → structure_dirty || encoded_version != content_version
 non-anim content dirt           → mark_non_anim_content_dirty bumps CachedScene/Overlay
                                   (InputOrRebuild/Theme/Layout/…; pure AnimPaint does not)
@@ -250,15 +251,21 @@ Product path for continuous isolation (no gallery/entity hardcode):
    - **`ProgressBar`:** `AnimEntry` **only while** `progress == None`
      (indeterminate). Determinate (`Some`) is `Inline` into the cached scene
      and does **not** keep a permanent anim tick.
-2. **`LayerRegistry::register_external_widgets_from_visual`** promotes External
-   slots to Anim when the live widget reports
-   `PaintIsolation::AnimEntry` (resolved via known types that implement
-   `paint_isolation()`). Other External stays
-   `CompositorEntryKind::External` (transparent placeholder) — never an empty
-   Anim with silent missing content. Host slots for widgets that leave External
-   (e.g. ProgressBar `None→Some` → `Inline`) are pruned. Stable
-   `AnimLayerId` / compositor `LayerId` follow existing plan identity rules;
-   ancestor clip/order/layout changes still set `structure_dirty`.
+2. **`LayerRegistry::register_external_widgets_from_visual`:**
+   - **Discover** isolation via a closed type allowlist (`paint_isolation()` on
+     `Spinner` / `ProgressBar`; unknown → `Inline`).
+   - **Promote** External → Anim only when discovered isolation is
+     `PaintIsolation::AnimEntry` (isolation-keyed decision).
+   - Other External stays `CompositorEntryKind::External` (transparent
+     placeholder) — never an empty Anim with silent missing content.
+   - Host slots for widgets that leave External (e.g. ProgressBar `None→Some`
+     → `Inline`) are pruned. Stable `AnimLayerId` / compositor `LayerId`
+     follow existing plan identity rules; ancestor clip/order/layout changes
+     still set `structure_dirty`.
+   - **Known limitation:** third-party widgets that only call
+     `AnimEntry.apply` are not discovered; path forward is trait / TypeId
+     host-painter registration (no inventory/linkme). See
+     [guide/paint-isolation.md](../guide/paint-isolation.md).
 3. **Host scenes** (FullWindowTransparent target):
    - Spinner: `AnimLayerHost::sync_spinner_scene` via `Spinner::paint_arms`;
      version / dirty advance only when the **12-step visual phase** changes

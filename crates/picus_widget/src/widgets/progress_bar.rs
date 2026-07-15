@@ -427,12 +427,13 @@ impl Widget for ProgressBar {
         let border_width = *props.get::<BorderWidth>(cache);
         let corner_radius = *props.get::<CornerRadius>(cache);
 
-        if self.paint_isolation() == PaintIsolation::AnimEntry {
+        let isolation = self.paint_isolation();
+        if isolation == PaintIsolation::AnimEntry {
             // Public isolation: AnimEntry → External painter slot every paint (mode not sticky).
             // Masonry does not append External paint into VisualLayerPlan scene segments;
             // Picus anim host is authoritative via `paint_indeterminate_segment`.
             // Skip local segment strokes here to avoid dual sources of truth.
-            self.paint_isolation().apply(ctx);
+            isolation.apply(ctx);
             // Full paint path ack (selective path acks via host after successful present).
             self.ack_indeterminate_phase(self.indeterminate_phase);
             return;

@@ -25,25 +25,31 @@
 //! ## Phase 2c / 2d (Spinner + indeterminate ProgressBar)
 //!
 //! Widgets declare [`PaintIsolation`] (P3 public API). [`PaintIsolation::AnimEntry`]
-//! applies as Masonry External every paint; host promotion follows isolation
-//! (not gallery/entity hardcode). Host scene painters remain type-dispatched
-//! (Spinner arms / ProgressBar segment). G2 selective anim path unchanged.
+//! applies as Masonry External every paint. **Promotion** is isolation-keyed
+//! (`promotes_to_anim_host`); **discovery** of isolation still downcasts known
+//! types (`paint_isolation()` on Spinner / ProgressBar) — not gallery/entity
+//! hardcode, but not open third-party discovery either. Host **scene paint** is
+//! separately type-dispatched (arms / segment). G2 selective anim path unchanged.
 //!
 //! ## Phase 3 ([`PaintIsolation`])
 //!
 //! - Public enum: [`PaintIsolation::{Inline, AnimEntry}`] in `picus_widget`
 //!   (painter slot, not global top layer).
 //! - Spinner / indeterminate ProgressBar default `AnimEntry`; determinate bar `Inline`.
-//! - `register_external_widgets_from_visual` promotes External → Anim when live
-//!   widget reports `AnimEntry` (stable [`AnimLayerId`] / compositor [`LayerId`]).
+//! - `register_external_widgets_from_visual` promotes External → Anim when the
+//!   allowlisted live widget reports `AnimEntry` (stable [`AnimLayerId`] /
+//!   compositor [`LayerId`]). Unknown External stays transparent placeholder.
+//! - **Known limitation:** custom widgets that only `AnimEntry.apply` are not
+//!   discovered; path forward is trait / TypeId host-painter registry (no
+//!   inventory/linkme). See `docs/guide/paint-isolation.md`.
 //!
 //! ## Delivered vs not yet
 //!
 //! - **G10:** product path has no default anim present throttle; `PICUS_ANIM_PRESENT_HZ`
 //!   is diagnostic opt-in only (positive Hz caps anim-driven presents).
 //! - **G2 unit contracts:** Spinner + indeterminate ProgressBar host paths in-tree.
-//! - **Not yet:** full PresentMon G3/G4 protocol numbers (baseline tables may still
-//!   be placeholders — do not invent fake numbers).
+//! - **Not yet:** open custom-AnimEntry discovery; full PresentMon G3/G4 protocol
+//!   numbers (baseline tables may still be placeholders — do not invent fake numbers).
 //!
 //! See `docs/guide/paint-isolation.md`, `docs/architecture/runtime.md`, and
 //! `docs/plans/frame-pipeline.md`.
@@ -1240,13 +1246,14 @@ impl LayerRegistry {
                 .any(|e| !matches!(e.kind, CompositorEntryKind::CachedScene))
     }
 
-    /// Bind External painter slots whose live widgets declare
-    /// [`PaintIsolation::AnimEntry`] (Spinner; indeterminate ProgressBar).
+    /// Bind External painter slots whose live widgets resolve to
+    /// [`PaintIsolation::AnimEntry`] (stock: Spinner; indeterminate ProgressBar).
     ///
     /// Unbound External widgets stay [`CompositorEntryKind::External`] (transparent
     /// placeholder) — they are **not** promoted to Anim with an empty host scene.
-    /// No gallery/entity hardcode: promotion is **isolation-driven** via
-    /// [`widget_paint_isolation`]. Host entries for widgets that left External /
+    /// No gallery/entity hardcode. **Promotion** is isolation-keyed
+    /// (`promotes_to_anim_host`); **discovery** uses [`widget_paint_isolation`]
+    /// (closed type allowlist). Host entries for widgets that left External /
     /// became determinate (`Inline`) are pruned. Allocates a stable
     /// [`AnimLayerId`] per widget; compositor [`LayerId`] follows plan identity.
     pub(crate) fn register_external_widgets_from_visual(
@@ -1400,10 +1407,14 @@ impl LayerRegistry {
 
 /// Resolve public [`PaintIsolation`] for a live widget (host promotion gate).
 ///
-/// Known anim-capable widgets report their isolation; unknown widgets default
-/// to [`PaintIsolation::Inline`] so bare External placeholders are not promoted
-/// to empty Anim entries. Host **scene paint** still type-dispatches (Spinner /
-/// ProgressBar painters) — isolation only decides External → Anim promotion.
+/// **Discovery** is a closed allowlist: downcast known types and call their
+/// `paint_isolation()`. Unknown widgets default to [`PaintIsolation::Inline`]
+/// so bare External placeholders are not promoted to empty Anim entries.
+///
+/// Once resolved, the **enum value** decides promotion (`promotes_to_anim_host`).
+/// Host **scene paint** is a separate type-dispatched step (Spinner arms /
+/// ProgressBar segment). Custom retained widgets are not discoverable yet —
+/// see module docs and `docs/guide/paint-isolation.md`.
 fn widget_paint_isolation(render_root: &RenderRoot, widget_id: WidgetId) -> PaintIsolation {
     let Some(wref) = render_root.get_widget(widget_id) else {
         return PaintIsolation::Inline;
@@ -1592,6 +1603,67 @@ mod tests {
 
         fn make_trace_span(&self, id: WidgetId) -> Span {
             trace_span!("ModeBox", id = id.trace())
+        }
+    }
+
+    /// Exercises [`PaintIsolation::apply`] only (not host-known type).
+    struct IsolationBox {
+        isolation: PaintIsolation,
+    }
+
+    impl IsolationBox {
+        fn new(isolation: PaintIsolation) -> Self {
+            Self { isolation }
+        }
+    }
+
+    impl Widget for IsolationBox {
+        type Action = NoAction;
+
+        fn register_children(&mut self, _ctx: &mut RegisterCtx<'_>) {}
+
+        fn property_changed(&mut self, _ctx: &mut UpdateCtx<'_>, _property_type: TypeId) {}
+
+        fn measure(
+            &mut self,
+            _ctx: &mut MeasureCtx<'_>,
+            _props: &PropertiesRef<'_>,
+            _axis: Axis,
+            _len_req: LenReq,
+            _cross_length: Option<Length>,
+        ) -> Length {
+            Length::px(20.0)
+        }
+
+        fn layout(&mut self, _ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, _size: Size) {}
+
+        fn paint(
+            &mut self,
+            ctx: &mut PaintCtx<'_>,
+            _props: &PropertiesRef<'_>,
+            _painter: &mut Painter<'_>,
+        ) {
+            self.isolation.apply(ctx);
+        }
+
+        fn accessibility_role(&self) -> Role {
+            Role::GenericContainer
+        }
+
+        fn accessibility(
+            &mut self,
+            _ctx: &mut AccessCtx<'_>,
+            _props: &PropertiesRef<'_>,
+            _node: &mut Node,
+        ) {
+        }
+
+        fn children_ids(&self) -> ChildrenIds {
+            ChildrenIds::new()
+        }
+
+        fn make_trace_span(&self, id: WidgetId) -> Span {
+            trace_span!("IsolationBox", id = id.trace())
         }
     }
 
@@ -2367,9 +2439,84 @@ mod tests {
     }
 
     #[test]
+    fn paint_isolation_apply_anim_entry_sets_external_slot() {
+        // Harness-level: PaintIsolation::apply(AnimEntry) must reserve External
+        // in VisualLayerPlan (not only enum→mode unit mapping).
+        let root_widget = NewWidget::new(IsolationBox::new(PaintIsolation::AnimEntry));
+        let mut root = test_root(root_widget);
+        let (plan, _) = root.redraw();
+        let external_count = plan
+            .layers
+            .iter()
+            .filter(|l| matches!(l.kind, VisualLayerKind::External { .. }))
+            .count();
+        assert_eq!(
+            external_count, 1,
+            "AnimEntry.apply must set External; plan={plan:?}"
+        );
+    }
+
+    #[test]
+    fn paint_isolation_apply_inline_does_not_create_external() {
+        let root_widget = NewWidget::new(IsolationBox::new(PaintIsolation::Inline));
+        let mut root = test_root(root_widget);
+        let (plan, _) = root.redraw();
+        let external_count = plan
+            .layers
+            .iter()
+            .filter(|l| matches!(l.kind, VisualLayerKind::External { .. }))
+            .count();
+        assert_eq!(
+            external_count, 0,
+            "Inline.apply is a no-op; plan={plan:?}"
+        );
+    }
+
+    #[test]
+    fn undiscovered_anim_entry_apply_is_not_promoted_to_anim() {
+        // Known limitation: apply alone → External placeholder, not host Anim
+        // (IsolationBox is not on the discovery allowlist).
+        let root_widget = NewWidget::new(
+            Flex::row()
+                .with_fixed(NewWidget::new(ModeBox::new(
+                    PaintLayerMode::Inline,
+                    Color::from_rgb8(255, 0, 0),
+                )))
+                .with_fixed(NewWidget::new(IsolationBox::new(PaintIsolation::AnimEntry)))
+                .with_fixed(NewWidget::new(ModeBox::new(
+                    PaintLayerMode::Inline,
+                    Color::from_rgb8(0, 0, 255),
+                ))),
+        );
+        let mut root = test_root(root_widget);
+        let (plan, _) = root.redraw();
+        assert!(
+            plan.layers
+                .iter()
+                .any(|l| matches!(l.kind, VisualLayerKind::External { .. })),
+            "apply must still produce External"
+        );
+
+        let mut registry = LayerRegistry::new(AnimTargetStrategy::FullWindowTransparent);
+        registry.register_external_widgets_from_visual(&plan, &root);
+        registry.rebuild_from_visual_plan(&plan, Rect::new(0.0, 0.0, 80.0, 40.0));
+        let kinds: Vec<_> = registry.plan().entries().iter().map(|e| e.kind).collect();
+        assert!(
+            kinds.iter().any(|k| *k == CompositorEntryKind::External),
+            "undiscovered AnimEntry stays External; kinds={kinds:?}"
+        );
+        assert!(
+            !kinds.iter().any(|k| *k == CompositorEntryKind::Anim),
+            "must not invent Anim without discovery; kinds={kinds:?}"
+        );
+        assert_eq!(registry.host().len(), 0);
+    }
+
+    #[test]
     fn spinner_external_isolation_promotes_to_anim_entry() {
         // Plan/isolation contract (not a pixel scan of CachedScene blobs):
-        // Spinner PaintIsolation::AnimEntry → External slot → host Anim entry.
+        // Spinner discovery + AnimEntry → External slot → host Anim entry.
+        // Also covers Spinner paint_isolation().apply → External end-to-end.
         let spinner = NewWidget::new(Spinner::new());
         let root_widget = NewWidget::new(
             Flex::row()

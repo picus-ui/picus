@@ -25,5 +25,19 @@ registration path is `register_ui_components!(app, ...)`; advanced registration
 is opt-in and requires the `AdvancedAppPicusExt` trait from
 `picus::runtime::advanced`.
 
+### Continuous-anim paint isolation (retained)
+
+Continuous ~60 Hz visual animation uses a **painter-slot** contract
+(`PaintIsolation::{Inline, AnimEntry}`), not a global top layer:
+
+| Surface | Role |
+|---------|------|
+| `picus::components` (`UiSpinner`, `UiProgressBar`) | App-facing controls; isolation defaults already correct |
+| `picus_widget::PaintIsolation` | Retained/advanced enum + `apply` (not on `picus::prelude`) |
+| Picus host discovery | Closed allowlist today; custom `AnimEntry.apply` alone is not enough |
+
+Guide: [guide/paint-isolation.md](../guide/paint-isolation.md). AGENTS hard rule:
+continuous anim must not default to dirtying the full-window base present path.
+
 This split keeps the application contract small while allowing custom controls,
 projectors, and platform integrations to use the lower-level APIs explicitly.
