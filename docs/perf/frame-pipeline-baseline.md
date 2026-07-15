@@ -120,6 +120,7 @@ Record 1 Hz `picus frame timing` averages for the sample window. Remember:
 | `anim_tick_ms` | All entered-work paint attempts for that window (`frames`) |
 | `scene_build_*`, `surface_acquire`, `encode_*`, `composite`, `present_submit` | **Content paint attempts only** (`frames − anim_tick_only`, logged as `content_paint_frames`) so throttled anim-only zeros do not dilute encode/present |
 | Process `input_dispatch_ms` / `synth_ms` / `rebuild_ms` | `bevy_frames` (not multi-window paint attempts) |
+| Process `paint_ms` / `redraw_ms` / `present_ms` | **Content paint attempts** (`frames − anim_tick_only`, logged as process `content_paint_frames`); if that is 0, `present_ms=0` and paint/redraw fall back to all entered-work attempts |
 | Process `frames` | Sum of per-window paint attempts (can be ≈ windows × Bevy paints) |
 
 Also: `anim_tick_ms` currently includes rewrite inside `AnimFrame`; `scene_build_base_ms` is root `redraw()` only (see `runtime.md` Phase 0 honesty notes).

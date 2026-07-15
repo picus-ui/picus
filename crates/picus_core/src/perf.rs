@@ -11,6 +11,11 @@
 //!   Multi-window sessions therefore inflate `frames` by ~window count.
 //!   ECS phases (`input_dispatch_ms`, `synth_ms`, `rebuild_ms`) are averaged over
 //!   **`bevy_frames`** (each `begin_frame` / synthesis entry), not paint attempts.
+//!   Process `paint_ms` / `redraw_ms` / `present_ms` use **content paint attempts**
+//!   (`frames − anim_tick_only`) so throttled anim-only zeros do not dilute
+//!   encode/present cost (same rule as per-window present-path means). When there
+//!   are no content paints, `present_ms` is `0` and paint/redraw fall back to all
+//!   entered-work attempts so pure anim-tick cost remains visible.
 //! - **Per-window line**: `anim_tick_ms` is averaged over **all** entered-work paint
 //!   attempts for that window. Present-path phases (`scene_build_*`,
 //!   `surface_acquire`, `encode_*`, `composite`, `present_submit`) are averaged
@@ -362,13 +367,25 @@ impl FrameTiming {
         // ECS phases use Bevy-frame denominator so multi-window paint attempts
         // do not dilute synth/input averages.
         let bevy_frames = self.bevy_frames.max(1) as f64;
-        let paint_frames = self.frames.max(1) as f64;
+        let content_paint_frames = self.frames.saturating_sub(self.anim_tick_only_frames);
+        // Present-path process means: same content-paint rule as per-window lines.
+        // When only anim-tick-only attempts exist, fall back to all entered-work
+        // frames for paint/redraw so pure-anim cost is still visible; present=0.
+        let paint_denom = if content_paint_frames > 0 {
+            f64::from(content_paint_frames)
+        } else {
+            f64::from(self.frames.max(1))
+        };
         let input_dispatch_ms = (self.input_dispatch_ns as f64 / bevy_frames) / 1_000_000.0;
         let synth_ms = (self.synth_ns as f64 / bevy_frames) / 1_000_000.0;
         let rebuild_ms = (self.rebuild_ns as f64 / bevy_frames) / 1_000_000.0;
-        let paint_ms = (self.paint_ns as f64 / paint_frames) / 1_000_000.0;
-        let redraw_ms = (self.paint_redraw_ns as f64 / paint_frames) / 1_000_000.0;
-        let present_ms = (self.paint_present_ns as f64 / paint_frames) / 1_000_000.0;
+        let paint_ms = (self.paint_ns as f64 / paint_denom) / 1_000_000.0;
+        let redraw_ms = (self.paint_redraw_ns as f64 / paint_denom) / 1_000_000.0;
+        let present_ms = if content_paint_frames == 0 {
+            0.0
+        } else {
+            (self.paint_present_ns as f64 / f64::from(content_paint_frames)) / 1_000_000.0
+        };
         let avg_nodes = if self.synth_dirty_frames == 0 {
             0.0
         } else {
@@ -391,6 +408,7 @@ impl FrameTiming {
             target: "picus_core::perf",
             bevy_frames = self.bevy_frames,
             frames = self.frames,
+            content_paint_frames,
             presented = self.painted_frames,
             anim_tick_only = self.anim_tick_only_frames,
             synth_dirty = self.synth_dirty_frames,
@@ -404,7 +422,7 @@ impl FrameTiming {
             avg_cache_hits = format_args!("{avg_cache_hits:.0}"),
             paint_reasons = %reasons,
             synth_reasons = %synth_reasons,
-            note = "frames=per-window paint attempts; ECS avgs over bevy_frames; CPU only (PresentMon/ETW for display)",
+            note = "frames=per-window paint attempts; paint/present avgs over content_paint_frames; ECS over bevy_frames; CPU only (PresentMon/ETW for display)",
             "picus frame timing (process)"
         );
 
@@ -722,5 +740,41 @@ mod tests {
                 .content_paint_frames(),
             1
         );
+    }
+
+    #[test]
+    fn process_content_paint_denom_excludes_anim_tick_only() {
+        let _guard = ForceTimingGuard::enter();
+        let mut timing = FrameTiming::default();
+        let window = test_entity(4);
+
+        // 10ms present path on one content paint.
+        timing.record_window_paint(
+            window,
+            PaintPhaseTimings {
+                present_submit: Duration::from_millis(10),
+                encode_base: Duration::from_millis(0),
+                ..PaintPhaseTimings::default()
+            },
+            true,
+            false,
+            PaintReason::NeedsRedraw as u32,
+        );
+        // Tick-only zeros would dilute 10ms → 5ms if averaged over all frames.
+        timing.record_window_paint(
+            window,
+            PaintPhaseTimings::default(),
+            false,
+            true,
+            PaintReason::AnimTickNoPresent as u32,
+        );
+
+        assert_eq!(timing.frames, 2);
+        assert_eq!(timing.anim_tick_only_frames, 1);
+        let content = timing.frames.saturating_sub(timing.anim_tick_only_frames);
+        assert_eq!(content, 1);
+        let present_mean_ms =
+            (timing.paint_present_ns as f64 / f64::from(content)) / 1_000_000.0;
+        assert!((present_mean_ms - 10.0).abs() < 1e-9);
     }
 }

@@ -63,11 +63,11 @@ latency.
 **Phase instrumentation today (Phase 0 honesty):** `anim_tick_ms` includes
 rewrite that Masonry performs inside `AnimFrame`. `scene_build_base_ms` is only
 the subsequent root `redraw()` call. Present-path averages (`encode_*`,
-`composite`, `present_submit`, …) are over **content paint attempts**
-(`frames − anim_tick_only`), not diluted by throttled anim-only zeros. Process
-log `frames` counts **per-window paint attempts**; ECS averages use `bevy_frames`.
-Idle pure-`Skipped` paint does not assign `frame_id`s but still flushes process
-summaries on a ~1s wall clock.
+`composite`, `present_submit`, …) and process `paint_ms` / `present_ms` are over
+**content paint attempts** (`frames − anim_tick_only`), not diluted by throttled
+anim-only zeros. Process log `frames` counts **per-window paint attempts**; ECS
+averages use `bevy_frames`. Idle pure-`Skipped` paint does not assign `frame_id`s
+but still flushes process summaries on a ~1s wall clock.
 
 Windows baselines require PresentMon/ETW; protocol and result template:
 [perf/frame-pipeline-baseline.md](../perf/frame-pipeline-baseline.md).
