@@ -1,16 +1,18 @@
 use std::any::TypeId;
+use std::cell::Cell;
 
 use accesskit::{Node, Role};
 use tracing::{Span, trace_span};
 
 use crate::core::{
     AccessCtx, ArcStr, ChildrenIds, LayoutCtx, MeasureCtx, NewWidget, NoAction, PaintCtx,
-    PrePaintProps, PropertiesMut, PropertiesRef, Property, PropertySet, RegisterCtx, Update,
-    UpdateCtx, Widget, WidgetId, WidgetMut, WidgetPod, paint_background, paint_box_shadow,
+    PaintLayerMode, PrePaintProps, PropertiesMut, PropertiesRef, Property, PropertySet, RegisterCtx,
+    Update, UpdateCtx, Widget, WidgetId, WidgetMut, WidgetPod, paint_background, paint_box_shadow,
 };
 use crate::imaging::Painter;
-use crate::kurbo::{Axis, Size};
+use crate::kurbo::{Axis, Rect, Size};
 use crate::layout::{LayoutSize, LenReq, Length, SizeDef};
+use crate::peniko::color::{AlphaColor, Srgb};
 use crate::peniko::{Color, Gradient};
 use crate::properties::{
     BarColor, BorderColor, BorderWidth, CornerRadius, LineBreaking, paint_border_brush,
@@ -21,7 +23,28 @@ use crate::widgets::Label;
 
 // TODO - NaN probably shouldn't be a meaningful value in our API.
 
+/// Fixed indeterminate animation period (logical time), seconds.
+pub const INDETERMINATE_PERIOD_SECS: f64 = 1.2;
+
+/// Segment width as a fraction of track width.
+const INDETERMINATE_SEGMENT_FRAC: f64 = 0.3;
+
+/// Travel span multiplier so the segment fully enters then fully exits the track.
+/// `left = phase * 1.3 - 0.3` with phase ∈ [0, 1).
+const INDETERMINATE_TRAVEL: f64 = 1.3;
+
 /// A progress bar.
+///
+/// # Anim isolation (frame pipeline P2d)
+///
+/// When progress is [`None`] (indeterminate), every paint requests
+/// [`PaintLayerMode::External`] so Masonry reserves a painter-order placeholder
+/// and does **not** fold the moving segment into cached base scene segments.
+/// Picus [`AnimLayerHost`] fills the slot via [`Self::paint_indeterminate_segment`].
+/// Mode is not sticky — it must be set each paint.
+///
+/// Determinate mode (`Some`) paints inline into the cached scene and does **not**
+/// schedule a permanent anim clock.
 ///
 #[doc = concat!(
     "![25% progress bar](",
@@ -34,6 +57,15 @@ pub struct ProgressBar {
     /// `None` variant can be used to show a progress bar without a percentage.
     /// It is also used if an invalid float (outside of [0, 1]) is passed.
     progress: Option<f64>,
+    /// Normalized indeterminate phase ∈ `[0, 1)` (meaningful only when `progress` is `None`).
+    indeterminate_phase: f64,
+    /// Cumulative logical seconds for indeterminate animation (allows large jump frames).
+    indeterminate_elapsed: f64,
+    /// Last phase acked by Masonry `paint` **or** host selective sync after present.
+    ///
+    /// `Cell` so Picus can ack from an immutable widget ref after host scene build
+    /// (selective G2 path never runs `paint`).
+    last_paint_phase: Cell<Option<f64>>,
     label: WidgetPod<Label>,
 }
 
@@ -50,12 +82,107 @@ impl ProgressBar {
         let label = NewWidget::new(Label::new(Self::value(progress)))
             .with_props(label_props)
             .to_pod();
-        Self { progress, label }
+        Self {
+            progress,
+            indeterminate_phase: 0.0,
+            indeterminate_elapsed: 0.0,
+            last_paint_phase: Cell::new(None),
+            label,
+        }
     }
 }
 
 // --- MARK: METHODS
 impl ProgressBar {
+    /// Whether this bar is currently indeterminate (`progress == None`).
+    #[inline]
+    pub fn is_indeterminate(&self) -> bool {
+        self.progress.is_none()
+    }
+
+    /// Current progress value (`None` = indeterminate).
+    #[inline]
+    pub fn progress(&self) -> Option<f64> {
+        self.progress
+    }
+
+    /// Normalized indeterminate phase ∈ `[0, 1)`.
+    #[inline]
+    pub fn indeterminate_phase(&self) -> f64 {
+        self.indeterminate_phase
+    }
+
+    /// Cumulative logical elapsed seconds for the indeterminate animation.
+    #[inline]
+    pub fn indeterminate_elapsed(&self) -> f64 {
+        self.indeterminate_elapsed
+    }
+
+    /// Last acked indeterminate phase (`paint` or host selective present), if any.
+    #[inline]
+    pub fn acked_indeterminate_phase(&self) -> Option<f64> {
+        self.last_paint_phase.get()
+    }
+
+    /// Acknowledge that `phase` was committed (Masonry paint or host scene after present).
+    ///
+    /// Stops further `request_paint_only` spam for this exact phase on the selective
+    /// anim path where `paint` never runs.
+    #[inline]
+    pub fn ack_indeterminate_phase(&self, phase: f64) {
+        self.last_paint_phase.set(Some(phase));
+    }
+
+    /// Phase for a given elapsed logical time (seconds), period 1.2s.
+    #[inline]
+    pub fn phase_from_elapsed(elapsed_secs: f64) -> f64 {
+        (elapsed_secs / INDETERMINATE_PERIOD_SECS).rem_euclid(1.0)
+    }
+
+    /// Segment left edge as a fraction of track width: `phase * 1.3 - 0.3`.
+    #[inline]
+    pub fn segment_left_frac(phase: f64) -> f64 {
+        phase * INDETERMINATE_TRAVEL - INDETERMINATE_SEGMENT_FRAC
+    }
+
+    /// Segment width as a fraction of track width (0.3).
+    #[inline]
+    pub fn segment_width_frac() -> f64 {
+        INDETERMINATE_SEGMENT_FRAC
+    }
+
+    /// Record the indeterminate segment into `painter` in **border-box local** coordinates.
+    ///
+    /// Used by the widget paint path (full redraw) and by Picus `AnimLayerHost` for
+    /// selective anim-entry encode without a full-tree Masonry redraw.
+    ///
+    /// Colors come only from the provided theme property values — no brand defaults.
+    pub fn paint_indeterminate_segment(
+        painter: &mut Painter<'_>,
+        border_box: Rect,
+        phase: f64,
+        bar_color: AlphaColor<Srgb>,
+        border_width: &BorderWidth,
+        corner_radius: &CornerRadius,
+    ) {
+        let track = border_width.bg_rect(border_box, corner_radius);
+        let track_rect = track.rect();
+        let track_w = track_rect.width();
+        if track_w <= 0.0 || track_rect.height() <= 0.0 {
+            return;
+        }
+
+        let seg_w = track_w * INDETERMINATE_SEGMENT_FRAC;
+        let left_frac = Self::segment_left_frac(phase);
+        let seg_x0 = track_rect.x0 + left_frac * track_w;
+        let segment = Rect::new(seg_x0, track_rect.y0, seg_x0 + seg_w, track_rect.y1);
+
+        // Clip to the rounded track so the segment enters/exits cleanly.
+        painter.push_fill_clip(track);
+        painter.fill(segment, bar_color).draw();
+        painter.pop_clip();
+    }
+
     fn value_accessibility(&self) -> Box<str> {
         if let Some(value) = self.progress {
             format!("{:.0}%", value * 100.).into()
@@ -71,6 +198,12 @@ impl ProgressBar {
             "".into()
         }
     }
+
+    fn reset_indeterminate_clock(&mut self) {
+        self.indeterminate_elapsed = 0.0;
+        self.indeterminate_phase = 0.0;
+        self.last_paint_phase.set(None);
+    }
 }
 
 // --- MARK: WIDGETMUT
@@ -80,14 +213,34 @@ impl ProgressBar {
     /// The progress value will be clamped to [0, 1].
     ///
     /// A `None` value (or NaN) will show an indeterminate progress bar.
+    ///
+    /// Lifecycle (P2.13):
+    /// - `Some → None`: reset phase/elapsed, invalidate, start anim clock.
+    /// - `None → Some`: stop subsequent anim ticks, invalidate (no permanent tick).
     pub fn set_progress(this: &mut WidgetMut<'_, Self>, progress: Option<f64>) {
         let progress = clamp_progress(progress);
+        let was_indeterminate = this.widget.progress.is_none();
+        let now_indeterminate = progress.is_none();
         let progress_changed = this.widget.progress != progress;
+
         if progress_changed {
             this.widget.progress = progress;
             let mut label = this.ctx.get_mut(&mut this.widget.label);
             Label::set_text(&mut label, Self::value(progress));
         }
+
+        if was_indeterminate && !now_indeterminate {
+            // None → Some: stop anim clock; next on_anim_frame will not re-request.
+            this.widget.reset_indeterminate_clock();
+        } else if !was_indeterminate && now_indeterminate {
+            // Some → None: restart from phase 0 and schedule anim.
+            this.widget.reset_indeterminate_clock();
+            this.ctx.request_anim_frame();
+        } else if now_indeterminate && progress_changed {
+            // Stay indeterminate but value path changed (e.g. NaN clamp) — keep clock.
+            this.ctx.request_anim_frame();
+        }
+
         this.ctx.request_layout();
         this.ctx.request_render();
     }
@@ -109,6 +262,34 @@ fn clamp_progress(progress: Option<f64>) -> Option<f64> {
 impl Widget for ProgressBar {
     type Action = NoAction;
 
+    fn on_anim_frame(
+        &mut self,
+        ctx: &mut UpdateCtx<'_>,
+        _props: &mut PropertiesMut<'_>,
+        interval: u64,
+    ) {
+        if self.progress.is_some() {
+            // Determinate: do not keep a permanent tick (P2.13).
+            return;
+        }
+
+        // Advance with logical time; large deltas may skip frames (P2.12).
+        self.indeterminate_elapsed += (interval as f64) * 1e-9;
+        let phase = Self::phase_from_elapsed(self.indeterminate_elapsed);
+        let phase_changed = self.indeterminate_phase != phase;
+        self.indeterminate_phase = phase;
+
+        // Keep requesting next anim frame while indeterminate.
+        ctx.request_anim_frame();
+
+        // Request paint only while the current phase is not yet acked (or changed).
+        // Throttle skips leave the phase unacked so the next tick re-requests;
+        // selective host sync acks only after successful present.
+        if phase_changed || self.last_paint_phase.get() != Some(phase) {
+            ctx.request_paint_only();
+        }
+    }
+
     fn register_children(&mut self, ctx: &mut RegisterCtx<'_>) {
         ctx.register_child(&mut self.label);
     }
@@ -123,12 +304,19 @@ impl Widget for ProgressBar {
         }
     }
 
-    fn update(
-        &mut self,
-        _ctx: &mut UpdateCtx<'_>,
-        _props: &mut PropertiesMut<'_>,
-        _event: &Update,
-    ) {
+    fn update(&mut self, ctx: &mut UpdateCtx<'_>, _props: &mut PropertiesMut<'_>, event: &Update) {
+        match event {
+            Update::WidgetAdded => {
+                // P2.11: indeterminate starts at phase 0 and requests first anim frame.
+                if self.progress.is_none() {
+                    self.indeterminate_phase = 0.0;
+                    self.indeterminate_elapsed = 0.0;
+                    self.last_paint_phase.set(None);
+                    ctx.request_anim_frame();
+                }
+            }
+            _ => (),
+        }
     }
 
     fn measure(
@@ -187,7 +375,20 @@ impl Widget for ProgressBar {
 
         paint_box_shadow(painter, bbox, p.box_shadow, p.corner_radius);
         paint_background(painter, bbox, p.background, p.border_width, p.corner_radius);
-        // We need to delay painting the border until after we paint the filled bar area.
+
+        // Indeterminate: track chrome (shadow/bg/border) stays in the base cached
+        // scene. The moving segment is host-only under External isolation, so the
+        // border cannot wait for paint() (External content is not folded into base).
+        if self.progress.is_none() {
+            let border_brush = resolve_border_brush(props, cache);
+            paint_border_brush(
+                painter,
+                bbox,
+                &border_brush,
+                &p.border_width,
+                &p.corner_radius,
+            );
+        }
     }
 
     fn paint(
@@ -201,7 +402,18 @@ impl Widget for ProgressBar {
         let border_width = *props.get::<BorderWidth>(cache);
         let corner_radius = *props.get::<CornerRadius>(cache);
 
-        let progress = self.progress.unwrap_or(1.);
+        if self.progress.is_none() {
+            // Anim isolation: External painter slot every paint (mode resets each pass).
+            // Masonry does not append External paint into VisualLayerPlan scene segments;
+            // Picus `AnimLayerHost` is authoritative via `paint_indeterminate_segment`.
+            // Skip local segment strokes here to avoid dual sources of truth.
+            ctx.set_paint_layer_mode(PaintLayerMode::External);
+            // Full paint path ack (selective path acks via host after successful present).
+            self.ack_indeterminate_phase(self.indeterminate_phase);
+            return;
+        }
+
+        let progress = self.progress.unwrap_or(0.);
         if progress > 0. {
             // The bar width is without the borders.
             let bar_width = border_box.width() - 2. * border_width.width.get();
@@ -244,9 +456,10 @@ impl Widget for ProgressBar {
         _props: &PropertiesRef<'_>,
         node: &mut Node,
     ) {
-        node.set_min_numeric_value(0.0);
-        node.set_max_numeric_value(1.0);
+        // P2.14: None is not a fake numeric value — only report range + value when determinate.
         if let Some(value) = self.progress {
+            node.set_min_numeric_value(0.0);
+            node.set_max_numeric_value(1.0);
             node.set_numeric_value(value);
         }
     }
@@ -265,6 +478,55 @@ impl Widget for ProgressBar {
 }
 
 // --- MARK: TESTS
+#[cfg(test)]
+mod unit_tests {
+    use super::*;
+
+    #[test]
+    fn phase_at_zero_half_and_period() {
+        assert_eq!(ProgressBar::phase_from_elapsed(0.0), 0.0);
+        assert!((ProgressBar::phase_from_elapsed(0.6) - 0.5).abs() < 1e-12);
+        assert!((ProgressBar::phase_from_elapsed(1.2) - 0.0).abs() < 1e-12);
+        // Cross period.
+        assert!((ProgressBar::phase_from_elapsed(1.8) - 0.5).abs() < 1e-12);
+    }
+
+    #[test]
+    fn large_delta_skip_wraps() {
+        // 5s = 4 full periods + 0.2s → phase = 0.2/1.2
+        let phase = ProgressBar::phase_from_elapsed(5.0);
+        let expected = (5.0 / INDETERMINATE_PERIOD_SECS).rem_euclid(1.0);
+        assert!((phase - expected).abs() < 1e-12);
+        assert!((phase - (0.2 / 1.2)).abs() < 1e-12);
+    }
+
+    #[test]
+    fn segment_geometry_at_phase_ends() {
+        // phase 0: fully left of track (invisible)
+        assert!((ProgressBar::segment_left_frac(0.0) - (-0.3)).abs() < 1e-12);
+        // phase → 1: segment just finishes exiting right
+        assert!((ProgressBar::segment_left_frac(1.0 - 1e-15) - (1.3 - 0.3 - 1.3e-15)).abs() < 1e-9);
+        assert!((ProgressBar::segment_width_frac() - 0.3).abs() < 1e-12);
+    }
+
+    #[test]
+    fn new_indeterminate_starts_at_phase_zero() {
+        let bar = ProgressBar::new(None);
+        assert!(bar.is_indeterminate());
+        assert_eq!(bar.indeterminate_phase(), 0.0);
+        assert_eq!(bar.indeterminate_elapsed(), 0.0);
+        assert!(bar.acked_indeterminate_phase().is_none());
+    }
+
+    #[test]
+    fn new_determinate_has_no_indeterminate_clock() {
+        let bar = ProgressBar::new(Some(0.4));
+        assert!(!bar.is_indeterminate());
+        assert_eq!(bar.progress(), Some(0.4));
+        assert_eq!(bar.indeterminate_phase(), 0.0);
+    }
+}
+
 #[cfg(any())]
 mod tests {
     use super::*;

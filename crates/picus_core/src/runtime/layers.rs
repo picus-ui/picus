@@ -1,4 +1,5 @@
-//! Masonry layer contract (P2a) + ordered compositor (P2b) + Spinner anim entry (P2c).
+//! Masonry layer contract (P2a) + ordered compositor (P2b) + Spinner (P2c) +
+//! indeterminate ProgressBar (P2d) anim entries.
 //!
 //! ## Phase 2a gate (closed)
 //!
@@ -30,9 +31,15 @@
 //!   not reassemble/encode base (G2 progress).
 //! - Spinner 12-step visual phase gates host version / paint request.
 //!
+//! ## Phase 2d (indeterminate ProgressBar)
+//!
+//! - Indeterminate [`ProgressBar`] (`progress == None`) sets External every paint;
+//!   determinate stays inline cached. Host paints the 30% track segment via
+//!   [`ProgressBar::paint_indeterminate_segment`]; continuous phase ∈ [0,1)
+//!   over a 1.2s period gates host version / paint request.
+//!
 //! ## Not yet (do not overclaim)
 //!
-//! - Indeterminate ProgressBar anim entry (P2d)
 //! - Removing transitional ~30 Hz anim present throttle (G10 / P2e)
 //! - Full PresentMon G4 protocol run (documented; not required here)
 //!
@@ -47,8 +54,8 @@ use crate::masonry_core::{
     kurbo::{Affine, Rect, Size},
     peniko::color::{AlphaColor, Srgb},
 };
-use picus_widget::properties::ContentColor;
-use picus_widget::widgets::Spinner;
+use picus_widget::properties::{BarColor, BorderWidth, ContentColor, CornerRadius};
+use picus_widget::widgets::{ProgressBar, Spinner};
 
 // ---------------------------------------------------------------------------
 // Gate inventory (what pinned xilem actually offers)
@@ -219,33 +226,38 @@ pub(crate) struct AnimLayerEntry {
     pub scene: Scene,
     /// Last discrete visual phase baked into `scene` (Spinner: 0..12).
     pub visual_phase: Option<u8>,
+    /// Last continuous phase baked into `scene` (ProgressBar indeterminate ∈ [0,1)).
+    pub continuous_phase: Option<f64>,
 }
 
-/// Result of [`AnimLayerHost::sync_spinner_scene`].
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(crate) struct SpinnerSyncResult {
+/// Result of host scene sync for one anim widget (Spinner or ProgressBar).
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub(crate) struct AnimWidgetSyncResult {
     /// Host content version advanced (needs encode).
     pub version_bumped: bool,
     /// Window bounds/transform changed (may invalidate base layout order).
     pub geometry_changed: bool,
-    /// Phase present on the host after the call (for widget phase ack).
+    /// Discrete phase present on the host after the call (Spinner ack).
     pub visual_phase: Option<u8>,
+    /// Continuous phase present on the host after the call (ProgressBar ack).
+    pub continuous_phase: Option<f64>,
 }
 
-/// Aggregate of [`SpinnerSyncResult`] over a host sync pass.
+/// Aggregate of [`AnimWidgetSyncResult`] over a host sync pass.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct AnimSyncSummary {
     /// Any host entry version advanced.
     pub any_version_bumped: bool,
-    /// Any spinner geometry moved (forces full base path — Issue 11).
+    /// Any anim widget geometry moved (forces full base path — Issue 11).
     pub any_geometry_changed: bool,
 }
 
 /// Picus-side registry for isolated anim draw state.
 ///
 /// Owned by [`LayerRegistry`] on [`super::WindowRuntime`]. Product widgets that
-/// emit External every paint (Spinner in P2c) register here; pure infrastructure
-/// frames may have an empty host and a single [`CompositorEntryKind::CachedScene`].
+/// emit External every paint (Spinner in P2c, indeterminate ProgressBar in P2d)
+/// register here; pure infrastructure frames may have an empty host and a single
+/// [`CompositorEntryKind::CachedScene`].
 ///
 /// ```text
 /// WindowRuntime
@@ -305,6 +317,7 @@ impl AnimLayerHost {
                 dirty: true,
                 scene: Scene::new(),
                 visual_phase: None,
+                continuous_phase: None,
             },
         );
         id
@@ -324,6 +337,7 @@ impl AnimLayerHost {
                 dirty: true,
                 scene: Scene::new(),
                 visual_phase: None,
+                continuous_phase: None,
             },
         );
         id
@@ -403,10 +417,10 @@ impl AnimLayerHost {
         color: AlphaColor<Srgb>,
         window_transform: Affine,
         window_bounds: Rect,
-    ) -> SpinnerSyncResult {
+    ) -> AnimWidgetSyncResult {
         let phase = Spinner::visual_phase(t);
         let Some(entry) = self.entries.get_mut(&id) else {
-            return SpinnerSyncResult::default();
+            return AnimWidgetSyncResult::default();
         };
         let phase_changed = entry.visual_phase != Some(phase);
         let geom_changed = entry.bounds != window_bounds || entry.transform != window_transform;
@@ -415,10 +429,11 @@ impl AnimLayerHost {
         entry.transform = window_transform;
         if !needs_build {
             // Still report phase so callers can ack the widget without rebuild.
-            return SpinnerSyncResult {
+            return AnimWidgetSyncResult {
                 version_bumped: false,
                 geometry_changed: false,
                 visual_phase: Some(phase),
+                continuous_phase: None,
             };
         }
         let mut local = Scene::new();
@@ -431,12 +446,73 @@ impl AnimLayerHost {
         scene.append_transformed(&local, window_transform);
         entry.scene = scene;
         entry.visual_phase = Some(phase);
+        entry.continuous_phase = None;
         entry.version = entry.version.saturating_add(1);
         entry.dirty = true;
-        SpinnerSyncResult {
+        AnimWidgetSyncResult {
             version_bumped: true,
             geometry_changed: geom_changed,
             visual_phase: Some(phase),
+            continuous_phase: None,
+        }
+    }
+
+    /// Sync an indeterminate ProgressBar segment scene in window space.
+    ///
+    /// Bumps version when continuous phase changes, geometry changes, or the
+    /// scene was empty. Theme property values are supplied by the caller.
+    pub(crate) fn sync_progress_indeterminate_scene(
+        &mut self,
+        id: AnimLayerId,
+        phase: f64,
+        border_box: Rect,
+        bar_color: AlphaColor<Srgb>,
+        border_width: BorderWidth,
+        corner_radius: CornerRadius,
+        window_transform: Affine,
+        window_bounds: Rect,
+    ) -> AnimWidgetSyncResult {
+        let Some(entry) = self.entries.get_mut(&id) else {
+            return AnimWidgetSyncResult::default();
+        };
+        let phase_changed = entry.continuous_phase != Some(phase);
+        let geom_changed = entry.bounds != window_bounds || entry.transform != window_transform;
+        let needs_build = phase_changed || geom_changed || entry.scene.is_empty();
+        entry.bounds = window_bounds;
+        entry.transform = window_transform;
+        if !needs_build {
+            return AnimWidgetSyncResult {
+                version_bumped: false,
+                geometry_changed: false,
+                visual_phase: None,
+                continuous_phase: Some(phase),
+            };
+        }
+        let mut local = Scene::new();
+        {
+            let sink: &mut dyn PaintSink = &mut local;
+            let mut painter = Painter::new(sink);
+            ProgressBar::paint_indeterminate_segment(
+                &mut painter,
+                border_box,
+                phase,
+                bar_color,
+                &border_width,
+                &corner_radius,
+            );
+        }
+        let mut scene = Scene::new();
+        scene.append_transformed(&local, window_transform);
+        entry.scene = scene;
+        entry.continuous_phase = Some(phase);
+        entry.visual_phase = None;
+        entry.version = entry.version.saturating_add(1);
+        entry.dirty = true;
+        AnimWidgetSyncResult {
+            version_bumped: true,
+            geometry_changed: geom_changed,
+            visual_phase: None,
+            continuous_phase: Some(phase),
         }
     }
 
@@ -1160,27 +1236,38 @@ impl LayerRegistry {
                 .any(|e| !matches!(e.kind, CompositorEntryKind::CachedScene))
     }
 
-    /// Bind External painter slots that have a host painter (P2c: Spinner only).
+    /// Bind External painter slots that have a host painter
+    /// (P2c: Spinner; P2d: indeterminate ProgressBar).
     ///
     /// Unbound External widgets stay [`CompositorEntryKind::External`] (transparent
     /// placeholder) — they are **not** promoted to Anim with an empty host scene.
-    /// No gallery/entity hardcode: promotion is type-based (`Spinner` downcast).
+    /// No gallery/entity hardcode: promotion is type-based (widget downcast).
+    /// Host entries for widgets that left External / became determinate are pruned.
     pub(crate) fn register_external_widgets_from_visual(
         &mut self,
         visual: &VisualLayerPlan,
         render_root: &RenderRoot,
     ) {
+        let mut live_host: std::collections::HashSet<WidgetId> =
+            std::collections::HashSet::new();
         for layer in &visual.layers {
             if !matches!(layer.kind, VisualLayerKind::External { .. }) {
                 continue;
             }
-            let is_spinner = render_root
-                .get_widget(layer.widget_id)
-                .and_then(|w| w.downcast::<Spinner>())
-                .is_some();
-            if is_spinner {
+            if widget_has_anim_host_painter(render_root, layer.widget_id) {
                 self.host.register_external_slot(layer.widget_id);
+                live_host.insert(layer.widget_id);
             }
+        }
+        // Prune host slots no longer External with a host painter (e.g. ProgressBar
+        // switched to determinate, or widget removed from External set).
+        let stale: Vec<WidgetId> = self
+            .host
+            .widget_ids()
+            .filter(|id| !live_host.contains(id))
+            .collect();
+        for id in stale {
+            let _ = self.host.remove_widget(id);
         }
     }
 
@@ -1204,9 +1291,9 @@ impl LayerRegistry {
         }
     }
 
-    /// Rebuild host scenes from live widgets (Spinner downcast + paint_arms).
+    /// Rebuild host scenes from live widgets (Spinner / indeterminate ProgressBar).
     ///
-    /// Acks Spinner visual phase after host sync (selective path never paints).
+    /// Phase ack is deferred until successful present (Issue 13).
     /// Prunes host entries whose widgets left the tree.
     pub(crate) fn sync_anim_entries_from_widgets(
         &mut self,
@@ -1269,63 +1356,122 @@ impl LayerRegistry {
         saw_anim_dirty
     }
 
-    /// After a **successful** present, ack Spinner visual phases on live widgets.
+    /// After a **successful** present, ack Spinner / ProgressBar phases on live widgets.
     ///
     /// Selective G2 never runs Masonry `paint`; host scene build alone must not
     /// ack (Failed would strand dirty host with no `request_paint_only` — Issue 13).
-    pub(crate) fn ack_spinner_phases_after_present(&self, render_root: &RenderRoot) {
+    pub(crate) fn ack_anim_phases_after_present(&self, render_root: &RenderRoot) {
         for e in self.plan.entries() {
             let (Some(anim_id), Some(widget_id)) = (e.anim_id, e.widget_id) else {
                 continue;
             };
-            let Some(phase) = self.host.get(anim_id).and_then(|h| h.visual_phase) else {
+            let Some(host_e) = self.host.get(anim_id) else {
                 continue;
             };
             let Some(wref) = render_root.get_widget(widget_id) else {
                 continue;
             };
-            let Some(spinner) = wref.downcast::<Spinner>() else {
-                continue;
-            };
-            spinner.inner().ack_visual_phase(phase);
+            if let Some(phase) = host_e.visual_phase {
+                if let Some(spinner) = wref.downcast::<Spinner>() {
+                    spinner.inner().ack_visual_phase(phase);
+                    continue;
+                }
+            }
+            if let Some(phase) = host_e.continuous_phase {
+                if let Some(bar) = wref.downcast::<ProgressBar>() {
+                    bar.inner().ack_indeterminate_phase(phase);
+                }
+            }
         }
+    }
+
+    /// Backward-compatible name used by Spinner-era call sites / tests.
+    #[inline]
+    pub(crate) fn ack_spinner_phases_after_present(&self, render_root: &RenderRoot) {
+        self.ack_anim_phases_after_present(render_root);
     }
 }
 
-/// Downcast + host scene sync for one bound widget (Spinner product path).
+/// True when the widget type has a host anim painter for the current mode.
+fn widget_has_anim_host_painter(render_root: &RenderRoot, widget_id: WidgetId) -> bool {
+    let Some(wref) = render_root.get_widget(widget_id) else {
+        return false;
+    };
+    if wref.downcast::<Spinner>().is_some() {
+        return true;
+    }
+    if let Some(bar) = wref.downcast::<ProgressBar>() {
+        return bar.inner().is_indeterminate();
+    }
+    false
+}
+
+/// Downcast + host scene sync for one bound widget (Spinner / ProgressBar).
 fn sync_one_anim_widget(
     registry: &mut LayerRegistry,
     render_root: &RenderRoot,
     anim_id: AnimLayerId,
     widget_id: WidgetId,
-) -> SpinnerSyncResult {
+) -> AnimWidgetSyncResult {
     let Some(wref) = render_root.get_widget(widget_id) else {
-        return SpinnerSyncResult::default();
+        return AnimWidgetSyncResult::default();
     };
-    let Some(spinner) = wref.downcast::<Spinner>() else {
-        // Non-spinner External: leave empty transparent host scene.
-        return SpinnerSyncResult::default();
-    };
-    let t = spinner.inner().t();
-    let size = wref.ctx().content_box().size();
-    let color = wref.get_prop::<ContentColor>().color;
+
     // QueryCtx::window_transform maps content-box → window space.
     let window_transform = wref.ctx().window_transform();
     let window_bounds = wref.ctx().bounding_box();
-    // End immutable widget borrows before host_mut.
-    let _ = spinner;
-    let _ = wref;
 
-    // Phase ack is deferred until successful present (Issue 13): ack-on-sync
-    // left Failed presents with unacked host dirty but no further request_paint.
-    registry.host_mut().sync_spinner_scene(
-        anim_id,
-        t,
-        size,
-        color,
-        window_transform,
-        window_bounds,
-    )
+    if let Some(spinner) = wref.downcast::<Spinner>() {
+        let t = spinner.inner().t();
+        let size = wref.ctx().content_box().size();
+        let color = wref.get_prop::<ContentColor>().color;
+        let _ = spinner;
+        let _ = wref;
+        // Phase ack deferred until successful present (Issue 13).
+        return registry.host_mut().sync_spinner_scene(
+            anim_id,
+            t,
+            size,
+            color,
+            window_transform,
+            window_bounds,
+        );
+    }
+
+    if let Some(bar) = wref.downcast::<ProgressBar>() {
+        if !bar.inner().is_indeterminate() {
+            // Determinate: drop host binding; no anim scene.
+            let _ = bar;
+            let _ = wref;
+            let _ = registry.host_mut().remove_widget(widget_id);
+            return AnimWidgetSyncResult::default();
+        }
+        let phase = bar.inner().indeterminate_phase();
+        let border_box = wref.ctx().border_box();
+        // Local-space border box for paint_indeterminate_segment (origin at 0,0).
+        let local_box = Rect::from_origin_size(
+            crate::masonry_core::kurbo::Point::ORIGIN,
+            border_box.size(),
+        );
+        let bar_color = wref.get_prop::<BarColor>().0;
+        let border_width = *wref.get_prop::<BorderWidth>();
+        let corner_radius = *wref.get_prop::<CornerRadius>();
+        let _ = bar;
+        let _ = wref;
+        return registry.host_mut().sync_progress_indeterminate_scene(
+            anim_id,
+            phase,
+            local_box,
+            bar_color,
+            border_width,
+            corner_radius,
+            window_transform,
+            window_bounds,
+        );
+    }
+
+    // Unknown External: leave empty transparent host scene.
+    AnimWidgetSyncResult::default()
 }
 
 fn layer_bounds_estimate(layer: &VisualLayer, window_bounds: Rect) -> Rect {
@@ -1361,7 +1507,7 @@ mod tests {
         layout::{LenReq, Length},
         peniko::Color,
     };
-    use picus_widget::widgets::{Flex, SizedBox, Spinner};
+    use picus_widget::widgets::{Flex, ProgressBar, SizedBox, Spinner};
 
     // --- minimal widgets for layer-mode spikes --------------------------------
 
@@ -2554,5 +2700,378 @@ mod tests {
         );
         assert!(r3.version_bumped);
         assert!(r3.geometry_changed);
+    }
+
+    // --- P2d indeterminate ProgressBar ---------------------------------------
+
+    #[test]
+    fn progress_phase_at_zero_half_and_period() {
+        assert_eq!(ProgressBar::phase_from_elapsed(0.0), 0.0);
+        assert!((ProgressBar::phase_from_elapsed(0.6) - 0.5).abs() < 1e-12);
+        assert!((ProgressBar::phase_from_elapsed(1.2)).abs() < 1e-12);
+        // Cross 1.2s period.
+        assert!((ProgressBar::phase_from_elapsed(1.8) - 0.5).abs() < 1e-12);
+        // Large delta skip wraps.
+        let phase = ProgressBar::phase_from_elapsed(5.0);
+        assert!((phase - (5.0_f64 / 1.2).rem_euclid(1.0)).abs() < 1e-12);
+        assert!((ProgressBar::segment_left_frac(0.0) - (-0.3)).abs() < 1e-12);
+        assert!((ProgressBar::segment_width_frac() - 0.3).abs() < 1e-12);
+    }
+
+    #[test]
+    fn indeterminate_progress_external_promotes_to_anim() {
+        let bar = NewWidget::new(ProgressBar::new(None));
+        let root_widget = NewWidget::new(
+            Flex::row()
+                .with_fixed(NewWidget::new(ModeBox::new(
+                    PaintLayerMode::Inline,
+                    Color::from_rgb8(255, 0, 0),
+                )))
+                .with_fixed(
+                    NewWidget::new(
+                        SizedBox::new(bar)
+                            .width(Length::px(120.0))
+                            .height(Length::px(20.0)),
+                    ),
+                )
+                .with_fixed(NewWidget::new(ModeBox::new(
+                    PaintLayerMode::Inline,
+                    Color::from_rgb8(0, 0, 255),
+                ))),
+        );
+        let mut root = test_root(root_widget);
+        let _ = root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(
+            1,
+        )));
+        let (plan, _) = root.redraw();
+        let external_count = plan
+            .layers
+            .iter()
+            .filter(|l| matches!(l.kind, VisualLayerKind::External { .. }))
+            .count();
+        assert_eq!(
+            external_count, 1,
+            "indeterminate ProgressBar must reserve External; plan={plan:?}"
+        );
+
+        let mut registry = LayerRegistry::new(AnimTargetStrategy::FullWindowTransparent);
+        registry.register_external_widgets_from_visual(&plan, &root);
+        registry.rebuild_from_visual_plan(&plan, Rect::new(0.0, 0.0, 200.0, 40.0));
+        let kinds: Vec<_> = registry.plan().entries().iter().map(|e| e.kind).collect();
+        assert!(
+            kinds.iter().any(|k| *k == CompositorEntryKind::Anim),
+            "indeterminate ProgressBar External → Anim; kinds={kinds:?}"
+        );
+    }
+
+    #[test]
+    fn determinate_progress_is_not_external_or_anim() {
+        let bar = NewWidget::new(ProgressBar::new(Some(0.5)));
+        let root_widget = NewWidget::new(
+            Flex::row()
+                .with_fixed(NewWidget::new(ModeBox::new(
+                    PaintLayerMode::Inline,
+                    Color::from_rgb8(255, 0, 0),
+                )))
+                .with_fixed(
+                    NewWidget::new(
+                        SizedBox::new(bar)
+                            .width(Length::px(120.0))
+                            .height(Length::px(20.0)),
+                    ),
+                ),
+        );
+        let mut root = test_root(root_widget);
+        // Even after AnimFrame, determinate must not schedule isolation.
+        let _ = root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(
+            100,
+        )));
+        let (plan, _) = root.redraw();
+        assert!(
+            !plan
+                .layers
+                .iter()
+                .any(|l| matches!(l.kind, VisualLayerKind::External { .. })),
+            "determinate ProgressBar must stay Inline; plan={plan:?}"
+        );
+        let mut registry = LayerRegistry::new(AnimTargetStrategy::FullWindowTransparent);
+        registry.register_external_widgets_from_visual(&plan, &root);
+        registry.rebuild_from_visual_plan(&plan, Rect::new(0.0, 0.0, 200.0, 40.0));
+        assert_eq!(registry.host().len(), 0);
+        assert!(!registry.has_anim_entries());
+    }
+
+    #[test]
+    fn host_progress_phase_gate_and_large_delta() {
+        let mut host = AnimLayerHost::new(AnimTargetStrategy::FullWindowTransparent);
+        let w = NewWidget::new(ProgressBar::new(None)).id();
+        let id = host.register_external_slot(w);
+        let color = AlphaColor::from_rgb8(0, 120, 212);
+        let border = BorderWidth::default();
+        let radius = CornerRadius::default();
+        let local = Rect::new(0.0, 0.0, 100.0, 16.0);
+        let bounds = Rect::new(0.0, 0.0, 100.0, 16.0);
+        let xf = Affine::IDENTITY;
+
+        // t=0 / phase 0
+        assert!(
+            host.sync_progress_indeterminate_scene(
+                id, 0.0, local, color, border, radius, xf, bounds
+            )
+            .version_bumped
+        );
+        let v0 = host.get(id).unwrap().version;
+        // Same phase: no bump.
+        assert!(
+            !host
+                .sync_progress_indeterminate_scene(
+                    id, 0.0, local, color, border, radius, xf, bounds
+                )
+                .version_bumped
+        );
+        assert_eq!(host.get(id).unwrap().version, v0);
+
+        // t=600ms → phase 0.5
+        assert!(
+            host.sync_progress_indeterminate_scene(
+                id, 0.5, local, color, border, radius, xf, bounds
+            )
+            .version_bumped
+        );
+        assert_eq!(host.get(id).unwrap().version, v0 + 1);
+        assert!(!host.get(id).unwrap().scene.is_empty());
+
+        // Cross period: phase wraps to 0 again → bump (continuous phase key).
+        assert!(
+            host.sync_progress_indeterminate_scene(
+                id, 0.0, local, color, border, radius, xf, bounds
+            )
+            .version_bumped
+        );
+
+        // Large delta target phase still rebuilds when different.
+        let jump = ProgressBar::phase_from_elapsed(5.0);
+        assert!(
+            host.sync_progress_indeterminate_scene(
+                id, jump, local, color, border, radius, xf, bounds
+            )
+            .version_bumped
+        );
+    }
+
+    #[test]
+    fn pure_anim_progress_dirt_only_anim_needs_encode_g2() {
+        // G2: after clean present, only host anim dirt from phase advance marks
+        // Anim for encode — CachedScene stays clean.
+        let bar = NewWidget::new(ProgressBar::new(None));
+        let root_widget = NewWidget::new(
+            Flex::row()
+                .with_fixed(NewWidget::new(ModeBox::new(
+                    PaintLayerMode::Inline,
+                    Color::from_rgb8(255, 0, 0),
+                )))
+                .with_fixed(
+                    NewWidget::new(
+                        SizedBox::new(bar)
+                            .width(Length::px(120.0))
+                            .height(Length::px(20.0)),
+                    ),
+                )
+                .with_fixed(NewWidget::new(ModeBox::new(
+                    PaintLayerMode::Inline,
+                    Color::from_rgb8(0, 0, 255),
+                ))),
+        );
+        let mut root = test_root(root_widget);
+        let _ = root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(
+            1,
+        )));
+        let (plan, _) = root.redraw();
+
+        let mut registry = LayerRegistry::new(AnimTargetStrategy::FullWindowTransparent);
+        registry.register_external_widgets_from_visual(&plan, &root);
+        registry.rebuild_from_visual_plan(&plan, Rect::new(0.0, 0.0, 200.0, 40.0));
+        let first = registry.sync_anim_entries_from_widgets(&root);
+        assert!(
+            first.any_version_bumped,
+            "initial ProgressBar host scene must dirty anim"
+        );
+        let version_after_first = registry
+            .plan()
+            .entries()
+            .iter()
+            .find_map(|e| e.anim_id.and_then(|id| registry.host().get(id).map(|h| h.version)))
+            .expect("host version");
+        registry.clear_dirty_after_successful_present();
+        assert_eq!(registry.plan().dirty_encode_ids().count(), 0);
+        assert!(!registry.non_anim_needs_encode());
+
+        // Advance 600ms (half period) without full redraw — G2 path.
+        let _ = root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(
+            600,
+        )));
+        let dirtied = registry.sync_anim_entries_from_widgets(&root);
+        assert!(
+            dirtied.any_version_bumped,
+            "600ms must advance continuous phase and dirt host"
+        );
+        let version_after = registry
+            .plan()
+            .entries()
+            .iter()
+            .find_map(|e| e.anim_id.and_then(|id| registry.host().get(id).map(|h| h.version)))
+            .expect("host version after phase");
+        assert!(
+            version_after > version_after_first,
+            "host version must advance: {version_after_first} → {version_after}"
+        );
+        assert!(
+            registry.only_anim_needs_encode(),
+            "G2: only Anim needs encode on pure ProgressBar anim dirt"
+        );
+        assert!(
+            !registry.non_anim_needs_encode(),
+            "base CachedScene must not re-encode on pure anim dirt"
+        );
+    }
+
+    #[test]
+    fn progress_some_none_lifecycle_toggles_isolation() {
+        let bar = NewWidget::new(ProgressBar::new(Some(0.25)));
+        let bar_id = bar.id();
+        let root_widget = NewWidget::new(
+            SizedBox::new(bar)
+                .width(Length::px(120.0))
+                .height(Length::px(20.0)),
+        );
+        let mut root = test_root(root_widget);
+
+        // Determinate: no External.
+        let (plan, _) = root.redraw();
+        assert!(
+            !plan
+                .layers
+                .iter()
+                .any(|l| matches!(l.kind, VisualLayerKind::External { .. }))
+        );
+
+        // Some → None: reset phase, start anim isolation.
+        root.edit_widget(bar_id, |mut w| {
+            let mut bar = w.downcast::<ProgressBar>();
+            ProgressBar::set_progress(&mut bar, None);
+        });
+        {
+            let phase = root
+                .get_widget(bar_id)
+                .unwrap()
+                .downcast::<ProgressBar>()
+                .unwrap()
+                .inner()
+                .indeterminate_phase();
+            assert_eq!(phase, 0.0, "Some→None resets phase to 0 before first tick");
+            let elapsed = root
+                .get_widget(bar_id)
+                .unwrap()
+                .downcast::<ProgressBar>()
+                .unwrap()
+                .inner()
+                .indeterminate_elapsed();
+            assert_eq!(elapsed, 0.0, "Some→None resets elapsed");
+        }
+        let _ = root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(
+            1,
+        )));
+        let (plan, _) = root.redraw();
+        assert!(
+            plan.layers
+                .iter()
+                .any(|l| matches!(l.kind, VisualLayerKind::External { .. })),
+            "None must enable External isolation"
+        );
+
+        let mut registry = LayerRegistry::new(AnimTargetStrategy::FullWindowTransparent);
+        registry.register_external_widgets_from_visual(&plan, &root);
+        registry.rebuild_from_visual_plan(&plan, Rect::new(0.0, 0.0, 120.0, 20.0));
+        assert!(registry.has_anim_entries());
+
+        // None → Some: drop isolation and host binding.
+        root.edit_widget(bar_id, |mut w| {
+            let mut bar = w.downcast::<ProgressBar>();
+            ProgressBar::set_progress(&mut bar, Some(0.75));
+        });
+        let (plan, _) = root.redraw();
+        assert!(
+            !plan
+                .layers
+                .iter()
+                .any(|l| matches!(l.kind, VisualLayerKind::External { .. })),
+            "Some must leave External isolation"
+        );
+        registry.register_external_widgets_from_visual(&plan, &root);
+        registry.rebuild_from_visual_plan(&plan, Rect::new(0.0, 0.0, 120.0, 20.0));
+        assert_eq!(
+            registry.host().len(),
+            0,
+            "determinate must prune host anim slot"
+        );
+        assert!(!registry.has_anim_entries());
+    }
+
+    #[test]
+    fn progress_ack_only_after_present_helper() {
+        let bar = NewWidget::new(ProgressBar::new(None));
+        let bar_id = bar.id();
+        let root_widget = NewWidget::new(
+            SizedBox::new(bar)
+                .width(Length::px(120.0))
+                .height(Length::px(20.0)),
+        );
+        let mut root = test_root(root_widget);
+        let _ = root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(
+            1,
+        )));
+        let (plan, _) = root.redraw();
+        let mut registry = LayerRegistry::new(AnimTargetStrategy::FullWindowTransparent);
+        registry.register_external_widgets_from_visual(&plan, &root);
+        registry.rebuild_from_visual_plan(&plan, Rect::new(0.0, 0.0, 120.0, 20.0));
+
+        // Force unacked sentinel distinct from live phase.
+        root.get_widget(bar_id)
+            .unwrap()
+            .downcast::<ProgressBar>()
+            .unwrap()
+            .inner()
+            .ack_indeterminate_phase(-1.0);
+
+        let _ = registry.sync_anim_entries_from_widgets(&root);
+        assert_eq!(
+            root.get_widget(bar_id)
+                .unwrap()
+                .downcast::<ProgressBar>()
+                .unwrap()
+                .inner()
+                .acked_indeterminate_phase(),
+            Some(-1.0),
+            "sync alone must not ack ProgressBar phase"
+        );
+
+        registry.ack_anim_phases_after_present(&root);
+        let expected = root
+            .get_widget(bar_id)
+            .unwrap()
+            .downcast::<ProgressBar>()
+            .unwrap()
+            .inner()
+            .indeterminate_phase();
+        assert_eq!(
+            root.get_widget(bar_id)
+                .unwrap()
+                .downcast::<ProgressBar>()
+                .unwrap()
+                .inner()
+                .acked_indeterminate_phase(),
+            Some(expected),
+            "ack after present must commit host continuous phase"
+        );
     }
 }

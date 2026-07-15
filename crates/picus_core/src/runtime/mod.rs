@@ -1421,11 +1421,11 @@ impl WindowRuntime {
         if painted {
             // Sticky: clear entry/host dirty only after successful present.
             self.layer_registry.clear_dirty_after_successful_present();
-            // Ack Spinner phases only after present succeeds (Issue 13).
+            // Ack Spinner / ProgressBar phases only after present succeeds (Issue 13).
             // Selective path never paints; Failed must leave phase unacked so
             // request_paint_only continues until encode/present can retry.
             self.layer_registry
-                .ack_spinner_phases_after_present(&self.render_root);
+                .ack_anim_phases_after_present(&self.render_root);
             // Base invalidation clears only after a full-path present (Issue 10).
             if used_full_base_path {
                 self.base_invalidated = false;

@@ -473,8 +473,9 @@ PR6-docs-cleanup
 | P1b | **完成**（`RedrawDemand` 分类 + reactive 文档；无 paint-only Bevy 捷径） |
 | P2a | **完成**（Masonry 层契约硬门禁 + `AnimLayerHost` scaffold + 目标策略文档） |
 | P2b | **完成基础设施**（`CompositorEntryKind` + 稳定 `LayerId`、painter-order plan、dirty/version、`render_ordered_frame` 多 texture composite、resize metrics generation、timing 分桶） |
-| P2c | **Spinner 垂直切片**（External isolation、host scene、12-step phase gate、selective anim encode / G2 层合同单测）；G3/G4 实测与 ProgressBar / 去 throttle 仍属后续 |
-| P2d+ | ProgressBar / 去默认 anim throttle 未开始 |
+| P2c | **Spinner 垂直切片**（External isolation、host scene、12-step phase gate、selective anim encode / G2 层合同单测）；G3/G4 实测仍属后续 |
+| P2d | **indeterminate ProgressBar 动画**（phase∈[0,1) 1.2s、segment 几何、Some↔None 生命周期、仅 indeterminate External、host segment paint、G2 层合同单测） |
+| P2e+ | 去默认 anim throttle 未开始 |
 | P3 | 未开始 |
 | P4 | 可选·未开始 |
 | P5 | 可选·未开始 |

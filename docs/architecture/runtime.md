@@ -235,76 +235,87 @@ alpha / Mica                    → layer targets straight-alpha; when present n
                                   final replace) so semi-transparent upper layers are correct
 ```
 
-#### Spinner anim entry (P2c / G2 progress)
+#### Spinner + indeterminate ProgressBar anim entries (P2c / P2d / G2 progress)
 
-Product path for continuous spinner isolation (no gallery/entity hardcode):
+Product path for continuous isolation (no gallery/entity hardcode):
 
-1. **`Spinner` paint** sets `PaintLayerMode::External` every paint (mode is not
-   sticky). Masonry reserves a painter-order placeholder; spinner pixels are
-   **not** folded into cached base scene segments.
+1. **Widget paint** sets `PaintLayerMode::External` every paint when isolation
+   applies (mode is not sticky):
+   - **`Spinner`:** always External.
+   - **`ProgressBar`:** External **only while** `progress == None`
+     (indeterminate). Determinate (`Some`) paints inline into the cached scene
+     and does **not** keep a permanent anim tick.
 2. **`LayerRegistry::register_external_widgets_from_visual`** promotes External
-   slots to Anim **only when a host painter exists** (today: `Spinner` downcast).
-   Non-Spinner External stays `CompositorEntryKind::External` (transparent
-   placeholder) — never an empty Anim with silent missing content.
-3. **Host scenes:** `AnimLayerHost::sync_spinner_scene` builds a window-space
-   `Scene` via `Spinner::paint_arms` (FullWindowTransparent target). Content
-   version / dirty advance only when the **12-step visual phase** changes (or
-   geometry/first build). Spinner widget paint only sets External (no local
-   strokes); host is authoritative.
+   slots to Anim **only when a host painter exists** (type downcast:
+   `Spinner`, or indeterminate `ProgressBar`). Other External stays
+   `CompositorEntryKind::External` (transparent placeholder) — never an empty
+   Anim with silent missing content. Host slots for widgets that leave External
+   (e.g. ProgressBar `None→Some`) are pruned.
+3. **Host scenes** (FullWindowTransparent target):
+   - Spinner: `AnimLayerHost::sync_spinner_scene` via `Spinner::paint_arms`;
+     version / dirty advance only when the **12-step visual phase** changes
+     (or geometry/first build).
+   - Indeterminate ProgressBar: `sync_progress_indeterminate_scene` via
+     `ProgressBar::paint_indeterminate_segment` (segment width = 30% of track,
+     `left = phase×1.3 − 0.3`, rounded-track clip; **theme `BarColor` /
+     border metrics only** — no production brand defaults). Continuous
+     `indeterminate_phase ∈ [0,1)` over a **1.2s** logical period gates version
+     (large jump frames allowed via rem_euclid).
 4. **Steady anim ticks (G2):** when dirty is only `AnimTick`/`AnimPaint`, the
    window has already painted once, the plan has Anim entries, **no sticky
    `base_invalidated`**, **no rewrite pending**, and **no CachedScene/Overlay
    needs encode** after metrics notify, `step_frame` **skips** full-tree
-   `redraw()` and base reassembly. Spinner phase is acked only after
-   **successful present** (host dirty is always re-merged into post_dirty so
-   Failed present still retries encode). Phase-unchanged ticks skip
-   encode/present once acked. Metrics/size changes force full path (never
-   encode empty base with `visual=None`).
+   `redraw()` and base reassembly. Widget phases are acked only after
+   **successful present** (`ack_anim_phases_after_present`; host dirty is
+   always re-merged into post_dirty so Failed present still retries encode).
+   Phase-unchanged ticks skip encode/present once acked. Metrics/size changes
+   force full path (never encode empty base with `visual=None`).
 5. **Rewrite during AnimFrame:** if rewrite was pending before the tick (and
    completed) or still pending after, set sticky `base_invalidated` +
    `InputOrRebuild` (unthrottled) until a **full-path** present succeeds —
-   anim throttle cannot drop base reassembly (Issue 10). Spinner geometry
-   moves on selective sync also force full path (Issue 11 partial).
+   anim throttle cannot drop base reassembly (Issue 10). Host geometry moves
+   on selective sync also force full path (Issue 11 partial).
 6. **Content / resize / first paint** still full-redraw; bound External widgets
    are re-`request_paint_only` so External mode sticks for the paint pass.
-   Rewrite *started and finished entirely inside* AnimFrame without prior
-   pending flag remains a residual gap when non-spinner widgets
-   `request_layout` during the tick (Spinner itself does not).
+7. **ProgressBar lifecycle (P2.13):** `Some→None` resets elapsed/phase to 0,
+   invalidates, starts anim; `None→Some` stops further anim requests and
+   invalidates; determinate must not retain a permanent tick. Accessibility
+   reports numeric value only when determinate (None is not a fake number).
 
 **Known limitation (not G3 under scroll/clip):** host anim scenes use
 `AncestorClip::none` and do not yet re-apply ancestor clip/scroll packages.
-Spinner under a clipped portal/scroll may paint outside the ancestor clip on
-the FullWindowTransparent anim target until clip plumbing lands.
+Anim widgets under a clipped portal/scroll may paint outside the ancestor clip
+on the FullWindowTransparent anim target until clip plumbing lands.
 
 **Not yet (do not overclaim):**
 
-- Indeterminate ProgressBar anim entry (P2d) — needs its own host painter before
-  External→Anim promotion
 - Removing transitional ~30 Hz anim present throttle (G10 / P2e)
 - Full PresentMon/ETW G4 drag protocol run (documented in
   [perf/frame-pipeline-baseline.md](../perf/frame-pipeline-baseline.md); not
   required for this vertical slice)
-- Claiming G2 complete for every anim widget — only Spinner host path is wired
+- Claiming product G2/G3/G4 complete without PresentMon data — layer-contract
+  unit tests cover Spinner + indeterminate ProgressBar host paths
 
 #### Anim target choice (size gate input)
 
 | Strategy | Encode shape | First composite? |
 |----------|--------------|------------------|
-| **Full-window transparent** anim target; only anim widgets paint | Full-window clear of anim RT; sparse scene | **Yes** (selected; Spinner P2c) |
+| **Full-window transparent** anim target; only anim widgets paint | Full-window clear of anim RT; sparse scene | **Yes** (selected; Spinner P2c / ProgressBar P2d) |
 | Widget-bounds / atlas | Smaller encode; more bookkeeping | Deferred (P4 / if G3·G4 fail) |
 
 Rationale and budget assumptions:
 [perf/frame-pipeline-baseline.md](../perf/frame-pipeline-baseline.md) §6.
 
-#### Timing (P2.5 + P2c)
+#### Timing (P2.5 + P2c + P2d)
 
 `PICUS_FRAME_TIMING=1` continues to report per-window `frame_id` with
 `scene_build_base_ms` / `scene_build_anim_ms` / `encode_base_ms` /
 `encode_anim_ms` / `composite_ms`. Ordered path attributes non-anim entry
 encodes to `encode_base` and `OrderedEntryKind::Anim` to `encode_anim`.
-On pure-anim Spinner frames, `scene_build_base_ms` is 0 and
-`scene_build_anim_ms` measures host scene sync; `encode_base` should stay 0
-when only Anim entries `needs_encode`. These remain **CPU submit-path** times.
+On pure-anim Spinner / indeterminate ProgressBar frames, `scene_build_base_ms`
+is 0 and `scene_build_anim_ms` measures host scene sync; `encode_base` should
+stay 0 when only Anim entries `needs_encode`. These remain **CPU submit-path**
+times.
 
 ### Frame pipeline evolution
 
