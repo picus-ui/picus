@@ -137,9 +137,13 @@ Implications:
    custom winit integration or a dedicated anim timer outside the full schedule
    — deferred; measurable today is correct wake **reason** and no Failed/content
    redraw loops.
-4. G5 is unchanged: content/resize/retry stickies still force encode/present on
-   the FrameDriver path and set `need_content_present` so the next wake is not
-   anim-throttled away.
+4. Two layers stay separate: (a) content stickies set `need_content_present` so
+   Bevy **wakes** (a `RequestRedraw` is written and not dropped); (b) G5 dirty
+   reasons (`FirstPaint` / `InputOrRebuild` / `ResizeMetrics` / `RetrySurface`)
+   still force **unthrottled encode/present** on the FrameDriver path. Wake
+   demand alone does not imply G5: e.g. rewrite-only content demand can still
+   hit the transitional LayoutRewrite+AnimTick present throttle while Bevy is
+   awake.
 
 App public API remains `run_picus`; `FrameDriver` / `RedrawDemand` stay internal.
 

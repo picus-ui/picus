@@ -89,8 +89,13 @@ impl DirtyBudget {
             .any(|r| matches!(r, DirtyReason::AnimTick | DirtyReason::AnimPaint { .. }))
     }
 
-    /// Content may have changed enough that encode/present is required
-    /// (before considering the pure-anim throttle).
+    /// Decision-table: encode/present may be required this frame (anything
+    /// except pure `AnimTick`, including `AnimPaint`).
+    ///
+    /// **Not** the same as Bevy wake flag [`RedrawDemand::need_content_present`]:
+    /// that host flag is sticky/rewrite-based and stays false after a throttled
+    /// AnimPaint encode-skip. This method feeds `FrameDriver::decide_present`
+    /// only.
     pub(crate) fn needs_content_present(&self) -> bool {
         self.reasons
             .iter()
@@ -121,8 +126,11 @@ pub(crate) struct FrameDecision {
 /// wake explicit and testable:
 ///
 /// - [`Self::need_anim_tick`]: timeline B (advance anim clock; may skip encode)
-/// - [`Self::need_content_present`]: timeline C/D (encode/present or content
-///   stickies that must not die — resize/retry/input/theme)
+/// - [`Self::need_content_present`]: Bevy content-wake demand from host stickies
+///   / rewrite (resize/retry/input/theme). **Decision-table content ≠ this flag**:
+///   [`DirtyBudget::needs_content_present`] is true for `AnimPaint` and drives
+///   encode/present decisions; after a throttled AnimPaint skip the host wake
+///   flag stays false so the next frame is not G5-promoted to `InputOrRebuild`.
 ///
 /// # Tradeoff (P1b.2)
 ///
@@ -135,6 +143,8 @@ pub(crate) struct RedrawDemand {
     /// Need another Bevy frame for the anim clock (Masonry `needs_anim` / sticky).
     pub need_anim_tick: bool,
     /// Need another Bevy frame for content encode/present or unfulfilled content stickies.
+    ///
+    /// Host sticky/rewrite wake only — not [`DirtyBudget::needs_content_present`].
     pub need_content_present: bool,
 }
 
@@ -643,9 +653,50 @@ mod tests {
     }
 
     #[test]
+    fn multi_window_redraw_demand_merge_matrix() {
+        // Mirrors `paint_masonry_ui` OR-merge of per-window FrameStepResult demands
+        // before a single process-wide RequestRedraw.
+        fn merge_windows(a: RedrawDemand, b: RedrawDemand) -> RedrawDemand {
+            let mut d = RedrawDemand::none();
+            d.merge(a);
+            d.merge(b);
+            d
+        }
+
+        // Anim-only ∨ content → both flags; still one RequestRedraw via any().
+        let merged = merge_windows(
+            RedrawDemand::anim_tick_only(),
+            RedrawDemand::content_present_only(),
+        );
+        assert_eq!(merged, RedrawDemand::both());
+        assert!(merged.any());
+
+        // Failed-none ∨ content → content only (Failed must not clear content wake).
+        let merged = merge_windows(RedrawDemand::none(), RedrawDemand::content_present_only());
+        assert_eq!(merged, RedrawDemand::content_present_only());
+        assert!(merged.need_content_present && !merged.need_anim_tick);
+
+        // Anim-only ∨ Failed-none → anim-only (idle window does not clear demand).
+        let merged = merge_windows(RedrawDemand::anim_tick_only(), RedrawDemand::none());
+        assert_eq!(merged, RedrawDemand::anim_tick_only());
+        assert!(merged.is_anim_only());
+
+        // none ∨ none → no wake.
+        let merged = merge_windows(RedrawDemand::none(), RedrawDemand::none());
+        assert_eq!(merged, RedrawDemand::none());
+        assert!(!merged.any());
+
+        // Failed anim-only ∨ content (typical multi-window matrix from host paths).
+        let failed_anim = RedrawDemand::anim_tick_only(); // finish_present Failed + live clock
+        let content = RedrawDemand::content_present_only();
+        let merged = merge_windows(failed_anim, content);
+        assert_eq!(merged, RedrawDemand::both());
+    }
+
+    #[test]
     fn pure_anim_tick_dirty_needs_anim_not_content() {
-        // DirtyBudget classification that feeds decide_present — redraw demand
-        // on the host mirrors this: AnimTick alone is anim-only.
+        // DirtyBudget classification that feeds decide_present — decision-table
+        // content (includes AnimPaint) is not the Bevy wake content flag.
         let mut dirty = DirtyBudget::new();
         dirty.insert(DirtyReason::AnimTick);
         assert!(dirty.needs_anim_tick());
