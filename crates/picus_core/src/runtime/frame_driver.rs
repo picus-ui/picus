@@ -550,6 +550,29 @@ mod tests {
     }
 
     #[test]
+    fn base_invalidation_via_input_or_rebuild_is_unthrottled() {
+        // Issue 10: rewrite-completed sticky is promoted to InputOrRebuild so
+        // anim throttle cannot drop the frame that must reassemble base.
+        let mut dirty = DirtyBudget::new();
+        dirty.insert(DirtyReason::AnimTick);
+        dirty.insert(DirtyReason::AnimPaint { layer: 0 });
+        dirty.insert(DirtyReason::LayoutRewrite);
+        dirty.insert(DirtyReason::InputOrRebuild);
+        assert!(dirty.requires_unthrottled_present());
+        assert!(!dirty.is_selective_anim_encode());
+
+        let mut driver = FrameDriver::new();
+        let t0 = Instant::now();
+        driver.note_anim_present(t0);
+        let decision = driver.decide_present(&dirty, Some(interval_33ms()), t0);
+        assert!(
+            decision.do_present,
+            "base invalidation must present under anim throttle pressure"
+        );
+        assert!(!decision.throttled_anim_present);
+    }
+
+    #[test]
     fn anim_paint_allowed_after_interval() {
         let mut dirty = DirtyBudget::new();
         dirty.insert(DirtyReason::AnimPaint { layer: 0 });

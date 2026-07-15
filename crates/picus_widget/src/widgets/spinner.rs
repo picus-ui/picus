@@ -1,4 +1,5 @@
 use std::any::TypeId;
+use std::cell::Cell;
 use std::f64::consts::PI;
 
 use accesskit::{Node, Role};
@@ -35,8 +36,11 @@ use crate::theme;
 )]
 pub struct Spinner {
     t: f64,
-    /// Last phase that called [`UpdateCtx::request_paint_only`] (host version gate).
-    last_paint_phase: Option<u8>,
+    /// Last phase acked by Masonry `paint` **or** host selective sync.
+    ///
+    /// `Cell` so Picus can ack from an immutable widget ref after host scene
+    /// build (selective G2 path never runs `paint`).
+    last_paint_phase: Cell<Option<u8>>,
 }
 
 // --- MARK: DEFAULT
@@ -44,7 +48,7 @@ impl Default for Spinner {
     fn default() -> Self {
         Self {
             t: 0.0,
-            last_paint_phase: None,
+            last_paint_phase: Cell::new(None),
         }
     }
 }
@@ -78,6 +82,21 @@ impl Spinner {
     #[inline]
     pub fn phase(&self) -> u8 {
         Self::visual_phase(self.t)
+    }
+
+    /// Last acked visual phase (`paint` or host selective sync), if any.
+    #[inline]
+    pub fn acked_visual_phase(&self) -> Option<u8> {
+        self.last_paint_phase.get()
+    }
+
+    /// Acknowledge that `phase` was committed (Masonry paint or host scene sync).
+    ///
+    /// Stops further `request_paint_only` spam for this phase on the selective
+    /// anim path where `paint` never runs.
+    #[inline]
+    pub fn ack_visual_phase(&self, phase: u8) {
+        self.last_paint_phase.set(Some(phase));
     }
 
     /// Record spinner arms into `painter` in **content-box local** coordinates.
@@ -131,11 +150,11 @@ impl Widget for Spinner {
         }
         // Keep the anim clock scheduled at display rate (60–120Hz OK).
         ctx.request_anim_frame();
-        // Paint only when the 12-step visual phase advances. Do **not** advance
-        // `last_paint_phase` here — only `paint` does, so a throttled/skipped
-        // AnimPaint frame re-requests the same phase until host sync can run.
+        // Request paint only while the current phase is not yet acked by paint
+        // or host selective sync. Throttle skips leave the phase unacked so the
+        // next tick re-requests; selective host sync acks without Masonry paint.
         let phase = Self::visual_phase(self.t);
-        if self.last_paint_phase != Some(phase) {
+        if self.last_paint_phase.get() != Some(phase) {
             ctx.request_paint_only();
         }
     }
@@ -186,8 +205,8 @@ impl Widget for Spinner {
         // Picus `AnimLayerHost` is authoritative via `Spinner::paint_arms`. Skip local
         // strokes here to avoid wasted work and dual sources of truth.
         ctx.set_paint_layer_mode(PaintLayerMode::External);
-        // Phase paint acknowledged only once paint actually runs (throttle-safe).
-        self.last_paint_phase = Some(Self::visual_phase(self.t));
+        // Full paint path ack (selective path acks via `ack_visual_phase` after host sync).
+        self.ack_visual_phase(Self::visual_phase(self.t));
     }
 
     fn accessibility_role(&self) -> Role {

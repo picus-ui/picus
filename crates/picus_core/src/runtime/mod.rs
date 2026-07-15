@@ -202,6 +202,9 @@ pub struct WindowRuntime {
     retry_dirty: bool,
     /// Theme/font registration dirty.
     theme_or_font_dirty: bool,
+    /// Base CachedScene may be stale (rewrite completed during anim / geom move).
+    /// Sticky until a **full-path** present succeeds — not anim-throttlable (Issue 10).
+    base_invalidated: bool,
     /// Per-window frame scheduler (decision table + transitional anim throttle).
     frame_driver: FrameDriver,
     /// Painter-order compositor plan + anim host (P2b infrastructure).
@@ -325,6 +328,7 @@ impl WindowRuntime {
             resize_dirty: false,
             retry_dirty: false,
             theme_or_font_dirty: false,
+            base_invalidated: false,
             frame_driver: FrameDriver::new(),
             layer_registry: LayerRegistry::default(),
             viewport_width: initial_viewport.0,
@@ -845,7 +849,8 @@ impl WindowRuntime {
         if self.theme_or_font_dirty {
             dirty.insert(DirtyReason::ThemeOrFont);
         }
-        if self.needs_redraw {
+        // Sticky base invalidation is content dirt (G5 unthrottled via InputOrRebuild).
+        if self.base_invalidated || self.needs_redraw {
             // Generic content/input redraw when not already tagged finer.
             dirty.insert(DirtyReason::InputOrRebuild);
         }
@@ -923,6 +928,7 @@ impl WindowRuntime {
             || self.resize_dirty
             || self.retry_dirty
             || self.theme_or_font_dirty
+            || self.base_invalidated
             || self.render_root.needs_rewrite_passes();
         RedrawDemand {
             need_anim_tick,
@@ -973,6 +979,10 @@ impl WindowRuntime {
         // needs_redraw armed would map to InputOrRebuild and bypass ~30Hz throttle.
         if anim_raised_redraw && !snap.needs_redraw {
             self.needs_redraw = false;
+        }
+        // Base invalidation must survive throttle skips until a full present (Issue 10).
+        if self.base_invalidated {
+            self.needs_redraw = true;
         }
         if throttled {
             self.needs_anim_frame = true;
@@ -1094,8 +1104,8 @@ impl WindowRuntime {
         if snap.theme_or_font_dirty {
             post_dirty.insert(DirtyReason::ThemeOrFont);
         }
-        if snap.needs_redraw {
-            // Pre-tick redraw is content/input/rebuild (unthrottled).
+        if snap.needs_redraw || self.base_invalidated {
+            // Pre-tick redraw / sticky base invalidation is content (unthrottled).
             post_dirty.insert(DirtyReason::InputOrRebuild);
         }
         if anim_raised_redraw {
@@ -1113,11 +1123,17 @@ impl WindowRuntime {
         }
         // Outstanding rewrite, or rewrite that completed during this AnimFrame
         // (flag cleared) — both require full base reassembly, not selective anim.
+        // Sticky `base_invalidated` so anim throttle cannot drop the only frame
+        // that knew rewrite completed (Issue 10).
         let rewrite_pending_after_anim = self.render_root.needs_rewrite_passes();
         let rewrite_completed_during_anim =
             rewrite_pending_before_anim && !rewrite_pending_after_anim;
         if rewrite_pending_after_anim || rewrite_completed_during_anim {
             post_dirty.insert(DirtyReason::LayoutRewrite);
+            self.base_invalidated = true;
+            self.needs_redraw = true;
+            // Promote to unthrottled content dirt so present cannot be skipped.
+            post_dirty.insert(DirtyReason::InputOrRebuild);
         }
         if self.needs_anim_frame || self.render_root.needs_anim() {
             post_dirty.insert(DirtyReason::AnimTick);
@@ -1195,6 +1211,7 @@ impl WindowRuntime {
         // - Prefer full path whenever non-anim structure/content is dirty
         let selective_anim = post_dirty.is_selective_anim_encode()
             && self.has_painted_once
+            && !self.base_invalidated
             && self.layer_registry.has_anim_entries()
             && self.layer_registry.prefers_ordered_composite()
             && !self.render_root.needs_rewrite_passes()
@@ -1209,17 +1226,27 @@ impl WindowRuntime {
         let frame_h = logical_size.height.max(1);
         let scale = self.window_scale_factor;
 
+        // True when this present attempt used (or fell back to) a full base rebuild.
+        let mut used_full_base_path = !selective_anim;
+
         let (render_result, surface_timings) = if selective_anim {
             // Steady Spinner anim: no base scene rebuild, no full redraw.
             let anim_started = std::time::Instant::now();
-            let _ = self
+            let sync_summary = self
                 .layer_registry
                 .sync_anim_entries_from_widgets(&self.render_root);
             phases.scene_build_anim = anim_started.elapsed();
             phases.scene_build_base = std::time::Duration::ZERO;
 
-            // Defense: if sync/propagate somehow dirtied base, fall back to full path.
-            if self.layer_registry.non_anim_needs_encode() {
+            // Geometry change under selective path implies layout may have moved
+            // base content (Issue 11 partial detection) — force full reassembly.
+            if sync_summary.any_geometry_changed {
+                self.base_invalidated = true;
+            }
+
+            // Defense: if sync/propagate somehow dirtied base, or geom moved, full path.
+            if self.layer_registry.non_anim_needs_encode() || sync_summary.any_geometry_changed {
+                used_full_base_path = true;
                 // Fall through by rebuilding with a full redraw instead of empty base.
                 let bound_ids: Vec<_> = self.layer_registry.host().widget_ids().collect();
                 for id in bound_ids {
@@ -1391,6 +1418,10 @@ impl WindowRuntime {
         if painted {
             // Sticky: clear entry/host dirty only after successful present.
             self.layer_registry.clear_dirty_after_successful_present();
+            // Base invalidation clears only after a full-path present (Issue 10).
+            if used_full_base_path {
+                self.base_invalidated = false;
+            }
         } else {
             self.layer_registry.retain_dirty_after_failed_present();
         }

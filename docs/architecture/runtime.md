@@ -252,14 +252,22 @@ Product path for continuous spinner isolation (no gallery/entity hardcode):
    geometry/first build). Spinner widget paint only sets External (no local
    strokes); host is authoritative.
 4. **Steady anim ticks (G2):** when dirty is only `AnimTick`/`AnimPaint`, the
-   window has already painted once, the plan has Anim entries, **no rewrite
-   completed/pending this tick**, and **no CachedScene/Overlay needs encode**
-   after metrics notify, `step_frame` **skips** full-tree `redraw()` and base
-   reassembly. Only host anim scenes rebuild; encode dirties Anim entries only.
-   Phase-unchanged ticks skip encode/present. Metrics/size changes force full
-   path (never encode empty base with `visual=None`).
-5. **Content / resize / first paint** still full-redraw; bound External widgets
+   window has already painted once, the plan has Anim entries, **no sticky
+   `base_invalidated`**, **no rewrite pending**, and **no CachedScene/Overlay
+   needs encode** after metrics notify, `step_frame` **skips** full-tree
+   `redraw()` and base reassembly. Host sync acks Spinner visual phase (no
+   Masonry paint). Phase-unchanged ticks skip encode/present. Metrics/size
+   changes force full path (never encode empty base with `visual=None`).
+5. **Rewrite during AnimFrame:** if rewrite was pending before the tick (and
+   completed) or still pending after, set sticky `base_invalidated` +
+   `InputOrRebuild` (unthrottled) until a **full-path** present succeeds —
+   anim throttle cannot drop base reassembly (Issue 10). Spinner geometry
+   moves on selective sync also force full path (Issue 11 partial).
+6. **Content / resize / first paint** still full-redraw; bound External widgets
    are re-`request_paint_only` so External mode sticks for the paint pass.
+   Rewrite *started and finished entirely inside* AnimFrame without prior
+   pending flag remains a residual gap when non-spinner widgets
+   `request_layout` during the tick (Spinner itself does not).
 
 **Known limitation (not G3 under scroll/clip):** host anim scenes use
 `AncestorClip::none` and do not yet re-apply ancestor clip/scroll packages.

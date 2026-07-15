@@ -221,6 +221,26 @@ pub(crate) struct AnimLayerEntry {
     pub visual_phase: Option<u8>,
 }
 
+/// Result of [`AnimLayerHost::sync_spinner_scene`].
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct SpinnerSyncResult {
+    /// Host content version advanced (needs encode).
+    pub version_bumped: bool,
+    /// Window bounds/transform changed (may invalidate base layout order).
+    pub geometry_changed: bool,
+    /// Phase present on the host after the call (for widget phase ack).
+    pub visual_phase: Option<u8>,
+}
+
+/// Aggregate of [`SpinnerSyncResult`] over a host sync pass.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct AnimSyncSummary {
+    /// Any host entry version advanced.
+    pub any_version_bumped: bool,
+    /// Any spinner geometry moved (forces full base path — Issue 11).
+    pub any_geometry_changed: bool,
+}
+
 /// Picus-side registry for isolated anim draw state.
 ///
 /// Owned by [`LayerRegistry`] on [`super::WindowRuntime`]. Product widgets that
@@ -375,8 +395,6 @@ impl AnimLayerHost {
 
     /// Sync a Spinner anim scene in window space; bumps version only when the
     /// 12-step visual phase changes, geometry changes, or the scene was empty.
-    ///
-    /// Returns `true` when this entry needs encode (version advanced).
     pub(crate) fn sync_spinner_scene(
         &mut self,
         id: AnimLayerId,
@@ -385,10 +403,10 @@ impl AnimLayerHost {
         color: AlphaColor<Srgb>,
         window_transform: Affine,
         window_bounds: Rect,
-    ) -> bool {
+    ) -> SpinnerSyncResult {
         let phase = Spinner::visual_phase(t);
         let Some(entry) = self.entries.get_mut(&id) else {
-            return false;
+            return SpinnerSyncResult::default();
         };
         let phase_changed = entry.visual_phase != Some(phase);
         let geom_changed = entry.bounds != window_bounds || entry.transform != window_transform;
@@ -396,7 +414,12 @@ impl AnimLayerHost {
         entry.bounds = window_bounds;
         entry.transform = window_transform;
         if !needs_build {
-            return false;
+            // Still report phase so callers can ack the widget without rebuild.
+            return SpinnerSyncResult {
+                version_bumped: false,
+                geometry_changed: false,
+                visual_phase: Some(phase),
+            };
         }
         let mut local = Scene::new();
         {
@@ -410,7 +433,11 @@ impl AnimLayerHost {
         entry.visual_phase = Some(phase);
         entry.version = entry.version.saturating_add(1);
         entry.dirty = true;
-        true
+        SpinnerSyncResult {
+            version_bumped: true,
+            geometry_changed: geom_changed,
+            visual_phase: Some(phase),
+        }
     }
 
     pub(crate) fn clear_dirty_after_encode(&mut self, id: AnimLayerId) {
@@ -1179,12 +1206,12 @@ impl LayerRegistry {
 
     /// Rebuild host scenes from live widgets (Spinner downcast + paint_arms).
     ///
-    /// Returns `true` when any anim entry version advanced (needs encode).
-    /// Safe on pure-anim frames without a full Masonry paint pass.
-    ///
-    /// Also prunes host entries whose widgets left the tree (selective-path
-    /// windows never hit the full-path orphan cleanup alone).
-    pub(crate) fn sync_anim_entries_from_widgets(&mut self, render_root: &RenderRoot) -> bool {
+    /// Acks Spinner visual phase after host sync (selective path never paints).
+    /// Prunes host entries whose widgets left the tree.
+    pub(crate) fn sync_anim_entries_from_widgets(
+        &mut self,
+        render_root: &RenderRoot,
+    ) -> AnimSyncSummary {
         let orphans: Vec<WidgetId> = self
             .host
             .widget_ids()
@@ -1200,16 +1227,16 @@ impl LayerRegistry {
             .iter()
             .filter_map(|e| Some((e.anim_id?, e.widget_id?)))
             .collect();
-        let mut any = false;
+        let mut summary = AnimSyncSummary::default();
         for (anim_id, widget_id) in pairs {
-            if sync_one_anim_widget(self, render_root, anim_id, widget_id) {
-                any = true;
-            }
+            let one = sync_one_anim_widget(self, render_root, anim_id, widget_id);
+            summary.any_version_bumped |= one.version_bumped;
+            summary.any_geometry_changed |= one.geometry_changed;
         }
-        if any {
+        if summary.any_version_bumped {
             self.propagate_host_dirty_to_plan();
         }
-        any
+        summary
     }
 
     /// True when the plan has at least one Anim entry (selective G2 path eligible).
@@ -1249,13 +1276,13 @@ fn sync_one_anim_widget(
     render_root: &RenderRoot,
     anim_id: AnimLayerId,
     widget_id: WidgetId,
-) -> bool {
+) -> SpinnerSyncResult {
     let Some(wref) = render_root.get_widget(widget_id) else {
-        return false;
+        return SpinnerSyncResult::default();
     };
     let Some(spinner) = wref.downcast::<Spinner>() else {
         // Non-spinner External: leave empty transparent host scene.
-        return false;
+        return SpinnerSyncResult::default();
     };
     let t = spinner.inner().t();
     let size = wref.ctx().content_box().size();
@@ -1263,9 +1290,29 @@ fn sync_one_anim_widget(
     // QueryCtx::window_transform maps content-box → window space.
     let window_transform = wref.ctx().window_transform();
     let window_bounds = wref.ctx().bounding_box();
-    registry
-        .host_mut()
-        .sync_spinner_scene(anim_id, t, size, color, window_transform, window_bounds)
+    // End immutable widget borrows before host_mut.
+    let _ = spinner;
+    let _ = wref;
+
+    let result = registry.host_mut().sync_spinner_scene(
+        anim_id,
+        t,
+        size,
+        color,
+        window_transform,
+        window_bounds,
+    );
+
+    // Ack phase on the widget without edit_widget/rewrite (Cell + immutable ref).
+    // Selective G2 never runs Spinner::paint; host sync is the ack (Issue 12).
+    if let Some(phase) = result.visual_phase
+        && let Some(wref) = render_root.get_widget(widget_id)
+        && let Some(spinner) = wref.downcast::<Spinner>()
+    {
+        spinner.inner().ack_visual_phase(phase);
+    }
+
+    result
 }
 
 fn layer_bounds_estimate(layer: &VisualLayer, window_bounds: Rect) -> Rect {
@@ -2224,13 +2271,23 @@ mod tests {
         let bounds = Rect::new(0.0, 0.0, 40.0, 40.0);
         let xf = Affine::IDENTITY;
 
-        assert!(host.sync_spinner_scene(id, 0.0, size, color, xf, bounds));
+        assert!(
+            host.sync_spinner_scene(id, 0.0, size, color, xf, bounds)
+                .version_bumped
+        );
         let v1 = host.get(id).unwrap().version;
         // Same phase (0 for t in [0, 1/12)): no version bump.
-        assert!(!host.sync_spinner_scene(id, 0.01, size, color, xf, bounds));
+        assert!(
+            !host
+                .sync_spinner_scene(id, 0.01, size, color, xf, bounds)
+                .version_bumped
+        );
         assert_eq!(host.get(id).unwrap().version, v1);
         // Next phase.
-        assert!(host.sync_spinner_scene(id, 1.0 / 12.0, size, color, xf, bounds));
+        assert!(
+            host.sync_spinner_scene(id, 1.0 / 12.0, size, color, xf, bounds)
+                .version_bumped
+        );
         assert_eq!(host.get(id).unwrap().version, v1 + 1);
         assert!(!host.get(id).unwrap().scene.is_empty());
     }
@@ -2265,8 +2322,9 @@ mod tests {
         let mut registry = LayerRegistry::new(AnimTargetStrategy::FullWindowTransparent);
         registry.register_external_widgets_from_visual(&plan, &root);
         registry.rebuild_from_visual_plan(&plan, Rect::new(0.0, 0.0, 80.0, 40.0));
+        let first_sync = registry.sync_anim_entries_from_widgets(&root);
         assert!(
-            registry.sync_anim_entries_from_widgets(&root),
+            first_sync.any_version_bumped,
             "initial host scene build must dirty anim"
         );
         let version_after_first = registry
@@ -2289,7 +2347,7 @@ mod tests {
         )));
         let dirtied = registry.sync_anim_entries_from_widgets(&root);
         assert!(
-            dirtied,
+            dirtied.any_version_bumped,
             "100ms anim must advance Spinner visual phase and dirt host via sync"
         );
         let version_after_phase = registry
@@ -2318,5 +2376,113 @@ mod tests {
             !registry.non_anim_needs_encode(),
             "base CachedScene must not re-encode on pure anim dirt"
         );
+    }
+
+    #[test]
+    fn host_sync_acks_spinner_visual_phase_without_paint() {
+        // Issue 12: selective path never paints; host sync must ack phase so
+        // on_anim_frame stops re-requesting request_paint_only for that phase.
+        let spinner = NewWidget::new(Spinner::new());
+        let spinner_id = spinner.id();
+        let root_widget = NewWidget::new(
+            SizedBox::new(spinner)
+                .width(Length::px(40.0))
+                .height(Length::px(40.0)),
+        );
+        let mut root = test_root(root_widget);
+        let _ = root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(
+            1,
+        )));
+        let (plan, _) = root.redraw();
+        // After full paint path, phase may already be acked by paint.
+        let mut registry = LayerRegistry::new(AnimTargetStrategy::FullWindowTransparent);
+        registry.register_external_widgets_from_visual(&plan, &root);
+        registry.rebuild_from_visual_plan(&plan, Rect::new(0.0, 0.0, 80.0, 40.0));
+        let _ = registry.sync_anim_entries_from_widgets(&root);
+
+        // Clear ack to simulate a phase that has not been painted yet.
+        {
+            let wref = root.get_widget(spinner_id).expect("spinner");
+            let s = wref.downcast::<Spinner>().expect("downcast");
+            // Force unacked state for current phase by setting a different phase.
+            let current = s.inner().phase();
+            s.inner()
+                .ack_visual_phase(current.wrapping_add(1) % Spinner::PHASE_COUNT);
+            // Now current phase is unacked relative to t... actually we set wrong phase.
+            // Reset: ack a sentinel then advance t via anim without paint.
+            s.inner().ack_visual_phase(255); // impossible phase so current is unacked
+        }
+        let before = root
+            .get_widget(spinner_id)
+            .unwrap()
+            .downcast::<Spinner>()
+            .unwrap()
+            .inner()
+            .acked_visual_phase();
+        assert_eq!(before, Some(255));
+
+        // Sync without paint must ack the real phase.
+        let _ = registry.sync_anim_entries_from_widgets(&root);
+        let after = root
+            .get_widget(spinner_id)
+            .unwrap()
+            .downcast::<Spinner>()
+            .unwrap()
+            .inner()
+            .acked_visual_phase();
+        let expected = root
+            .get_widget(spinner_id)
+            .unwrap()
+            .downcast::<Spinner>()
+            .unwrap()
+            .inner()
+            .phase();
+        assert_eq!(
+            after,
+            Some(expected),
+            "host sync must ack spinner visual phase"
+        );
+    }
+
+    #[test]
+    fn geometry_change_reported_from_spinner_sync() {
+        // Issue 11 partial: bounds move reports geometry_changed for full-path fallthrough.
+        let mut host = AnimLayerHost::new(AnimTargetStrategy::FullWindowTransparent);
+        let w = NewWidget::new(Spinner::new()).id();
+        let id = host.register_external_slot(w);
+        let color = AlphaColor::from_rgb8(255, 255, 255);
+        let size = Size::new(40.0, 40.0);
+        let r1 = host.sync_spinner_scene(
+            id,
+            0.0,
+            size,
+            color,
+            Affine::IDENTITY,
+            Rect::new(0.0, 0.0, 40.0, 40.0),
+        );
+        assert!(r1.version_bumped);
+        // First build: bounds from ZERO → rect counts as geometry_changed.
+        assert!(r1.geometry_changed);
+        // Same geom / phase: no bump, no geom change.
+        let r2 = host.sync_spinner_scene(
+            id,
+            0.0,
+            size,
+            color,
+            Affine::IDENTITY,
+            Rect::new(0.0, 0.0, 40.0, 40.0),
+        );
+        assert!(!r2.version_bumped);
+        assert!(!r2.geometry_changed);
+        let r3 = host.sync_spinner_scene(
+            id,
+            0.0,
+            size,
+            color,
+            Affine::IDENTITY,
+            Rect::new(10.0, 10.0, 50.0, 50.0),
+        );
+        assert!(r3.version_bumped);
+        assert!(r3.geometry_changed);
     }
 }
