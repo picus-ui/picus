@@ -35,8 +35,10 @@
 //!
 //! - Indeterminate [`ProgressBar`] (`progress == None`) sets External every paint;
 //!   determinate stays inline cached. Host paints the 30% track segment via
-//!   [`ProgressBar::paint_indeterminate_segment`]; continuous phase ∈ [0,1)
-//!   over a 1.2s period gates host version / paint request.
+//!   [`ProgressBar::paint_indeterminate_segment`] using content-space `border_box()`
+//!   (insets preserved). Continuous phase ∈ [0,1) over 1.2s bumps host version on
+//!   **every logical tick** (not Spinner's 12-step discrete gate) so the segment
+//!   stays smooth; G2 still holds because only Anim encodes.
 //!
 //! ## Not yet (do not overclaim)
 //!
@@ -1440,19 +1442,25 @@ fn sync_one_anim_widget(
 
     if let Some(bar) = wref.downcast::<ProgressBar>() {
         if !bar.inner().is_indeterminate() {
-            // Determinate: drop host binding; no anim scene.
+            // Determinate: drop host binding. Signal geometry_changed so selective
+            // encode cannot keep an empty Anim entry — force full plan rebuild
+            // (defense-in-depth if progress flipped without content dirt).
             let _ = bar;
             let _ = wref;
             let _ = registry.host_mut().remove_widget(widget_id);
-            return AnimWidgetSyncResult::default();
+            return AnimWidgetSyncResult {
+                version_bumped: false,
+                geometry_changed: true,
+                visual_phase: None,
+                continuous_phase: None,
+            };
         }
         let phase = bar.inner().indeterminate_phase();
+        // Masonry `border_box()` is content-box space (may have negative origin
+        // when BorderWidth/Padding insets are non-zero). Pass through unchanged —
+        // `window_transform()` expects the same space; ORIGIN+size would misalign
+        // the host segment vs track chrome in pre_paint.
         let border_box = wref.ctx().border_box();
-        // Local-space border box for paint_indeterminate_segment (origin at 0,0).
-        let local_box = Rect::from_origin_size(
-            crate::masonry_core::kurbo::Point::ORIGIN,
-            border_box.size(),
-        );
         let bar_color = wref.get_prop::<BarColor>().0;
         let border_width = *wref.get_prop::<BorderWidth>();
         let corner_radius = *wref.get_prop::<CornerRadius>();
@@ -1461,7 +1469,7 @@ fn sync_one_anim_widget(
         return registry.host_mut().sync_progress_indeterminate_scene(
             anim_id,
             phase,
-            local_box,
+            border_box,
             bar_color,
             border_width,
             corner_radius,
@@ -2860,6 +2868,61 @@ mod tests {
     }
 
     #[test]
+    fn host_progress_segment_uses_content_space_border_origin() {
+        // Non-zero BorderWidth: content-space border_box has negative origin.
+        // Host scene build must receive that rect, not ORIGIN+size.
+        use crate::masonry_core::layout::Length;
+        let mut host = AnimLayerHost::new(AnimTargetStrategy::FullWindowTransparent);
+        let w = NewWidget::new(ProgressBar::new(None)).id();
+        let id = host.register_external_slot(w);
+        let color = AlphaColor::from_rgb8(0, 120, 212);
+        let border = BorderWidth::all(Length::px(10.0));
+        let radius = CornerRadius::default();
+        let content_space = Rect::new(-10.0, -10.0, 110.0, 30.0);
+        let wrong_origin = Rect::from_origin_size(Point::ORIGIN, content_space.size());
+
+        let correct_seg = ProgressBar::indeterminate_segment_rect(
+            content_space,
+            0.5,
+            &border,
+            &radius,
+        )
+        .expect("segment with content-space origin");
+        let wrong_seg = ProgressBar::indeterminate_segment_rect(
+            wrong_origin,
+            0.5,
+            &border,
+            &radius,
+        )
+        .expect("segment with ORIGIN rewrite");
+        assert!(
+            (correct_seg.x0 - wrong_seg.x0).abs() > 1.0,
+            "content-space origin shifts segment vs ORIGIN rewrite: {} vs {}",
+            correct_seg.x0,
+            wrong_seg.x0
+        );
+        assert!(
+            correct_seg.x0 < 0.0 || correct_seg.x0 < wrong_seg.x0,
+            "insets pull segment toward negative content origin"
+        );
+
+        assert!(
+            host.sync_progress_indeterminate_scene(
+                id,
+                0.5,
+                content_space,
+                color,
+                border,
+                radius,
+                Affine::IDENTITY,
+                Rect::new(0.0, 0.0, 120.0, 40.0),
+            )
+            .version_bumped
+        );
+        assert!(!host.get(id).unwrap().scene.is_empty());
+    }
+
+    #[test]
     fn pure_anim_progress_dirt_only_anim_needs_encode_g2() {
         // G2: after clean present, only host anim dirt from phase advance marks
         // Anim for encode — CachedScene stays clean.
@@ -2994,11 +3057,19 @@ mod tests {
         registry.rebuild_from_visual_plan(&plan, Rect::new(0.0, 0.0, 120.0, 20.0));
         assert!(registry.has_anim_entries());
 
-        // None → Some: drop isolation and host binding.
+        // None → Some: drop isolation and host binding; no permanent anim tick.
         root.edit_widget(bar_id, |mut w| {
             let mut bar = w.downcast::<ProgressBar>();
             ProgressBar::set_progress(&mut bar, Some(0.75));
         });
+        // Drain one already-scheduled AnimFrame from the prior indeterminate mode.
+        let _ = root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(
+            16,
+        )));
+        assert!(
+            !root.needs_anim(),
+            "after None→Some + one drain frame, determinate must not keep needs_anim"
+        );
         let (plan, _) = root.redraw();
         assert!(
             !plan
@@ -3007,14 +3078,65 @@ mod tests {
                 .any(|l| matches!(l.kind, VisualLayerKind::External { .. })),
             "Some must leave External isolation"
         );
-        registry.register_external_widgets_from_visual(&plan, &root);
-        registry.rebuild_from_visual_plan(&plan, Rect::new(0.0, 0.0, 120.0, 20.0));
+        // Further anim frames must not re-arm External.
+        let _ = root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(
+            100,
+        )));
+        assert!(!root.needs_anim(), "determinate stays off the anim clock");
+        let (plan2, _) = root.redraw();
+        assert!(
+            !plan2
+                .layers
+                .iter()
+                .any(|l| matches!(l.kind, VisualLayerKind::External { .. })),
+            "further ticks must not re-arm External"
+        );
+        registry.register_external_widgets_from_visual(&plan2, &root);
+        registry.rebuild_from_visual_plan(&plan2, Rect::new(0.0, 0.0, 120.0, 20.0));
         assert_eq!(
             registry.host().len(),
             0,
             "determinate must prune host anim slot"
         );
         assert!(!registry.has_anim_entries());
+    }
+
+    #[test]
+    fn determinate_during_sync_reports_geometry_changed() {
+        // Defense-in-depth: if a plan still has an Anim entry but the widget is
+        // already determinate, sync prunes host and forces full-path fallthrough.
+        let bar = NewWidget::new(ProgressBar::new(None));
+        let bar_id = bar.id();
+        let root_widget = NewWidget::new(
+            SizedBox::new(bar)
+                .width(Length::px(120.0))
+                .height(Length::px(20.0)),
+        );
+        let mut root = test_root(root_widget);
+        let _ = root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(
+            1,
+        )));
+        let (plan, _) = root.redraw();
+        let mut registry = LayerRegistry::new(AnimTargetStrategy::FullWindowTransparent);
+        registry.register_external_widgets_from_visual(&plan, &root);
+        registry.rebuild_from_visual_plan(&plan, Rect::new(0.0, 0.0, 120.0, 20.0));
+        assert!(registry.has_anim_entries());
+
+        // Flip to determinate without going through register prune first.
+        root.edit_widget(bar_id, |mut w| {
+            let mut bar = w.downcast::<ProgressBar>();
+            ProgressBar::set_progress(&mut bar, Some(0.5));
+        });
+        let summary = registry.sync_anim_entries_from_widgets(&root);
+        assert!(
+            summary.any_geometry_changed,
+            "determinate during selective sync must force full-path (geometry_changed)"
+        );
+        assert_eq!(
+            registry.host().len(),
+            0,
+            "host slot removed when widget is determinate"
+        );
     }
 
     #[test]

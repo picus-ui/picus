@@ -151,12 +151,35 @@ impl ProgressBar {
         INDETERMINATE_SEGMENT_FRAC
     }
 
-    /// Record the indeterminate segment into `painter` in **border-box local** coordinates.
+    /// Segment rect in the same coordinate space as `border_box` (content-box space).
     ///
-    /// Used by the widget paint path (full redraw) and by Picus `AnimLayerHost` for
-    /// selective anim-entry encode without a full-tree Masonry redraw.
+    /// Callers must pass Masonry `border_box()` unchanged — with non-zero border/padding
+    /// insets that rect has a **negative origin**. Re-origin to `(0,0)` misaligns the
+    /// host-drawn segment vs track chrome.
+    #[inline]
+    pub fn indeterminate_segment_rect(
+        border_box: Rect,
+        phase: f64,
+        border_width: &BorderWidth,
+        corner_radius: &CornerRadius,
+    ) -> Option<Rect> {
+        let track = border_width.bg_rect(border_box, corner_radius);
+        let track_rect = track.rect();
+        let track_w = track_rect.width();
+        if track_w <= 0.0 || track_rect.height() <= 0.0 {
+            return None;
+        }
+        let seg_w = track_w * INDETERMINATE_SEGMENT_FRAC;
+        let left_frac = Self::segment_left_frac(phase);
+        let seg_x0 = track_rect.x0 + left_frac * track_w;
+        Some(Rect::new(seg_x0, track_rect.y0, seg_x0 + seg_w, track_rect.y1))
+    }
+
+    /// Record the indeterminate segment into `painter` in **content-box** coordinates.
     ///
-    /// Colors come only from the provided theme property values — no brand defaults.
+    /// `border_box` must be the content-space rect from Masonry (`ctx.border_box()`),
+    /// not `ORIGIN + size`. Used by Picus `AnimLayerHost` for selective anim-entry
+    /// encode; colors come only from the provided theme property values.
     pub fn paint_indeterminate_segment(
         painter: &mut Painter<'_>,
         border_box: Rect,
@@ -165,17 +188,12 @@ impl ProgressBar {
         border_width: &BorderWidth,
         corner_radius: &CornerRadius,
     ) {
-        let track = border_width.bg_rect(border_box, corner_radius);
-        let track_rect = track.rect();
-        let track_w = track_rect.width();
-        if track_w <= 0.0 || track_rect.height() <= 0.0 {
+        let Some(segment) =
+            Self::indeterminate_segment_rect(border_box, phase, border_width, corner_radius)
+        else {
             return;
-        }
-
-        let seg_w = track_w * INDETERMINATE_SEGMENT_FRAC;
-        let left_frac = Self::segment_left_frac(phase);
-        let seg_x0 = track_rect.x0 + left_frac * track_w;
-        let segment = Rect::new(seg_x0, track_rect.y0, seg_x0 + seg_w, track_rect.y1);
+        };
+        let track = border_width.bg_rect(border_box, corner_radius);
 
         // Clip to the rounded track so the segment enters/exits cleanly.
         painter.push_fill_clip(track);
@@ -233,11 +251,8 @@ impl ProgressBar {
             // None → Some: stop anim clock; next on_anim_frame will not re-request.
             this.widget.reset_indeterminate_clock();
         } else if !was_indeterminate && now_indeterminate {
-            // Some → None: restart from phase 0 and schedule anim.
+            // Some → None (including Some(NaN) → None via clamp): restart from phase 0.
             this.widget.reset_indeterminate_clock();
-            this.ctx.request_anim_frame();
-        } else if now_indeterminate && progress_changed {
-            // Stay indeterminate but value path changed (e.g. NaN clamp) — keep clock.
             this.ctx.request_anim_frame();
         }
 
@@ -524,6 +539,117 @@ mod unit_tests {
         assert!(!bar.is_indeterminate());
         assert_eq!(bar.progress(), Some(0.4));
         assert_eq!(bar.indeterminate_phase(), 0.0);
+    }
+
+    #[test]
+    fn segment_preserves_content_space_border_origin() {
+        // Masonry content-space border_box with 10px border insets has negative origin.
+        // Host must not re-origin to (0,0) or the segment shifts relative to the track.
+        // bg_rect insets by border width: (-10,-10,110,30)+10px → track at (0,0,100,20);
+        // ORIGIN+size of the same size is (0,0,120,40) → track at (10,10,110,30).
+        use crate::layout::Length;
+        let border = BorderWidth::all(Length::px(10.0));
+        let radius = CornerRadius::default();
+        let content_space_border = Rect::new(-10.0, -10.0, 110.0, 30.0);
+        let origin_rewritten = Rect::from_origin_size(
+            crate::kurbo::Point::ORIGIN,
+            content_space_border.size(),
+        );
+
+        let track = border.bg_rect(content_space_border, &radius).rect();
+        let seg = ProgressBar::indeterminate_segment_rect(
+            content_space_border,
+            0.5,
+            &border,
+            &radius,
+        )
+        .expect("segment");
+        assert!(
+            (seg.y0 - track.y0).abs() < 1e-12,
+            "segment vertical origin follows track"
+        );
+        // Re-origining to ORIGIN+size shifts the track (and thus the segment).
+        let wrong_track = border.bg_rect(origin_rewritten, &radius).rect();
+        let wrong_seg = ProgressBar::indeterminate_segment_rect(
+            origin_rewritten,
+            0.5,
+            &border,
+            &radius,
+        )
+        .expect("wrong segment");
+        assert!(
+            (wrong_track.x0 - track.x0).abs() > 1.0,
+            "ORIGIN rewrite shifts track origin ({wrong} vs {correct})",
+            wrong = wrong_track.x0,
+            correct = track.x0
+        );
+        assert!(
+            (wrong_seg.x0 - seg.x0).abs() > 1.0,
+            "ORIGIN rewrite shifts segment x0 ({wrong} vs {correct})",
+            wrong = wrong_seg.x0,
+            correct = seg.x0
+        );
+        // Phase 0.5: left = 0.35 → segment starts at track.x0 + 0.35 * track_w.
+        let left = ProgressBar::segment_left_frac(0.5);
+        let expected_x0 = track.x0 + left * track.width();
+        assert!((seg.x0 - expected_x0).abs() < 1e-12);
+        // Golden: content-space border (-10,-10,110,30) + 10px border → track (0,0,100,20).
+        assert!((track.x0 - 0.0).abs() < 1e-12);
+        assert!((track.y0 - 0.0).abs() < 1e-12);
+        assert!((track.width() - 100.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn accessibility_omits_numeric_when_indeterminate() {
+        // Call accessibility with a fresh node — None must not set fake min/max/value.
+        let mut bar = ProgressBar::new(None);
+        assert_eq!(bar.accessibility_role(), Role::ProgressIndicator);
+
+        let mut node = Node::new(Role::ProgressIndicator);
+        // Seed fake values that a determinate pass would set, then re-fill as None.
+        node.set_min_numeric_value(0.0);
+        node.set_max_numeric_value(1.0);
+        node.set_numeric_value(0.42);
+        // Fresh node for indeterminate (widget only sets fields when Some).
+        let mut fresh = Node::new(Role::ProgressIndicator);
+        // Safety: accessibility ignores ctx/props for this widget.
+        // We cannot construct AccessCtx here; exercise the value path via a local helper.
+        fill_a11y_for_test(&bar, &mut fresh);
+        assert!(
+            fresh.numeric_value().is_none(),
+            "indeterminate must not report numeric_value"
+        );
+        assert!(
+            fresh.min_numeric_value().is_none(),
+            "indeterminate must not report min"
+        );
+        assert!(
+            fresh.max_numeric_value().is_none(),
+            "indeterminate must not report max"
+        );
+
+        bar.progress = Some(0.5);
+        let mut det = Node::new(Role::ProgressIndicator);
+        fill_a11y_for_test(&bar, &mut det);
+        assert_eq!(det.numeric_value(), Some(0.5));
+        assert_eq!(det.min_numeric_value(), Some(0.0));
+        assert_eq!(det.max_numeric_value(), Some(1.0));
+
+        bar.progress = None;
+        let mut back = Node::new(Role::ProgressIndicator);
+        fill_a11y_for_test(&bar, &mut back);
+        assert!(back.numeric_value().is_none());
+        assert!(back.min_numeric_value().is_none());
+        assert!(back.max_numeric_value().is_none());
+    }
+
+    /// Mirrors [`ProgressBar::accessibility`] body without AccessCtx.
+    fn fill_a11y_for_test(bar: &ProgressBar, node: &mut Node) {
+        if let Some(value) = bar.progress {
+            node.set_min_numeric_value(0.0);
+            node.set_max_numeric_value(1.0);
+            node.set_numeric_value(value);
+        }
     }
 }
 

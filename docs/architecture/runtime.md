@@ -258,9 +258,13 @@ Product path for continuous isolation (no gallery/entity hardcode):
    - Indeterminate ProgressBar: `sync_progress_indeterminate_scene` via
      `ProgressBar::paint_indeterminate_segment` (segment width = 30% of track,
      `left = phase×1.3 − 0.3`, rounded-track clip; **theme `BarColor` /
-     border metrics only** — no production brand defaults). Continuous
-     `indeterminate_phase ∈ [0,1)` over a **1.2s** logical period gates version
-     (large jump frames allowed via rem_euclid).
+     border metrics only** — no production brand defaults). Host paint uses
+     Masonry **content-space** `border_box()` unchanged (negative origin when
+     border/padding insets are non-zero — do not re-origin to `(0,0)`). Continuous
+     `indeterminate_phase ∈ [0,1)` over a **1.2s** logical period; unlike Spinner's
+     12-step discrete gate, **every non-zero tick advances phase and re-encodes
+     Anim** for smooth motion (base stays clean — G2). Large jump frames via
+     rem_euclid.
 4. **Steady anim ticks (G2):** when dirty is only `AnimTick`/`AnimPaint`, the
    window has already painted once, the plan has Anim entries, **no sticky
    `base_invalidated`**, **no rewrite pending**, and **no CachedScene/Overlay
