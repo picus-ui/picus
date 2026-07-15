@@ -48,16 +48,28 @@ path. Full plan: [plans/frame-pipeline.md](../plans/frame-pipeline.md).
 tick, full-window redraw/encode, and present remain on one path. Continuous
 widgets (e.g. Spinner) that request every anim tick can still force full-window
 encode+present. A **transitional** pure-animation present throttle (~30 Hz
-default, override `PICUS_ANIM_PRESENT_HZ`, `0` = off) reduces DWM drag ghosting
-without changing content/resize present rates. That throttle is **not** the end
-state; it is removed only after layered anim encode gates pass (G10).
+default; override `PICUS_ANIM_PRESENT_HZ` with a positive Hz, or
+`0` / `off` / `none` / `false` to disable) reduces DWM drag ghosting without
+changing content/resize present rates. That throttle is **not** the end state;
+it is removed only after layered anim encode gates pass (G10).
 
 **Observability:** set `PICUS_FRAME_TIMING=1` for per-window phase averages and a
 monotonic `frame_id` (`input_dispatch_ms`, `anim_tick_ms`,
 `scene_build_base_ms` / `scene_build_anim_ms`, `surface_acquire_ms`,
 `encode_*_ms`, `composite_ms`, `present_submit_ms`, `presented` /
 `anim_tick_only`). These are **CPU submit-path** times — not displayed-frame
-latency. Windows baselines require PresentMon/ETW; protocol and result template:
+latency.
+
+**Phase instrumentation today (Phase 0 honesty):** `anim_tick_ms` includes
+rewrite that Masonry performs inside `AnimFrame`. `scene_build_base_ms` is only
+the subsequent root `redraw()` call. Present-path averages (`encode_*`,
+`composite`, `present_submit`, …) are over **content paint attempts**
+(`frames − anim_tick_only`), not diluted by throttled anim-only zeros. Process
+log `frames` counts **per-window paint attempts**; ECS averages use `bevy_frames`.
+Idle pure-`Skipped` paint does not assign `frame_id`s but still flushes process
+summaries on a ~1s wall clock.
+
+Windows baselines require PresentMon/ETW; protocol and result template:
 [perf/frame-pipeline-baseline.md](../perf/frame-pipeline-baseline.md).
 
 ### Frame pipeline evolution

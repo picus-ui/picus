@@ -196,7 +196,7 @@ pub struct WindowRuntime {
 ///   encode + PresentPolicy gates pass (see `docs/plans/frame-pipeline.md` G10 / P2e).
 /// - Override with `PICUS_ANIM_PRESENT_HZ` for baseline/debug only:
 ///   - unset → transitional ~30 Hz (`from_millis(33)`)
-///   - `0` / `off` / `none` → disable throttle (full anim present rate)
+///   - `0` / `off` / `none` / `false` → disable throttle (full anim present rate)
 ///   - positive number → present at most that many anim-only frames per second
 /// - Content/input/resize redraws are **never** throttled by this path.
 ///
@@ -949,8 +949,9 @@ impl WindowRuntime {
         self.needs_redraw = false;
 
         let logical_size = self.render_root.size();
-        // Full-window scene build today; `scene_build_anim` stays 0 until
-        // layered anim isolation (frame-pipeline Phase 2).
+        // Root `redraw()` only. Rewrite that ran inside AnimFrame is already
+        // attributed to `phases.anim_tick` (see perf module B/C notes).
+        // `scene_build_anim` stays 0 until layered isolation (Phase 2).
         let scene_started = std::time::Instant::now();
         let (visual_layers, _tree_update) = self.render_root.redraw();
         phases.scene_build_base = scene_started.elapsed();

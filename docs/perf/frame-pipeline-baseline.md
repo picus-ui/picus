@@ -31,7 +31,7 @@ Fill one block per machine / OS build used for a baseline run.
 | Profile | `debug` / `release` |
 | Present mode observed | Mailbox / FifoRelaxed / Fifo / other (from runtime logs) |
 | `PICUS_FRAME_TIMING` | `1` |
-| `PICUS_ANIM_PRESENT_HZ` | unset (default ~30) / `0` / other |
+| `PICUS_ANIM_PRESENT_HZ` | unset (default ~30) / `0` · `off` · `none` · `false` (disable) / positive Hz |
 | PresentMon version | _required_ |
 | Notes | power plan, background load, multi-monitor, etc. |
 
@@ -106,11 +106,23 @@ set RUST_LOG=picus_core::perf=info
 #   leave PICUS_ANIM_PRESENT_HZ unset
 # Unthrottled anim present (baseline / debug only):
 #   set PICUS_ANIM_PRESENT_HZ=0
+#   (also accepted: off / none / false)
 cargo run -p gallery --release
 ```
 
 Record 1 Hz `picus frame timing` averages for the sample window. Remember:
 `present_submit_ms` ≠ display time.
+
+**How to read CPU averages:**
+
+| Field group | Denominator |
+|-------------|-------------|
+| `anim_tick_ms` | All entered-work paint attempts for that window (`frames`) |
+| `scene_build_*`, `surface_acquire`, `encode_*`, `composite`, `present_submit` | **Content paint attempts only** (`frames − anim_tick_only`, logged as `content_paint_frames`) so throttled anim-only zeros do not dilute encode/present |
+| Process `input_dispatch_ms` / `synth_ms` / `rebuild_ms` | `bevy_frames` (not multi-window paint attempts) |
+| Process `frames` | Sum of per-window paint attempts (can be ≈ windows × Bevy paints) |
+
+Also: `anim_tick_ms` currently includes rewrite inside `AnimFrame`; `scene_build_base_ms` is root `redraw()` only (see `runtime.md` Phase 0 honesty notes).
 
 ---
 
@@ -146,10 +158,14 @@ Report **median / p95 / p99** of the chosen latency metric (name the column).
 
 ### 3.4 CPU phase averages (`PICUS_FRAME_TIMING`, ms)
 
-| Profile | Res | Scenario | anim_tick | scene_build_base | encode_base | composite | present_submit | presented | anim_tick_only |
-|---------|-----|----------|-----------|------------------|-------------|---------|----------------|-----------|----------------|
-| release | 1080p | S2 | _ | _ | _ | _ | _ | _ | _ |
-| release | 1080p | S3 | _ | _ | _ | _ | _ | _ | _ |
+Copy values from the per-window `picus frame timing` line. Present-path columns
+are **content-paint means** (see §2.6), not diluted by `anim_tick_only` samples.
+Record both `presented` and `anim_tick_only` counters for the sample window.
+
+| Profile | Res | Scenario | anim_tick | scene_build_base | encode_base | composite | present_submit | presented | anim_tick_only | content_paint_frames |
+|---------|-----|----------|-----------|------------------|-------------|---------|----------------|-----------|----------------|----------------------|
+| release | 1080p | S2 | _ | _ | _ | _ | _ | _ | _ | _ |
+| release | 1080p | S3 | _ | _ | _ | _ | _ | _ | _ | _ |
 
 ---
 
@@ -176,3 +192,4 @@ compare against that row set (or a clearly marked newer baseline revision).
 | Date | Commit | Change |
 |------|--------|--------|
 | 2026-07-16 | Phase 0 PR | Created protocol + empty result tables |
+| 2026-07-16 | Phase 0 review fixes | Document present-path vs anim_tick denominators; full `PICUS_ANIM_PRESENT_HZ` disable set |

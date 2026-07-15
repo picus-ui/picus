@@ -6,7 +6,7 @@ use tracing_subscriber::{EnvFilter, fmt};
 // projection rebuild and dominates debug FPS. Use `RUST_LOG=picus_core=debug`
 // when diagnosing dirty reasons; `PICUS_FRAME_TIMING=1` for per-window phase
 // timings; `PICUS_ANIM_PRESENT_HZ` overrides the transitional anim-only present
-// throttle (unset ≈ 30 Hz, `0` disables — baseline/debug only).
+// throttle (unset ≈ 30 Hz; `0` / `off` / `none` / `false` disables — baseline/debug only).
 const DEFAULT_LOG_FILTER: &str = "info,wgpu_core=warn,wgpu_hal=warn,wgpu_hal::vulkan=error,bevy_render=warn,bevy_app=warn,picus_widget=info,xilem_core=info,picus_view=info,picus_view::masonry_root=info,picus_core=info,picus_core::perf=info";
 
 static LOGGING_INITIALIZED: OnceLock<()> = OnceLock::new();

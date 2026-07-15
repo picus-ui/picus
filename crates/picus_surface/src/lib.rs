@@ -301,7 +301,11 @@ pub enum RenderFrameResult {
 ///
 /// These are wall-clock durations measured around the present path only. They are
 /// **not** display latency or DWM composition time; use PresentMon/ETW for that.
+///
+/// Fields may be extended as the frame pipeline gains layer isolation; treat as
+/// diagnostic data rather than a frozen ABI.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct RenderFrameTimings {
     /// Time spent acquiring the swapchain texture (including reconfigure attempts).
     pub surface_acquire: std::time::Duration,
@@ -382,6 +386,13 @@ impl ExternalWindowSurface {
     ///
     /// Returns the outcome together with CPU-side phase timings. Timings measure
     /// submit-path wall time only — not actual display time.
+    ///
+    /// # Breaking change (frame-pipeline Phase 0)
+    ///
+    /// The return type is `(RenderFrameResult, RenderFrameTimings)` rather than
+    /// bare `RenderFrameResult`. This is an intentional **crate-level** API break
+    /// for direct `picus_surface` dependents. Application code that uses only the
+    /// `picus` facade / `run_picus` is unaffected.
     #[must_use]
     pub fn render_frame(
         &mut self,

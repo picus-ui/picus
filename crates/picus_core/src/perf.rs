@@ -4,20 +4,41 @@
 //! When enabled, Picus records **per-window** phase durations under a monotonic
 //! `frame_id` and logs a summary about once per second at `info` level.
 //!
+//! ## Units and averages
+//!
+//! - **Process rollup** (`picus frame timing (process)`): `frames` is the count of
+//!   **per-window paint attempts that entered work** (not Bevy system invocations).
+//!   Multi-window sessions therefore inflate `frames` by ~window count.
+//!   ECS phases (`input_dispatch_ms`, `synth_ms`, `rebuild_ms`) are averaged over
+//!   **`bevy_frames`** (each `begin_frame` / synthesis entry), not paint attempts.
+//! - **Per-window line**: `anim_tick_ms` is averaged over **all** entered-work paint
+//!   attempts for that window. Present-path phases (`scene_build_*`,
+//!   `surface_acquire`, `encode_*`, `composite`, `present_submit`) are averaged
+//!   only over **content paint attempts** (`frames - anim_tick_only`) so throttled
+//!   anim-only zeros do not dilute encode/present cost. When that denominator is
+//!   zero, those fields log as `0.000`.
+//! - Pure idle (`Skipped`) does not assign `frame_id`s; summaries still flush on a
+//!   ~1s wall clock from `begin_frame` so Button-idle campaigns still get process
+//!   lines (often with `frames=0` for paint).
+//!
 //! ## Phases (G1 skeleton)
 //!
-//! | Field | Timeline | Meaning |
-//! |-------|----------|---------|
-//! | `input_dispatch_ms` | A | PreUpdate Masonry input injection (process-wide) |
-//! | `anim_tick_ms` | B | `WindowEvent::AnimFrame` handling |
-//! | `scene_build_base_ms` | C | rewrite + root scene redraw (full window today) |
-//! | `scene_build_anim_ms` | C | isolated anim-layer scene build (**0** until layered) |
-//! | `surface_acquire_ms` | D | swapchain texture acquire |
+//! | Field | Timeline | Meaning (instrumentation today) |
+//! |-------|----------|----------------------------------|
+//! | `input_dispatch_ms` | A | PreUpdate Masonry input injection (process-wide; per Bevy frame) |
+//! | `anim_tick_ms` | B | `WindowEvent::AnimFrame` handling (**includes rewrite** that runs inside AnimFrame) |
+//! | `scene_build_base_ms` | C | Root `render_root.redraw()` only (full window today); **not** AnimFrame rewrite |
+//! | `scene_build_anim_ms` | C | Isolated anim-layer scene build (**0** until layered) |
+//! | `surface_acquire_ms` | D | Swapchain texture acquire |
 //! | `encode_base_ms` | C/D | Vello encode of base content (full window today) |
 //! | `encode_anim_ms` | C/D | Vello encode of anim layers (**0** until layered) |
-//! | `composite_ms` | D | blit/composite into the swapchain texture |
+//! | `composite_ms` | D | Blit/composite into the swapchain texture |
 //! | `present_submit_ms` | D | CPU wall time of `present()` |
-//! | `presented` / `anim_tick_only` | — | counters for present vs anim-only ticks |
+//! | `presented` / `anim_tick_only` | — | Counters for successful present vs anim-only ticks |
+//!
+//! Until rewrite is timed separately, timeline **B** (`anim_tick_ms`) absorbs rewrite
+//! that Masonry performs during `AnimFrame`. Timeline **C** `scene_build_base_ms` is
+//! only the subsequent root `redraw()` call. Do not treat B/C as cleanly split yet.
 //!
 //! ## CPU submit ≠ display time
 //!
@@ -30,10 +51,10 @@
 //!
 //! ```text
 //! picus frame timing: window=1v0 frame_id=120..179 frames=60 presented=30 \
-//!   anim_tick_only=28 input_dispatch_ms=0.04 anim_tick_ms=0.11 \
-//!   scene_build_base_ms=1.80 scene_build_anim_ms=0.00 surface_acquire_ms=0.25 \
-//!   encode_base_ms=5.10 encode_anim_ms=0.00 composite_ms=0.18 \
-//!   present_submit_ms=0.09 paint_reasons=anim_frame|anim_no_present
+//!   anim_tick_only=28 anim_tick_ms=0.11 scene_build_base_ms=1.80 \
+//!   scene_build_anim_ms=0.00 surface_acquire_ms=0.25 encode_base_ms=5.10 \
+//!   encode_anim_ms=0.00 composite_ms=0.18 present_submit_ms=0.09 \
+//!   paint_reasons=anim_frame|anim_no_present
 //! ```
 //!
 //! Spans are always available via `tracing` (`picus_core::perf` target) so
@@ -46,8 +67,20 @@ use std::time::{Duration, Instant};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::Resource;
 
+#[cfg(test)]
+thread_local! {
+    /// When true, [`frame_timing_enabled`] returns true regardless of env
+    /// (unit tests only; never set from production code).
+    static FORCE_FRAME_TIMING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
 /// Whether process-level frame timing aggregation is enabled.
 pub fn frame_timing_enabled() -> bool {
+    #[cfg(test)]
+    if FORCE_FRAME_TIMING.with(|c| c.get()) {
+        return true;
+    }
+
     static ENABLED: OnceLock<bool> = OnceLock::new();
     *ENABLED.get_or_init(|| {
         std::env::var("PICUS_FRAME_TIMING")
@@ -66,6 +99,13 @@ pub fn frame_timing_enabled() -> bool {
 ///
 /// Layered anim encode paths are not wired yet; `scene_build_anim` and
 /// `encode_anim` stay zero until isolation lands. See frame-pipeline plan.
+///
+/// # Instrumentation notes
+///
+/// - `anim_tick` covers `WindowEvent::AnimFrame` (including rewrite Masonry runs
+///   inside that event).
+/// - `scene_build_base` is only the root `redraw()` that follows when a content
+///   present is attempted — not AnimFrame rewrite.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct PaintPhaseTimings {
     pub anim_tick: Duration,
@@ -79,7 +119,7 @@ pub struct PaintPhaseTimings {
 }
 
 impl PaintPhaseTimings {
-    /// Sum of rewrite/redraw work (legacy `redraw_duration` aggregate).
+    /// Sum of anim-tick + scene-build work (legacy `redraw_duration` aggregate).
     #[must_use]
     pub fn redraw_total(&self) -> Duration {
         self.anim_tick + self.scene_build_base + self.scene_build_anim
@@ -102,8 +142,11 @@ pub struct FrameTiming {
     window_started: Option<Instant>,
     /// Monotonic id assigned to each per-window paint attempt that enters work.
     next_frame_id: u64,
+    /// Count of Bevy-frame entries via [`Self::begin_frame`] (ECS average denominator).
+    bevy_frames: u32,
     /// Process-wide PreUpdate input injection time this summary window.
     input_dispatch_ns: u128,
+    /// Per-window paint attempts that entered work (multi-window: one per window).
     frames: u32,
     painted_frames: u32,
     anim_tick_only_frames: u32,
@@ -140,6 +183,13 @@ struct WindowTimingAgg {
     paint_reasons: u32,
 }
 
+impl WindowTimingAgg {
+    /// Paint attempts that ran content/scene/present work (not pure anim-tick skips).
+    fn content_paint_frames(&self) -> u32 {
+        self.frames.saturating_sub(self.anim_tick_only_frames)
+    }
+}
+
 /// Why a paint pass ran (for idle continuous-redraw diagnosis).
 #[derive(Debug, Clone, Copy)]
 #[repr(u32)]
@@ -155,6 +205,10 @@ pub enum PaintReason {
 }
 
 impl FrameTiming {
+    /// Called once per Bevy frame from the synthesis entry path.
+    ///
+    /// Starts the ~1s summary window and flushes on wall clock even when no
+    /// window entered paint work (idle Button baselines still get process logs).
     pub fn begin_frame(&mut self) {
         if !frame_timing_enabled() {
             return;
@@ -162,6 +216,8 @@ impl FrameTiming {
         if self.window_started.is_none() {
             self.window_started = Some(Instant::now());
         }
+        self.bevy_frames = self.bevy_frames.saturating_add(1);
+        self.maybe_flush();
     }
 
     /// Record PreUpdate Masonry input injection cost (timeline A).
@@ -173,6 +229,7 @@ impl FrameTiming {
             self.window_started = Some(Instant::now());
         }
         self.input_dispatch_ns += duration.as_nanos();
+        self.maybe_flush();
     }
 
     pub fn record_synthesis(
@@ -207,6 +264,7 @@ impl FrameTiming {
                 }
             }
         }
+        self.maybe_flush();
     }
 
     pub fn record_rebuild(&mut self, duration: Duration) {
@@ -214,12 +272,13 @@ impl FrameTiming {
             return;
         }
         self.rebuild_ns += duration.as_nanos();
+        self.maybe_flush();
     }
 
     /// Record one per-window paint attempt with phase breakdown.
     ///
-    /// Assigns a monotonic `frame_id` and rolls process-level counters used by
-    /// the legacy summary fields.
+    /// Assigns a monotonic `frame_id`. Process-level `frames` counts **per-window
+    /// paint attempts**, not Bevy `paint_masonry_ui` invocations.
     pub fn record_window_paint(
         &mut self,
         window: Entity,
@@ -231,6 +290,18 @@ impl FrameTiming {
         if !frame_timing_enabled() {
             return;
         }
+        self.accumulate_window_paint(window, phases, painted, anim_tick_only, reasons);
+        self.maybe_flush();
+    }
+
+    fn accumulate_window_paint(
+        &mut self,
+        window: Entity,
+        phases: PaintPhaseTimings,
+        painted: bool,
+        anim_tick_only: bool,
+        reasons: u32,
+    ) {
         if self.window_started.is_none() {
             self.window_started = Some(Instant::now());
         }
@@ -275,43 +346,9 @@ impl FrameTiming {
         entry.composite_ns += phases.composite.as_nanos();
         entry.present_submit_ns += phases.present_submit.as_nanos();
         entry.paint_reasons |= reasons;
-
-        let Some(started) = self.window_started else {
-            return;
-        };
-        if started.elapsed() < Duration::from_secs(1) {
-            return;
-        }
-        self.flush_summary();
     }
 
-    /// Process-wide paint rollup used when no per-window detail is available.
-    ///
-    /// Prefer [`Self::record_window_paint`]. Kept for callers that still aggregate
-    /// multi-window totals in one shot (tests / transitional paths).
-    pub fn record_paint(
-        &mut self,
-        total: Duration,
-        redraw: Duration,
-        present: Duration,
-        painted: bool,
-        reasons: u32,
-    ) {
-        if !frame_timing_enabled() {
-            return;
-        }
-        if self.window_started.is_none() {
-            self.window_started = Some(Instant::now());
-        }
-        self.frames += 1;
-        self.paint_ns += total.as_nanos();
-        self.paint_redraw_ns += redraw.as_nanos();
-        self.paint_present_ns += present.as_nanos();
-        if painted {
-            self.painted_frames += 1;
-        }
-        self.paint_reasons |= reasons;
-
+    fn maybe_flush(&mut self) {
         let Some(started) = self.window_started else {
             return;
         };
@@ -322,13 +359,16 @@ impl FrameTiming {
     }
 
     fn flush_summary(&mut self) {
-        let frames = self.frames.max(1) as f64;
-        let input_dispatch_ms = (self.input_dispatch_ns as f64 / frames) / 1_000_000.0;
-        let synth_ms = (self.synth_ns as f64 / frames) / 1_000_000.0;
-        let rebuild_ms = (self.rebuild_ns as f64 / frames) / 1_000_000.0;
-        let paint_ms = (self.paint_ns as f64 / frames) / 1_000_000.0;
-        let redraw_ms = (self.paint_redraw_ns as f64 / frames) / 1_000_000.0;
-        let present_ms = (self.paint_present_ns as f64 / frames) / 1_000_000.0;
+        // ECS phases use Bevy-frame denominator so multi-window paint attempts
+        // do not dilute synth/input averages.
+        let bevy_frames = self.bevy_frames.max(1) as f64;
+        let paint_frames = self.frames.max(1) as f64;
+        let input_dispatch_ms = (self.input_dispatch_ns as f64 / bevy_frames) / 1_000_000.0;
+        let synth_ms = (self.synth_ns as f64 / bevy_frames) / 1_000_000.0;
+        let rebuild_ms = (self.rebuild_ns as f64 / bevy_frames) / 1_000_000.0;
+        let paint_ms = (self.paint_ns as f64 / paint_frames) / 1_000_000.0;
+        let redraw_ms = (self.paint_redraw_ns as f64 / paint_frames) / 1_000_000.0;
+        let present_ms = (self.paint_present_ns as f64 / paint_frames) / 1_000_000.0;
         let avg_nodes = if self.synth_dirty_frames == 0 {
             0.0
         } else {
@@ -346,9 +386,10 @@ impl FrameTiming {
             self.synth_reason_labels.join("|")
         };
 
-        // Process-wide rollup (ECS + multi-window totals).
+        // Process-wide rollup (ECS + multi-window paint attempt totals).
         tracing::info!(
             target: "picus_core::perf",
+            bevy_frames = self.bevy_frames,
             frames = self.frames,
             presented = self.painted_frames,
             anim_tick_only = self.anim_tick_only_frames,
@@ -363,22 +404,55 @@ impl FrameTiming {
             avg_cache_hits = format_args!("{avg_cache_hits:.0}"),
             paint_reasons = %reasons,
             synth_reasons = %synth_reasons,
-            note = "CPU phase times only; not display latency (use PresentMon/ETW)",
+            note = "frames=per-window paint attempts; ECS avgs over bevy_frames; CPU only (PresentMon/ETW for display)",
             "picus frame timing (process)"
         );
 
         // Per-window phase breakdown with frame_id range.
+        // input_dispatch is process-wide only (omitted here to avoid misread).
         for (window, agg) in &self.by_window {
             let w_frames = agg.frames.max(1) as f64;
+            let content_frames = agg.content_paint_frames().max(1) as f64;
+            let content_denom = agg.content_paint_frames();
             let first = agg.first_frame_id.unwrap_or(agg.last_frame_id);
             let anim_tick_ms = (agg.anim_tick_ns as f64 / w_frames) / 1_000_000.0;
-            let scene_build_base_ms = (agg.scene_build_base_ns as f64 / w_frames) / 1_000_000.0;
-            let scene_build_anim_ms = (agg.scene_build_anim_ns as f64 / w_frames) / 1_000_000.0;
-            let surface_acquire_ms = (agg.surface_acquire_ns as f64 / w_frames) / 1_000_000.0;
-            let encode_base_ms = (agg.encode_base_ns as f64 / w_frames) / 1_000_000.0;
-            let encode_anim_ms = (agg.encode_anim_ns as f64 / w_frames) / 1_000_000.0;
-            let composite_ms = (agg.composite_ns as f64 / w_frames) / 1_000_000.0;
-            let present_submit_ms = (agg.present_submit_ns as f64 / w_frames) / 1_000_000.0;
+            // Present-path averages: skip anim_tick_only zeros so encode/present
+            // report the cost of frames that actually built/presented content.
+            let scene_build_base_ms = if content_denom == 0 {
+                0.0
+            } else {
+                (agg.scene_build_base_ns as f64 / content_frames) / 1_000_000.0
+            };
+            let scene_build_anim_ms = if content_denom == 0 {
+                0.0
+            } else {
+                (agg.scene_build_anim_ns as f64 / content_frames) / 1_000_000.0
+            };
+            let surface_acquire_ms = if content_denom == 0 {
+                0.0
+            } else {
+                (agg.surface_acquire_ns as f64 / content_frames) / 1_000_000.0
+            };
+            let encode_base_ms = if content_denom == 0 {
+                0.0
+            } else {
+                (agg.encode_base_ns as f64 / content_frames) / 1_000_000.0
+            };
+            let encode_anim_ms = if content_denom == 0 {
+                0.0
+            } else {
+                (agg.encode_anim_ns as f64 / content_frames) / 1_000_000.0
+            };
+            let composite_ms = if content_denom == 0 {
+                0.0
+            } else {
+                (agg.composite_ns as f64 / content_frames) / 1_000_000.0
+            };
+            let present_submit_ms = if content_denom == 0 {
+                0.0
+            } else {
+                (agg.present_submit_ns as f64 / content_frames) / 1_000_000.0
+            };
             let w_reasons = format_paint_reasons(agg.paint_reasons);
 
             tracing::info!(
@@ -389,7 +463,7 @@ impl FrameTiming {
                 frames = agg.frames,
                 presented = agg.painted_frames,
                 anim_tick_only = agg.anim_tick_only_frames,
-                input_dispatch_ms = format_args!("{input_dispatch_ms:.3}"),
+                content_paint_frames = content_denom,
                 anim_tick_ms = format_args!("{anim_tick_ms:.3}"),
                 scene_build_base_ms = format_args!("{scene_build_base_ms:.3}"),
                 scene_build_anim_ms = format_args!("{scene_build_anim_ms:.3}"),
@@ -399,7 +473,7 @@ impl FrameTiming {
                 composite_ms = format_args!("{composite_ms:.3}"),
                 present_submit_ms = format_args!("{present_submit_ms:.3}"),
                 paint_reasons = %w_reasons,
-                note = "present_submit_ms is CPU submit time, not display time",
+                note = "present-path avgs over content_paint_frames; present_submit_ms is CPU not display",
                 "picus frame timing"
             );
         }
@@ -464,6 +538,25 @@ impl PhaseTimer {
 mod tests {
     use super::*;
 
+    struct ForceTimingGuard;
+
+    impl ForceTimingGuard {
+        fn enter() -> Self {
+            FORCE_FRAME_TIMING.with(|c| c.set(true));
+            Self
+        }
+    }
+
+    impl Drop for ForceTimingGuard {
+        fn drop(&mut self) {
+            FORCE_FRAME_TIMING.with(|c| c.set(false));
+        }
+    }
+
+    fn test_entity(index: u32) -> Entity {
+        Entity::from_bits(u64::from(index) | (1u64 << 32))
+    }
+
     #[test]
     fn paint_phase_totals_sum_components() {
         let phases = PaintPhaseTimings {
@@ -491,6 +584,143 @@ mod tests {
         let timing = FrameTiming::default();
         assert_eq!(timing.next_frame_id, 0);
         assert!(timing.by_window.is_empty());
-        let _ = frame_timing_enabled(); // smoke: OnceLock init is safe
+        let _ = frame_timing_enabled();
+    }
+
+    #[test]
+    fn record_window_paint_assigns_monotonic_frame_ids_and_counters() {
+        let _guard = ForceTimingGuard::enter();
+        let mut timing = FrameTiming::default();
+        let window = test_entity(1);
+
+        // Presented success path.
+        timing.record_window_paint(
+            window,
+            PaintPhaseTimings {
+                anim_tick: Duration::from_micros(100),
+                scene_build_base: Duration::from_millis(2),
+                encode_base: Duration::from_millis(5),
+                present_submit: Duration::from_micros(50),
+                ..PaintPhaseTimings::default()
+            },
+            true,
+            false,
+            PaintReason::NeedsRedraw as u32,
+        );
+        // Anim-tick only (no pixel present).
+        timing.record_window_paint(
+            window,
+            PaintPhaseTimings {
+                anim_tick: Duration::from_micros(80),
+                ..PaintPhaseTimings::default()
+            },
+            false,
+            true,
+            PaintReason::AnimTickNoPresent as u32,
+        );
+        // Throttle-style skip (also anim_tick_only).
+        timing.record_window_paint(
+            window,
+            PaintPhaseTimings {
+                anim_tick: Duration::from_micros(90),
+                ..PaintPhaseTimings::default()
+            },
+            false,
+            true,
+            PaintReason::NeedsAnimFrame as u32 | PaintReason::AnimTickNoPresent as u32,
+        );
+        // Present retry / failed (content path, not painted, not anim_tick_only).
+        timing.record_window_paint(
+            window,
+            PaintPhaseTimings {
+                anim_tick: Duration::from_micros(70),
+                scene_build_base: Duration::from_millis(1),
+                surface_acquire: Duration::from_micros(200),
+                encode_base: Duration::from_millis(3),
+                ..PaintPhaseTimings::default()
+            },
+            false,
+            false,
+            PaintReason::NeedsRedraw as u32,
+        );
+
+        assert_eq!(timing.next_frame_id, 4);
+        assert_eq!(timing.frames, 4);
+        assert_eq!(timing.painted_frames, 1);
+        assert_eq!(timing.anim_tick_only_frames, 2);
+
+        let agg = timing.by_window.get(&window).expect("window agg");
+        assert_eq!(agg.frames, 4);
+        assert_eq!(agg.painted_frames, 1);
+        assert_eq!(agg.anim_tick_only_frames, 2);
+        assert_eq!(agg.content_paint_frames(), 2);
+        assert_eq!(agg.first_frame_id, Some(0));
+        assert_eq!(agg.last_frame_id, 3);
+        // Encode only accumulated on the two content paints (5ms + 3ms).
+        assert_eq!(agg.encode_base_ns, Duration::from_millis(8).as_nanos());
+        // Anim tick only attempts contribute zero encode.
+        assert!(agg.anim_tick_ns > 0);
+    }
+
+    #[test]
+    fn content_paint_average_excludes_anim_tick_only_zeros() {
+        let _guard = ForceTimingGuard::enter();
+        let mut timing = FrameTiming::default();
+        let window = test_entity(2);
+
+        timing.record_window_paint(
+            window,
+            PaintPhaseTimings {
+                encode_base: Duration::from_millis(10),
+                ..PaintPhaseTimings::default()
+            },
+            true,
+            false,
+            PaintReason::NeedsRedraw as u32,
+        );
+        timing.record_window_paint(
+            window,
+            PaintPhaseTimings::default(),
+            false,
+            true,
+            PaintReason::AnimTickNoPresent as u32,
+        );
+
+        let agg = timing.by_window.get(&window).expect("agg");
+        assert_eq!(agg.frames, 2);
+        assert_eq!(agg.content_paint_frames(), 1);
+        // Mean over content paints = 10ms, not 5ms diluted over both frames.
+        let mean_ms =
+            (agg.encode_base_ns as f64 / f64::from(agg.content_paint_frames())) / 1_000_000.0;
+        assert!((mean_ms - 10.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn painted_and_anim_tick_only_are_independent_counters() {
+        let _guard = ForceTimingGuard::enter();
+        let mut timing = FrameTiming::default();
+        let window = test_entity(3);
+
+        // A content paint that did not successfully present (retry/failed).
+        timing.record_window_paint(
+            window,
+            PaintPhaseTimings {
+                encode_base: Duration::from_millis(1),
+                ..PaintPhaseTimings::default()
+            },
+            false,
+            false,
+            PaintReason::NeedsRedraw as u32,
+        );
+        assert_eq!(timing.painted_frames, 0);
+        assert_eq!(timing.anim_tick_only_frames, 0);
+        assert_eq!(
+            timing
+                .by_window
+                .get(&window)
+                .expect("agg")
+                .content_paint_frames(),
+            1
+        );
     }
 }
