@@ -571,7 +571,9 @@ impl GalleryPage {
             Self::Markdown => FluentIcon::Character,
             Self::Theme => FluentIcon::Brightness,
             Self::I18n => FluentIcon::Globe,
-            Self::Clipboard => FluentIcon::Character,
+            // No dedicated copy/clipboard glyph in the FluentIcon subset; Edit is
+            // document-adjacent and distinct from Character/Font text pages.
+            Self::Clipboard => FluentIcon::Edit,
             Self::StoragePickers => FluentIcon::Folder,
         }
     }

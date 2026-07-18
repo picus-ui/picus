@@ -7,8 +7,9 @@ details:
 | Module | Use |
 |--------|-----|
 | `picus::prelude` | Normal application imports and proc/macro helpers |
-| `picus::app` | `PicusPlugin`, `AppPicusExt`, Bevy app/ECS/window re-exports |
-| `picus::components` | Authoring components, templates, and view helpers |
+| `picus::app` | `PicusPlugin`, `AppPicusExt`, Bevy app/ECS/window re-exports (includes `rfd`) |
+| `picus::components` | Authoring components, templates, and view helpers (includes `TypographyPreset`) |
+| `picus::clipboard` | System clipboard resource + ECS event helpers (`Clipboard`, `ClipboardEvent`, …); installed by `PicusPlugin` |
 | `picus::events` | `UiAction`, `UiActionSender`, `UiEmit`, built-in action types |
 | `picus::projection` | `ProjectionCtx`, `UiView`, xilem-compatible view types |
 | `picus::styling` | Stylesheets, variants, selectors, inline style helpers |

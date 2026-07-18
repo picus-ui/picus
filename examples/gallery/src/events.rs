@@ -372,54 +372,79 @@ fn spawn_toast(world: &mut World, message: &str, kind: ToastKind, duration: f32)
     );
 }
 
+/// Max Unicode characters shown in gallery toast previews (clipboard / paths).
+const TOAST_PREVIEW_CHARS: usize = 120;
+
+/// Truncate long toast content with a trailing ellipsis (Unicode-safe).
+fn toast_preview(text: &str) -> String {
+    if text.chars().count() > TOAST_PREVIEW_CHARS {
+        let truncated: String = text.chars().take(TOAST_PREVIEW_CHARS).collect();
+        format!("{truncated}\u{2026}")
+    } else {
+        text.to_string()
+    }
+}
+
 fn apply_clipboard_copy(world: &mut World, text: &str) {
+    // `Clipboard::set_text` swallows arboard errors; verify with get_text before Success.
     let outcome = match world.get_resource::<Clipboard>() {
-        None => Err(("Clipboard resource is not available.", ToastKind::Error)),
+        None => Err((
+            "Clipboard resource is not available.".to_string(),
+            ToastKind::Error,
+        )),
         Some(clipboard) if !clipboard.is_available() => Err((
-            "System clipboard is unavailable in this environment.",
+            "System clipboard is unavailable in this environment.".to_string(),
             ToastKind::Warning,
         )),
         Some(clipboard) => {
             clipboard.set_text(text);
-            Ok(())
+            match clipboard.get_text() {
+                Some(written) if written == text => Ok(()),
+                Some(_) | None => Err((
+                    "Clipboard write could not be verified.".to_string(),
+                    ToastKind::Warning,
+                )),
+            }
         }
     };
     match outcome {
         Ok(()) => spawn_toast(
             world,
-            &format!("Copied to clipboard: {text}"),
+            &format!("Copied to clipboard: {}", toast_preview(text)),
             ToastKind::Success,
             2.4,
         ),
-        Err((message, kind)) => spawn_toast(world, message, kind, 3.0),
+        Err((message, kind)) => spawn_toast(world, &message, kind, 3.0),
     }
 }
 
 fn apply_clipboard_read(world: &mut World) {
     let outcome = match world.get_resource::<Clipboard>() {
-        None => Err(("Clipboard resource is not available.", ToastKind::Error, 3.0)),
+        None => Err((
+            "Clipboard resource is not available.".to_string(),
+            ToastKind::Error,
+            3.0,
+        )),
         Some(clipboard) if !clipboard.is_available() => Err((
-            "System clipboard is unavailable in this environment.",
+            "System clipboard is unavailable in this environment.".to_string(),
             ToastKind::Warning,
             3.0,
         )),
         Some(clipboard) => match clipboard.get_text() {
             Some(text) if !text.is_empty() => {
-                let preview = if text.chars().count() > 120 {
-                    let truncated: String = text.chars().take(120).collect();
-                    format!("{truncated}\u{2026}")
-                } else {
-                    text
-                };
-                Ok(format!("Clipboard: {preview}"))
+                Ok(format!("Clipboard: {}", toast_preview(&text)))
             }
-            Some(_) => Err(("Clipboard is empty.", ToastKind::Info, 2.0)),
-            None => Err(("Could not read clipboard text.", ToastKind::Warning, 2.4)),
+            Some(_) => Err(("Clipboard is empty.".to_string(), ToastKind::Info, 2.0)),
+            None => Err((
+                "Could not read clipboard text.".to_string(),
+                ToastKind::Warning,
+                2.4,
+            )),
         },
     };
     match outcome {
         Ok(message) => spawn_toast(world, &message, ToastKind::Info, 3.2),
-        Err((message, kind, duration)) => spawn_toast(world, message, kind, duration),
+        Err((message, kind, duration)) => spawn_toast(world, &message, kind, duration),
     }
 }
 
@@ -429,12 +454,15 @@ fn apply_pick_file(world: &mut World) {
         .set_title("Pick a file")
         .pick_file()
     {
-        Some(path) => spawn_toast(
-            world,
-            &format!("Selected file: {}", path.display()),
-            ToastKind::Success,
-            4.0,
-        ),
+        Some(path) => {
+            let display = toast_preview(&path.display().to_string());
+            spawn_toast(
+                world,
+                &format!("Selected file: {display}"),
+                ToastKind::Success,
+                4.0,
+            );
+        }
         None => spawn_toast(world, "File pick cancelled.", ToastKind::Info, 2.0),
     }
 }
@@ -444,12 +472,15 @@ fn apply_pick_folder(world: &mut World) {
         .set_title("Pick a folder")
         .pick_folder()
     {
-        Some(path) => spawn_toast(
-            world,
-            &format!("Selected folder: {}", path.display()),
-            ToastKind::Success,
-            4.0,
-        ),
+        Some(path) => {
+            let display = toast_preview(&path.display().to_string());
+            spawn_toast(
+                world,
+                &format!("Selected folder: {display}"),
+                ToastKind::Success,
+                4.0,
+            );
+        }
         None => spawn_toast(world, "Folder pick cancelled.", ToastKind::Info, 2.0),
     }
 }
