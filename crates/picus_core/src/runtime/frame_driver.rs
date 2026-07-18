@@ -8,8 +8,7 @@
 //! Host execution is [`super::WindowRuntime::step_frame`]: `decide_entry` →
 //! optional anim tick → `decide_present` → encode when needed. Content present
 //! still couples rewrite+encode+present; pure-anim selective encode lives on
-//! the host (layered Anim entries). See `docs/architecture/runtime.md` and
-//! `docs/plans/frame-pipeline.md`.
+//! the host (layered Anim entries). See `docs/architecture/runtime.md`.
 
 use std::time::{Duration, Instant};
 

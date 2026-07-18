@@ -51,8 +51,7 @@
 //! - **Not yet:** open custom-AnimEntry discovery; full PresentMon G3/G4 protocol
 //!   numbers (baseline tables may still be placeholders — do not invent fake numbers).
 //!
-//! See `docs/guide/paint-isolation.md`, `docs/architecture/runtime.md`, and
-//! `docs/plans/frame-pipeline.md`.
+//! See `docs/guide/paint-isolation.md` and `docs/architecture/runtime.md`.
 
 use std::collections::HashMap;
 

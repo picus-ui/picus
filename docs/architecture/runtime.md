@@ -34,10 +34,9 @@ configuration.
 ### Frame stages and four timelines
 
 The frame architecture separates four timelines so animation clock, scene build,
-and present freshness are not one OR-coupled path. Required plan phases
+and present freshness are not one OR-coupled path. Core stack phases
 (P0–P3 + docs P6) and the P4 tight-target slice are delivered; packed atlas
-allocation and P5 remain open. Full plan and
-progress: [plans/frame-pipeline.md](../plans/frame-pipeline.md).
+allocation and P5 remain open.
 
 | Timeline | Role | Trigger | Drop policy |
 |----------|------|---------|-------------|
@@ -397,11 +396,10 @@ is 0 and `scene_build_anim_ms` measures host scene sync; `encode_base` should
 stay 0 when only Anim entries `needs_encode`. These remain **CPU submit-path**
 times.
 
-### Frame pipeline plan status
+### Frame pipeline status
 
 Required stack **P0–P3 + P6** and the P4 tight-target/dirty-region-composite slice are
 implemented. Spinner product-path timing now verifies `scene_build_base=0` and
 `encode_base=0` in steady state; PresentMon G3/G4 tables may still be
 placeholders and must be filled from real display-path runs only. Packed atlas
-and **P5** async encode remain open. Plan and before/after summary:
-[plans/frame-pipeline.md](../plans/frame-pipeline.md).
+and **P5** async encode remain open.

@@ -1,7 +1,6 @@
 # Frame pipeline baseline record
 
 > **Status**: protocol + result template (architecture P0–P3 done; PresentMon tables may still be empty placeholders)  
-> **Related plan**: [plans/frame-pipeline.md](../plans/frame-pipeline.md)  
 > **Runtime narrative**: [architecture/runtime.md](../architecture/runtime.md)
 
 This file is the **versioned record** for frame-pipeline performance baselines.
