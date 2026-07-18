@@ -19,7 +19,7 @@ pub enum UiImageViewBoxUnits {
 /// Source rectangle intent for an image.
 ///
 /// The current Masonry image widget does not expose source-rectangle rendering,
-/// so this is stored for data/model parity and future custom image projection.
+/// so this is stored for data/model completeness and future custom image projection.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct UiImageViewBox {
     pub x: f64,

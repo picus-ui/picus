@@ -1027,7 +1027,7 @@ impl ExternalWindowSurface {
             }
         }
 
-        // --- acquire swapchain first (parity with render_frame; avoid encode on Retry) ---
+        // --- acquire swapchain first (match render_frame; avoid encode on Retry) ---
         let dev_id = self.surface.dev_id;
         let acquire_started = std::time::Instant::now();
         let mut did_reconfigure = false;

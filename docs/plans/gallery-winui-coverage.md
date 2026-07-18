@@ -1,4 +1,4 @@
-# Plan: example_gallery ↔ WinUI Gallery control parity
+# Plan: example_gallery ↔ WinUI Gallery control coverage
 
 **Status**: active  
 **Baseline**: `example_gallery` **57** pages (post `feat(gallery): expand showcase to 57 pages…`)  
@@ -241,7 +241,7 @@ Organized by WinUI Gallery categories. **“Picus target”** is the intended AP
 | ThemeTransition | SKIP |
 | ParallaxView | SKIP |
 
-*Exception (optional later)*: single **Easing / tween** lab page using existing `bevy_tween` integration — not WinUI parity-critical.
+*Exception (optional later)*: single **Easing / tween** lab page using existing `bevy_tween` integration — not required for WinUI coverage.
 
 ### 3.17 Windowing
 
@@ -331,7 +331,7 @@ Everything that is **not SKIP**, grouped by work type. This is the complete “c
 | B29 | ThemeShadow | Elevation API / tokens | ThemeShadow |
 | B30 | AppBar* / Pivot | Compose after B1/B16/TabBar | AppBarButton, Pivot, … |
 
-### 4.C — Explicit permanent / long-term SKIP (do not schedule as parity)
+### 4.C — Explicit permanent / long-term SKIP (do not schedule as coverage work)
 
 - All **Fundamentals** XAML pages  
 - All **Motion** pages (except optional tween lab)  
@@ -351,8 +351,8 @@ Each phase ends with: `cargo test -p example_gallery`, component unit tests wher
 ### Phase 0 — Bookkeeping (this document)
 
 - [x] Baseline 57-page gallery committed  
-- [x] Plan file written (`docs/plans/gallery-winui-parity.md`)  
-- [ ] Link from `docs/README.md`  
+- [x] Plan file written (`docs/plans/gallery-winui-coverage.md`)  
+- [x] Link from `docs/README.md`  
 - [ ] Keep `GalleryPage` doc-comment skip list in sync with §4.C  
 
 ### Phase 1 — Experience & gallery-only (no new controls)
@@ -387,7 +387,7 @@ Each phase ends with: `cargo test -p example_gallery`, component unit tests wher
 | **3b** | InfoBadge variants + InfoBar actions |
 | **3c** | ContentDialog structured actions |
 
-**Exit**: Status + Dialogs categories at parity for non-media apps.
+**Exit**: Status + Dialogs categories complete for non-media apps.
 
 ### Phase 4 — Layout containers
 
