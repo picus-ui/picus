@@ -430,7 +430,7 @@ mod tests {
     #[test]
     fn gallery_pages_are_one_component_each() {
         let labels = GalleryPage::ALL.map(GalleryPage::label);
-        assert_eq!(labels.len(), 57);
+        assert_eq!(labels.len(), 58);
         assert_eq!(labels[0], "Button");
         assert_eq!(labels[1], "HyperlinkButton");
         assert_eq!(labels[2], "ToggleSwitch");
@@ -454,6 +454,18 @@ mod tests {
         assert!(labels.contains(&"InfoBar"), "expected InfoBar page");
         assert!(labels.contains(&"Toolbar"), "expected Toolbar page");
         assert!(labels.contains(&"ScrollView"), "expected ScrollView page");
+        assert!(
+            labels.contains(&"MenuFlyout"),
+            "expected MenuFlyout page (vs ContextMenu)"
+        );
+        assert!(
+            labels.contains(&"Dialog"),
+            "expected Dialog / ContentDialog page"
+        );
+        assert!(
+            labels.contains(&"Popover"),
+            "expected Popover / Flyout / Popup page"
+        );
         // No multi-component category labels from the old gallery.
         assert!(!labels.contains(&"Buttons"));
         assert!(!labels.contains(&"Inputs"));
@@ -486,10 +498,14 @@ mod tests {
     fn gallery_nav_items_are_hierarchical_categories() {
         let (items, leaf_to_page) = build_gallery_nav_items_filtered("");
         assert_eq!(items.len(), GalleryPage::CATEGORIES.len());
-        assert_eq!(leaf_to_page, (0..GalleryPage::ALL.len()).collect::<Vec<_>>());
+        assert_eq!(
+            leaf_to_page,
+            (0..GalleryPage::ALL.len()).collect::<Vec<_>>()
+        );
         let leaf_count: usize = items.iter().map(|item| item.leaf_count()).sum();
         assert_eq!(leaf_count, GalleryPage::ALL.len());
-        for (index, (item, category)) in items.iter().zip(GalleryPage::CATEGORIES.iter()).enumerate()
+        for (index, (item, category)) in
+            items.iter().zip(GalleryPage::CATEGORIES.iter()).enumerate()
         {
             assert_eq!(item.label, category.label);
             assert!(
@@ -514,7 +530,10 @@ mod tests {
     #[test]
     fn gallery_nav_search_filters_leaves_by_label() {
         let (items, leaf_to_page) = build_gallery_nav_items_filtered("button");
-        assert!(!items.is_empty(), "expected matching categories for 'button'");
+        assert!(
+            !items.is_empty(),
+            "expected matching categories for 'button'"
+        );
         let leaf_count: usize = items.iter().map(|item| item.leaf_count()).sum();
         assert_eq!(leaf_count, leaf_to_page.len());
         assert!(leaf_count >= 2, "Button and HyperlinkButton should match");
@@ -614,7 +633,10 @@ mod tests {
                 has_back = true;
             }
             if nav.items.iter().any(|item| item.info_badge.is_some())
-                || nav.footer_items.iter().any(|item| item.info_badge.is_some())
+                || nav
+                    .footer_items
+                    .iter()
+                    .any(|item| item.info_badge.is_some())
             {
                 has_badge = true;
             }

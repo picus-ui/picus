@@ -4,8 +4,8 @@ use crate::helpers::{card, grid, info_button, note};
 use crate::state::GalleryBackdropPicker;
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 use picus::prelude::{
-    FluentIcon, UiButton, UiDivider, UiMenuBar, UiMenuBarItem, UiMenuItem, UiRadioGroup, UiTitleBar,
-    UiToolbar,
+    FluentIcon, UiButton, UiDivider, UiMenuBar, UiMenuBarItem, UiMenuItem, UiRadioGroup,
+    UiTitleBar, UiToolbar,
 };
 use picus::scene::{CommandsSceneExt, bsn, template_value};
 
@@ -53,6 +53,83 @@ pub fn spawn_menu_bar_page(commands: &mut Commands, parent: Entity) {
         commands,
         menu,
         "MenuBar supports nested items and dropdown overlay panels.",
+    );
+}
+
+/// WinUI MenuFlyout: left-click command list (distinct from right-click ContextMenu).
+///
+/// Picus maps this to a standalone [`UiMenuBarItem`] (same open-on-click menu panel
+/// used by MenuBar entries). For right-click menus, see the ContextMenu page
+/// (`UiContextMenuTrigger`).
+pub fn spawn_menu_flyout_page(commands: &mut Commands, parent: Entity) {
+    let g = grid(commands, parent, 2);
+
+    let flyout = card(commands, g, "Left-click MenuFlyout");
+    // Standalone menu bar item acts as a MenuFlyout trigger: left-click opens
+    // the command panel (WinUI MenuFlyout pattern).
+    let flyout_bar = commands
+        .spawn_scene(bsn! {
+            UiMenuBar
+            ChildOf(flyout)
+        })
+        .id();
+    commands.spawn_scene(bsn! {
+        template_value(UiMenuBarItem::new(
+            "Open MenuFlyout",
+            vec![
+                UiMenuItem::new("Share", "share"),
+                UiMenuItem::new("Copy link", "copy_link"),
+                UiMenuItem::new("Favorite", "favorite"),
+                UiMenuItem::new("Delete", "delete"),
+            ],
+        ))
+        ChildOf(flyout_bar)
+    });
+    note(
+        commands,
+        flyout,
+        "WinUI MenuFlyout → Picus UiMenuBarItem + UiMenuItem (left-click opens the panel). Nested under a minimal UiMenuBar for layout.",
+    );
+
+    let commands_card = card(commands, g, "Command list variants");
+    let commands_bar = commands
+        .spawn_scene(bsn! {
+            UiMenuBar
+            ChildOf(commands_card)
+        })
+        .id();
+    commands.spawn_scene(bsn! {
+        template_value(UiMenuBarItem::new(
+            "Edit actions",
+            vec![
+                UiMenuItem::new("Cut", "cut"),
+                UiMenuItem::new("Copy", "copy"),
+                UiMenuItem::new("Paste", "paste"),
+            ],
+        ))
+        ChildOf(commands_bar)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(UiMenuBarItem::new(
+            "More…",
+            vec![
+                UiMenuItem::new("Rename", "rename"),
+                UiMenuItem::new("Properties", "properties"),
+            ],
+        ))
+        ChildOf(commands_bar)
+    });
+    note(
+        commands,
+        commands_card,
+        "Multiple flyout triggers can sit side by side; each UiMenuBarItem owns its own overlay panel.",
+    );
+
+    let vs = card(commands, g, "MenuFlyout vs ContextMenu");
+    note(
+        commands,
+        vs,
+        "MenuFlyout (this page): left-click / explicit trigger → UiMenuBarItem. ContextMenu page: right-click → UiContextMenuTrigger + UiContextMenuItem. Same command-list idea; different open gesture.",
     );
 }
 

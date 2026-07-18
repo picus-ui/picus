@@ -233,6 +233,18 @@ pub fn dialog_button(
     title: impl Into<String>,
     body: impl Into<String>,
 ) -> Entity {
+    dialog_button_with_dismiss(commands, parent, label, title, body, "Close")
+}
+
+/// Spawn a button that opens a modal dialog with a custom dismiss label.
+pub fn dialog_button_with_dismiss(
+    commands: &mut Commands,
+    parent: Entity,
+    label: &str,
+    title: impl Into<String>,
+    body: impl Into<String>,
+    dismiss_label: impl Into<String>,
+) -> Entity {
     let id = commands
         .spawn_scene(bsn! {
             template_value(UiButton::new(label))
@@ -242,6 +254,7 @@ pub fn dialog_button(
     commands.entity(id).insert(GalleryButtonAction::Dialog {
         title: title.into(),
         body: body.into(),
+        dismiss_label: dismiss_label.into(),
     });
     id
 }

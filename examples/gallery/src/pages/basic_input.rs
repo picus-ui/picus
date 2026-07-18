@@ -55,6 +55,7 @@ pub fn spawn_button_page(commands: &mut Commands, parent: Entity) {
         .insert(GalleryButtonAction::Dialog {
             title: "Button Dialog".to_string(),
             body: "Demonstrates Picus UiDialog for message boxes.".to_string(),
+            dismiss_label: "Close".to_string(),
         });
     note(
         commands,
@@ -418,7 +419,11 @@ pub fn spawn_rating_control_page(commands: &mut Commands, parent: Entity) {
         template_value(UiRating::new(7.0).with_max(10))
         ChildOf(max)
     });
-    note(commands, max, "with_max sets the number of stars (here 10).");
+    note(
+        commands,
+        max,
+        "with_max sets the number of stars (here 10).",
+    );
 }
 
 pub fn spawn_time_picker_page(commands: &mut Commands, parent: Entity) {

@@ -1,7 +1,7 @@
 # Plan: example_gallery ↔ WinUI Gallery control coverage
 
 **Status**: active  
-**Baseline**: `example_gallery` **57** pages (post `feat(gallery): expand showcase to 57 pages…`)  
+**Baseline**: `example_gallery` **58** pages (post Phase 1b MenuFlyout + Dialog/Flyout polish)  
 **Reference**: sibling repo `../WinUI-Gallery` (`ControlInfoData.json`, ~**120** sample pages)  
 **Owner path**: `examples/gallery/` + `crates/picus_core/src/components/` + `crates/picus` facade
 
@@ -144,9 +144,9 @@ Organized by WinUI Gallery categories. **“Picus target”** is the intended AP
 
 | WinUI UniqueId | Status | Picus target | Effort | Notes |
 |----------------|--------|--------------|--------|-------|
-| ContentDialog | POLISH | `UiDialog` | M | Primary/secondary buttons, content slot |
-| Flyout | POLISH | `UiPopover` / anchored flyout | M | Rename map: Popover ≈ Flyout |
-| Popup | COMPOSE | Manual overlay (`spawn_manual_overlay_at`) page | S | Already partial on Popover page |
+| ContentDialog | POLISH | `UiDialog` | M | Gallery polished (dismiss labels); primary/secondary dual buttons → Phase 3c |
+| Flyout | POLISH | `UiPopover` / anchored flyout | M | Popover page demos placements via spawn_popover_in_overlay_root |
+| Popup | COMPOSE | Manual overlay (`spawn_manual_overlay_at`) page | S | Popover page demos fixed (x,y) popups |
 | TeachingTip | COMPONENT | Anchored tip + title/body/close + light-dismiss | M | Compose popover + structured content first |
 
 ### 3.10 Menus & toolbars
@@ -154,7 +154,7 @@ Organized by WinUI Gallery categories. **“Picus target”** is the intended AP
 | WinUI UniqueId | Status | Picus target | Effort | Notes |
 |----------------|--------|--------------|--------|-------|
 | MenuBar | POLISH | `UiMenuBar` | S | |
-| MenuFlyout | POLISH | `UiContextMenu` / menu panels | M | Dedicated page: left-click flyout vs context |
+| MenuFlyout | POLISH | `UiMenuBarItem` / menu panels | M | Dedicated page: left-click flyout vs ContextMenu |
 | CommandBar | COMPONENT | `UiCommandBar` (primary/secondary/overflow) on `UiToolbar` | L | |
 | AppBarButton | COMPOSE | Icon+label button in toolbar | S | After CommandBar or via Toolbar samples |
 | AppBarToggleButton | COMPOSE | Toggle in toolbar | S | Needs ToggleButton |
@@ -468,9 +468,9 @@ Use this as the living “can still ship” list. Check when gallery + API meet 
 ### Phase 1
 - [x] A1 Search filters nav  
 - [x] A2 NavigationView modes  
-- [ ] A3 MenuFlyout page  
-- [ ] A4 ContentDialog polish  
-- [ ] A5 Flyout/Popup polish  
+- [x] A3 MenuFlyout page  
+- [x] A4 ContentDialog polish  
+- [x] A5 Flyout/Popup polish  
 - [ ] A6 ScrollView polish  
 - [ ] A7 Iconography browser  
 - [ ] A8 Color / Geometry / Spacing  

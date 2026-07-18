@@ -1,11 +1,14 @@
 //! Gallery event handling for interactive showcase controls.
 
-use picus::app::bevy_ecs::{hierarchy::Children, message::MessageReader, prelude::*};
+use picus::app::bevy_ecs::{
+    hierarchy::ChildOf, hierarchy::Children, message::MessageReader, prelude::*,
+};
 use picus::prelude::{
-    AppI18n, BuiltinUiAction, NavigationViewItem, OverlayPlacement, ToastKind, UiAction, UiComboBoxChanged,
-    UiDialog, UiNavigationItem, UiNavigationSelectionChanged, UiNavigationView, UiRadioGroupChanged,
-    UiSearchChanged, UiToast, WindowBackdropMaterial, set_theme_backdrop_material,
-    spawn_in_overlay_root, spawn_manual_overlay_at,
+    AppI18n, BuiltinUiAction, NavigationViewItem, OverlayPlacement, StyleClass, ToastKind,
+    UiAction, UiComboBoxChanged, UiDialog, UiLabel, UiNavigationItem, UiNavigationSelectionChanged,
+    UiNavigationView, UiPopover, UiRadioGroupChanged, UiSearchChanged, UiToast,
+    WindowBackdropMaterial, set_theme_backdrop_material, spawn_in_overlay_root,
+    spawn_manual_overlay_at, spawn_popover_in_overlay_root,
 };
 
 use crate::state::{
@@ -77,27 +80,32 @@ pub fn apply_gallery_actions(world: &mut World) {
                     kind,
                     duration,
                 } => spawn_toast(world, &message, kind, duration),
-                GalleryButtonAction::Dialog { title, body } => {
-                    spawn_dialog(world, &title, &body);
+                GalleryButtonAction::Dialog {
+                    title,
+                    body,
+                    dismiss_label,
+                } => {
+                    spawn_dialog(world, &title, &body, &dismiss_label);
                 }
                 GalleryButtonAction::Info { message } => {
                     spawn_toast(world, &message, ToastKind::Info, 2.0);
                 }
             }
+        } else if let Some(marker) = world
+            .get::<crate::pages::AnchoredFlyoutMarker>(event.source)
+            .copied()
+        {
+            spawn_anchored_flyout(world, event.source, marker.placement);
+        } else if let Some(pos) = world
+            .get::<crate::pages::ManualOverlayMarkerAt>(event.source)
+            .copied()
+        {
+            spawn_manual_popup(world, pos.x, pos.y);
         } else if world
             .get::<crate::pages::ManualOverlayMarker>(event.source)
             .is_some()
         {
-            spawn_manual_overlay_at(
-                world,
-                UiDialog::new(
-                    "Manual overlay",
-                    "This popover was positioned at a fixed (x, y) pixel coordinate via spawn_manual_overlay_at.",
-                )
-                .with_fixed_width(360.0),
-                120.0,
-                80.0,
-            );
+            spawn_manual_popup(world, 120.0, 80.0);
         }
     }
 
@@ -255,8 +263,7 @@ fn reorder_nav_content_children(world: &mut World, nav: Entity, content_order: &
         .map(|c| c.iter().collect())
         .unwrap_or_default();
 
-    let content_set: std::collections::HashSet<Entity> =
-        content_order.iter().copied().collect();
+    let content_set: std::collections::HashSet<Entity> = content_order.iter().copied().collect();
     let mut item_children = Vec::new();
     for child in children {
         if world.get::<UiNavigationItem>(child).is_some() {
@@ -282,8 +289,45 @@ fn set_gallery_page(world: &mut World, rt: &mut GalleryRuntime, leaf: usize) {
     }
 }
 
-fn spawn_dialog(world: &mut World, title: &str, body: &str) {
-    spawn_in_overlay_root(world, (UiDialog::new(title, body).with_fixed_width(460.0),));
+fn spawn_dialog(world: &mut World, title: &str, body: &str, dismiss_label: &str) {
+    let mut dialog = UiDialog::new(title, body).with_fixed_width(460.0);
+    dialog.dismiss_label = dismiss_label.to_string();
+    spawn_in_overlay_root(world, (dialog,));
+}
+
+/// WinUI Flyout: anchored light-dismiss panel via UiPopover.
+fn spawn_anchored_flyout(world: &mut World, anchor: Entity, placement: OverlayPlacement) {
+    let popover = UiPopover::new(anchor)
+        .with_placement(placement)
+        .with_auto_flip_placement(true)
+        .with_fixed_size(280.0, 120.0);
+    let entity = spawn_popover_in_overlay_root(
+        world,
+        (StyleClass(vec!["overlay.menu.panel".to_string()]),),
+        popover,
+    );
+    world.spawn((
+        UiLabel::new(format!(
+            "Anchored flyout\n(WinUI Flyout ≈ UiPopover)\nplacement: {placement:?}"
+        )),
+        ChildOf(entity),
+    ));
+}
+
+/// WinUI Popup: explicit pixel origin via spawn_manual_overlay_at.
+fn spawn_manual_popup(world: &mut World, x: f64, y: f64) {
+    spawn_manual_overlay_at(
+        world,
+        UiDialog::new(
+            "Popup (manual overlay)",
+            format!(
+                "WinUI Popup ≈ spawn_manual_overlay_at. Positioned at ({x:.0}, {y:.0}) relative to the window top-left."
+            ),
+        )
+        .with_fixed_width(360.0),
+        x,
+        y,
+    );
 }
 
 fn spawn_toast(world: &mut World, message: &str, kind: ToastKind, duration: f32) {

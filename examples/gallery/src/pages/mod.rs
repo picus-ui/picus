@@ -14,8 +14,8 @@ mod navigation;
 mod status;
 mod text;
 
-use bevy_ecs::prelude::*;
 use crate::state::GalleryPage;
+use bevy_ecs::prelude::*;
 
 /// Spawn the content for a gallery page into `parent`.
 pub fn spawn_page_content(commands: &mut Commands, parent: Entity, page: GalleryPage) {
@@ -42,6 +42,7 @@ pub fn spawn_page_content(commands: &mut Commands, parent: Entity, page: Gallery
         GalleryPage::Table => collections::spawn_table_page(commands, parent),
         GalleryPage::DataTable => collections::spawn_data_table_page(commands, parent),
         GalleryPage::MenuBar => menus::spawn_menu_bar_page(commands, parent),
+        GalleryPage::MenuFlyout => menus::spawn_menu_flyout_page(commands, parent),
         GalleryPage::Toolbar => menus::spawn_toolbar_page(commands, parent),
         GalleryPage::TitleBar => menus::spawn_title_bar_page(commands, parent),
         GalleryPage::WindowBackdrop => menus::spawn_window_backdrop_page(commands, parent),
@@ -80,4 +81,4 @@ pub fn spawn_page_content(commands: &mut Commands, parent: Entity, page: Gallery
     }
 }
 
-pub use dialogs::ManualOverlayMarker;
+pub use dialogs::{AnchoredFlyoutMarker, ManualOverlayMarker, ManualOverlayMarkerAt};

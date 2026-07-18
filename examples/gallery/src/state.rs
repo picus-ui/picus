@@ -60,6 +60,7 @@ pub enum GalleryPage {
     DataTable,
     // Menus & window
     MenuBar,
+    MenuFlyout,
     Toolbar,
     TitleBar,
     WindowBackdrop,
@@ -110,7 +111,7 @@ impl GalleryPage {
     /// Media (WebView2/MediaPlayer/Map/Camera/Sound/AnimatedVisual*),
     /// Motion interop, Shell JumpList/Badge notifications, AppWindow multi-window
     /// demos, Accessibility docs pages, platform-only CommandBarFlyout/Swipe, etc.
-    pub const ALL: [Self; 57] = [
+    pub const ALL: [Self; 58] = [
         // Basic Input
         Self::Button,
         Self::HyperlinkButton,
@@ -137,6 +138,7 @@ impl GalleryPage {
         Self::DataTable,
         // Menus & window
         Self::MenuBar,
+        Self::MenuFlyout,
         Self::Toolbar,
         Self::TitleBar,
         Self::WindowBackdrop,
@@ -199,31 +201,31 @@ impl GalleryPage {
         NavCategory {
             label: "Menus & Window",
             first_page_index: 21,
-            page_count: 4,
+            page_count: 5,
         },
         NavCategory {
             label: "Status & Info",
-            first_page_index: 25,
+            first_page_index: 26,
             page_count: 6,
         },
         NavCategory {
             label: "Dialogs & Flyouts",
-            first_page_index: 31,
+            first_page_index: 32,
             page_count: 4,
         },
         NavCategory {
             label: "Layout",
-            first_page_index: 35,
+            first_page_index: 36,
             page_count: 12,
         },
         NavCategory {
             label: "Navigation",
-            first_page_index: 47,
+            first_page_index: 48,
             page_count: 2,
         },
         NavCategory {
             label: "Media & Design",
-            first_page_index: 49,
+            first_page_index: 50,
             page_count: 8,
         },
     ];
@@ -289,6 +291,9 @@ impl GalleryPage {
                 "A data table supports typed columns, selection, and image cell templates."
             }
             Self::MenuBar => "A menu bar hosts top-level menus that open dropdown command panels.",
+            Self::MenuFlyout => {
+                "A menu flyout is a left-click command list (WinUI MenuFlyout). Contrast with ContextMenu, which opens on right-click."
+            }
             Self::Toolbar => {
                 "A toolbar groups compact action buttons, toggles, and separators horizontally."
             }
@@ -316,15 +321,17 @@ impl GalleryPage {
             Self::Avatar => {
                 "An avatar shows a person or entity as initials (or optional image) with size and shape variants."
             }
-            Self::Dialog => "A dialog is a modal overlay with a title, body, and dismiss action.",
+            Self::Dialog => {
+                "A content dialog (WinUI ContentDialog → UiDialog) is a modal overlay with title, body, and dismiss action."
+            }
             Self::Toast => {
                 "A toast is a transient or persistent notification on an overlay surface."
             }
             Self::ContextMenu => {
-                "A context menu opens a command list when the user right-clicks a control."
+                "A context menu opens a command list when the user right-clicks a control (WinUI MenuFlyout vs ContextMenu: see MenuFlyout page for left-click)."
             }
             Self::Popover => {
-                "A popover places a floating panel at an anchor or an explicit pixel origin."
+                "A popover (WinUI Flyout ≈ UiPopover; Popup ≈ spawn_manual_overlay_at) places a floating panel at an anchor or an explicit pixel origin."
             }
             Self::StackPanel => {
                 "A stack panel (flex row/column) lays out children along a single axis with gap."
@@ -414,6 +421,7 @@ impl GalleryPage {
             Self::Table => "Table",
             Self::DataTable => "DataTable",
             Self::MenuBar => "MenuBar",
+            Self::MenuFlyout => "MenuFlyout",
             Self::Toolbar => "Toolbar",
             Self::TitleBar => "TitleBar",
             Self::WindowBackdrop => "WindowBackdrop",
@@ -477,6 +485,7 @@ impl GalleryPage {
             Self::Table => FluentIcon::ViewAll,
             Self::DataTable => FluentIcon::ViewAll,
             Self::MenuBar => FluentIcon::GlobalNavigationButton,
+            Self::MenuFlyout => FluentIcon::More,
             Self::Toolbar => FluentIcon::AllApps,
             Self::TitleBar => FluentIcon::AllApps,
             Self::WindowBackdrop => FluentIcon::Brightness,
@@ -530,8 +539,12 @@ pub enum GalleryButtonAction {
         kind: ToastKind,
         duration: f32,
     },
-    /// Spawn a modal dialog overlay with the given title and body.
-    Dialog { title: String, body: String },
+    /// Spawn a modal dialog overlay with the given title, body, and dismiss label.
+    Dialog {
+        title: String,
+        body: String,
+        dismiss_label: String,
+    },
     /// Show a transient informational toast with the given message.
     Info { message: String },
 }
