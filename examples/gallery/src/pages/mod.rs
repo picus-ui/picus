@@ -12,6 +12,7 @@ mod layout;
 mod menus;
 mod navigation;
 mod status;
+mod system;
 mod text;
 
 use crate::state::GalleryPage;
@@ -81,6 +82,8 @@ pub fn spawn_page_content(commands: &mut Commands, parent: Entity, page: Gallery
         GalleryPage::Markdown => design::spawn_markdown_page(commands, parent),
         GalleryPage::Theme => design::spawn_theme_page(commands, parent),
         GalleryPage::I18n => design::spawn_i18n_page(commands, parent),
+        GalleryPage::Clipboard => system::spawn_clipboard_page(commands, parent),
+        GalleryPage::StoragePickers => system::spawn_storage_pickers_page(commands, parent),
     }
 }
 

@@ -1,7 +1,7 @@
 # Plan: example_gallery ↔ WinUI Gallery control coverage
 
 **Status**: active  
-**Baseline**: `example_gallery` **61** pages (post Phase 1b+1c MenuFlyout/Dialog polish + Color/Geometry/Spacing + Iconography)  
+**Baseline**: `example_gallery` **63** pages (post Phase 1 complete: 1a–1d)  
 **Reference**: sibling repo `../WinUI-Gallery` (`ControlInfoData.json`, ~**120** sample pages)  
 **Owner path**: `examples/gallery/` + `crates/picus_core/src/components/` + `crates/picus` facade
 
@@ -364,7 +364,7 @@ Each phase ends with: `cargo test -p example_gallery`, component unit tests wher
 | **1a** | Nav search filter + NavigationView deep samples ✅ |
 | **1b** | MenuFlyout / Dialog / Flyout-Popup polish pages |
 | **1c** | Design guidance pages (Color, Geometry, Spacing) + Iconography browser ✅ |
-| **1d** | Facade: clipboard + TypographyPreset; Clipboard + StoragePickers pages |
+| **1d** | Facade: clipboard + TypographyPreset; Clipboard + StoragePickers pages ✅ |
 
 **Exit**: Gallery feels closer to WinUI shell; no new `Ui*` types required.
 
@@ -475,10 +475,11 @@ Use this as the living “can still ship” list. Check when gallery + API meet 
 - [x] A7 Iconography browser  
 - [x] A8 Color / Geometry / Spacing  
 - [ ] A9 Acrylic / CompactSizing / ThemeShadow samples  
-- [ ] A10 Clipboard  
-- [ ] A11 StoragePickers  
+- [x] A10 Clipboard  
+- [x] A11 StoragePickers  
 - [ ] A12 Multi-window / AppWindow  
-- [ ] A13–A17 remaining polish  
+- [x] A17 Facade exports (`TypographyPreset`, clipboard)  
+- [ ] A13–A16 remaining polish  
 
 ### Phase 2–3
 - [ ] ToggleButton  

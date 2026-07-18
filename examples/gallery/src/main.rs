@@ -430,7 +430,15 @@ mod tests {
     #[test]
     fn gallery_pages_are_one_component_each() {
         let labels = GalleryPage::ALL.map(GalleryPage::label);
-        assert_eq!(labels.len(), 61);
+        assert_eq!(labels.len(), 63);
+        assert!(
+            labels.contains(&"Clipboard"),
+            "expected Clipboard system page"
+        );
+        assert!(
+            labels.contains(&"StoragePickers"),
+            "expected StoragePickers system page"
+        );
         assert_eq!(labels[0], "Button");
         assert_eq!(labels[1], "HyperlinkButton");
         assert_eq!(labels[2], "ToggleSwitch");

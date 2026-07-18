@@ -34,10 +34,10 @@
 /// See `docs/guide/app.md`.
 pub mod app {
     pub use picus_core::{
-        AppPicusExt, BevyWindowOptions, PicusBuiltinsPlugin, PicusPlugin, PicusUiSet,
-        SyncAssetSource, SyncTextSource, WindowBackdropColorScheme, WindowBackdropMaterial,
-        WindowSize, bevy_app, bevy_asset, bevy_ecs, bevy_input, bevy_math, bevy_scene, bevy_tasks,
-        bevy_text, bevy_tween, bevy_window, configure_window_for_backdrop, rfd,
+        bevy_app, bevy_asset, bevy_ecs, bevy_input, bevy_math, bevy_scene, bevy_tasks, bevy_text,
+        bevy_tween, bevy_window, configure_window_for_backdrop, rfd, AppPicusExt,
+        BevyWindowOptions, PicusBuiltinsPlugin, PicusPlugin, PicusUiSet, SyncAssetSource,
+        SyncTextSource, WindowBackdropColorScheme, WindowBackdropMaterial, WindowSize,
     };
 }
 
@@ -48,23 +48,22 @@ pub mod components {
         fluent_icon, icon, icon_glyph, icon_glyph_with_font_stack, icon_source, picus_icon,
     };
     pub use picus_core::{
-        AppBreakpoints, AutoDismiss, AvatarShape, BuiltinUiAction, ButtonAppearance,
-        ButtonIconPosition, ButtonShape, ButtonSize, ColorPickerChannel, FluentIcon, HasTooltip,
-        IconGlyph, LocalizeText, MessageBarKind, NAV_COMPACT_MODE_THRESHOLD,
-        NAV_EXPANDED_MODE_THRESHOLD, NAV_PANE_COMPACT_WIDTH, NAV_PANE_EXPANDED_WIDTH,
+        checkbox, slider, switch, text_input, AppBreakpoints, AutoDismiss, AvatarShape,
+        BuiltinUiAction, ButtonAppearance, ButtonIconPosition, ButtonShape, ButtonSize,
+        ColorPickerChannel, FluentIcon, HasTooltip, IconGlyph, LocalizeText, MessageBarKind,
         NavigationBackButtonVisible, NavigationDisplayMode, NavigationItemRegion,
         NavigationPaneDisplayMode, NavigationViewItem, NavigationViewItemKind, PicusIcon,
         RatingColor, RatingSize, ScrollAxis, SplitDirection, TitleBarAction, TitleBarIcon,
-        TitleBarState, ToastKind, UiAnyView, UiAvatar, UiBadge, UiBreadcrumb, UiBreadcrumbItem,
-        UiButton, UiCanvas, UiCanvasCommand, UiCanvasPathCommand, UiCanvasPosition, UiCard,
-        UiCheckbox, UiCheckboxChanged, UiColorPicker, UiColorPickerChanged, UiColorPickerPanel,
-        UiComboBox, UiComboBoxChanged, UiComboOption, UiComponentTemplate, UiContentShell,
-        UiContextMenu, UiContextMenuItem, UiContextMenuItemSelected, UiContextMenuTrigger,
-        UiDataCell, UiDataColumn, UiDataRow, UiDataTable, UiDataTableSelectionChanged,
-        UiDataTableSort, UiDataTableSortChanged, UiDatePicker, UiDatePickerChanged,
-        UiDatePickerPanel, UiDialog, UiDivider, UiDropdownItem, UiDropdownMenu,
-        UiDropdownPlacement, UiEmit, UiExpander, UiExpanderChanged, UiFlexColumn, UiFlexRow,
-        UiFormRow, UiGradientStop, UiGrid, UiGridAutoFlow, UiGridCell, UiGridLength,
+        TitleBarState, ToastKind, TypographyPreset, UiAnyView, UiAvatar, UiBadge, UiBreadcrumb,
+        UiBreadcrumbItem, UiButton, UiCanvas, UiCanvasCommand, UiCanvasPathCommand,
+        UiCanvasPosition, UiCard, UiCheckbox, UiCheckboxChanged, UiColorPicker,
+        UiColorPickerChanged, UiColorPickerPanel, UiComboBox, UiComboBoxChanged, UiComboOption,
+        UiComponentTemplate, UiContentShell, UiContextMenu, UiContextMenuItem,
+        UiContextMenuItemSelected, UiContextMenuTrigger, UiDataCell, UiDataColumn, UiDataRow,
+        UiDataTable, UiDataTableSelectionChanged, UiDataTableSort, UiDataTableSortChanged,
+        UiDatePicker, UiDatePickerChanged, UiDatePickerPanel, UiDialog, UiDivider, UiDropdownItem,
+        UiDropdownMenu, UiDropdownPlacement, UiEmit, UiExpander, UiExpanderChanged, UiFlexColumn,
+        UiFlexRow, UiFormRow, UiGradientStop, UiGrid, UiGridAutoFlow, UiGridCell, UiGridLength,
         UiGridLengthParseError, UiGroupBox, UiImage, UiImageAlignmentX, UiImageAlignmentY,
         UiImageViewBox, UiImageViewBoxUnits, UiInteractionEvent, UiLabel, UiLink, UiLinkAction,
         UiListSelectionMode, UiListView, UiListViewSelectionChanged, UiMarkdown, UiMenuBar,
@@ -82,15 +81,16 @@ pub mod components {
         UiThemePickerChanged, UiThemePickerMenu, UiThemePickerOption, UiTimePicker,
         UiTimePickerChanged, UiTimePickerPanel, UiTitleBar, UiToast, UiToolbar, UiTooltip,
         UiTreeNode, UiTreeNodeToggled, UiView, UiVisibleResponsive, UiWindow,
-        WindowBackdropColorScheme, WindowBackdropMaterial, checkbox, slider, switch, text_input,
+        WindowBackdropColorScheme, WindowBackdropMaterial, NAV_COMPACT_MODE_THRESHOLD,
+        NAV_EXPANDED_MODE_THRESHOLD, NAV_PANE_COMPACT_WIDTH, NAV_PANE_EXPANDED_WIDTH,
     };
 }
 
 /// Low-level projection helpers for custom `UiComponentTemplate` implementations.
 pub mod projection {
     pub use picus_core::{
-        ButtonView, ButtonWithChildView, CheckboxView, ProjectionCtx, SliderView, SwitchView,
-        UiView, checkbox, slider, switch, text_input,
+        checkbox, slider, switch, text_input, ButtonView, ButtonWithChildView, CheckboxView,
+        ProjectionCtx, SliderView, SwitchView, UiView,
     };
     pub use picus_core::{picus_view, xilem};
 }
@@ -100,18 +100,17 @@ pub mod projection {
 /// See `docs/guide/styling-themes.md`.
 pub mod styling {
     pub use picus_core::{
-        ActiveStyleVariant, BackdropStyle, BaseStyleSheet, ColorStyle, ComputedStyle,
-        CurrentColorStyle, InlineStyle, InteractionState, LayoutStyle, PseudoClass, Selector,
-        StyleClass, StyleDirty, StylePseudoState, StyleRule, StyleSetter, StyleSheet,
-        StyleTransition, SyncAssetSource, SyncTextSource, TargetColorStyle, TextStyle,
-        ThemeBackdrop, ThemeBackdropOverride, TokenValue, WINDOW_BACKDROP_TOKEN,
         apply_active_stylesheet_ron, apply_direct_text_input_style, apply_direct_widget_style,
         apply_label_style, apply_text_input_style, apply_widget_style,
         clear_theme_backdrop_material_override, mark_style_dirty, parse_stylesheet_ron,
         register_builtin_style_type_aliases, resolve_style, resolve_style_for_classes,
         resolve_style_for_classes_with_state, resolve_style_for_entity_classes,
         resolve_theme_backdrop_material, set_active_style_variant_by_name,
-        set_theme_backdrop_material, styled,
+        set_theme_backdrop_material, styled, ActiveStyleVariant, BackdropStyle, BaseStyleSheet,
+        ColorStyle, ComputedStyle, CurrentColorStyle, InlineStyle, InteractionState, LayoutStyle,
+        PseudoClass, Selector, StyleClass, StyleDirty, StylePseudoState, StyleRule, StyleSetter,
+        StyleSheet, StyleTransition, SyncAssetSource, SyncTextSource, TargetColorStyle, TextStyle,
+        ThemeBackdrop, ThemeBackdropOverride, TokenValue, WINDOW_BACKDROP_TOKEN,
     };
 }
 
@@ -120,21 +119,21 @@ pub mod styling {
 /// See `docs/guide/events-messages.md`.
 pub mod events {
     pub use picus_core::{
-        AcceleratorActivated, AcceleratorModifiers, AcceleratorScope, AcceleratorTextOverride,
-        AccessibleAction, CurrentAcceleratorModifiers, KeyboardAccelerator, UiAction,
-        UiActionSender, UiEmit, format_accelerator_text,
+        format_accelerator_text, AcceleratorActivated, AcceleratorModifiers, AcceleratorScope,
+        AcceleratorTextOverride, AccessibleAction, CurrentAcceleratorModifiers,
+        KeyboardAccelerator, UiAction, UiActionSender, UiEmit,
     };
 }
 
 /// Overlay helpers and overlay lifecycle systems.
 pub mod overlay {
     pub use picus_core::{
-        OverlayComputedPosition, OverlayConfig, OverlayMouseButtonCursor, OverlayPlacement,
-        OverlayPointerRoutingState, OverlayStack, OverlayState, dismiss_overlays_on_click,
-        ensure_overlay_root, ensure_overlay_root_entity, handle_global_overlay_clicks,
-        handle_tooltip_hovers, spawn_in_overlay_root,
+        dismiss_overlays_on_click, ensure_overlay_root, ensure_overlay_root_entity,
+        handle_global_overlay_clicks, handle_tooltip_hovers, spawn_in_overlay_root,
         spawn_manual_overlay_at, spawn_popover_in_overlay_root, sync_dropdown_positions,
         sync_overlay_positions, sync_overlay_stack_lifecycle, tick_auto_dismiss, tick_toasts,
+        OverlayComputedPosition, OverlayConfig, OverlayMouseButtonCursor, OverlayPlacement,
+        OverlayPointerRoutingState, OverlayStack, OverlayState,
     };
 }
 
@@ -142,26 +141,27 @@ pub mod overlay {
 pub mod runtime {
     pub use picus_core::masonry_core;
     pub use picus_core::{
-        MasonryRuntime, ProjectionCtx, SynthesizedUiViews, UiDirtyReason, UiProjectionDirtyDebug,
-        UiProjectionInvalidation, UiView, WindowRuntime, XilemFontBridge, collect_bevy_font_assets,
-        inject_bevy_input_into_masonry, rebuild_masonry_runtime, synthesize_ui, track_window_size,
+        collect_bevy_font_assets, inject_bevy_input_into_masonry, rebuild_masonry_runtime,
+        synthesize_ui, track_window_size, MasonryRuntime, ProjectionCtx, SynthesizedUiViews,
+        UiDirtyReason, UiProjectionDirtyDebug, UiProjectionInvalidation, UiView, WindowRuntime,
+        XilemFontBridge,
     };
 
     /// Low-level registration and projector APIs for advanced / framework use.
     pub mod advanced {
         pub use picus_core::{
-            AdvancedAppPicusExt, UiProjector, UiProjectorRegistry,
             expand_builtin_ui_component_templates, find_template_part, gather_ui_roots,
             register_builtin_projectors, register_builtin_ui_components,
             route_masonry_view_messages, sync_fonts_to_xilem, synthesize_roots,
-            synthesize_roots_with_stats, synthesize_world,
+            synthesize_roots_with_stats, synthesize_world, AdvancedAppPicusExt, UiProjector,
+            UiProjectorRegistry,
         };
     }
 }
 
 /// Internationalization helpers.
 pub mod i18n {
-    pub use picus_core::{AppI18n, resolve_localized_text};
+    pub use picus_core::{resolve_localized_text, AppI18n};
 }
 
 /// Icon definitions and bundled icon font data.
@@ -174,6 +174,17 @@ pub mod validation {
     pub use picus_core::validation::*;
 }
 
+/// System clipboard resource and ECS clipboard event helpers.
+///
+/// Prefer the [`Clipboard`] resource for simple get/set text access. Attach
+/// [`ClipboardEvent`] for copy/cut/paste flows processed by
+/// [`handle_clipboard_events`] (registered by [`crate::app::PicusPlugin`]).
+pub mod clipboard {
+    pub use picus_core::{
+        handle_clipboard_events, Clipboard, ClipboardEvent, ClipboardKind, ClipboardText,
+    };
+}
+
 /// BSN scene authoring helpers.
 pub mod scene {
     pub use picus_core::scene::*;
@@ -181,11 +192,11 @@ pub mod scene {
 
 /// Common imports for Picus applications.
 pub mod prelude {
-    pub use crate::{UiComponent, classes, register_ui_components, ui_view};
     pub use crate::{
-        app::*, components::*, events::*, i18n::*, icons::*, overlay::*, projection::*, runtime::*,
-        scene::*, styling::*,
+        app::*, clipboard::*, components::*, events::*, i18n::*, icons::*, overlay::*,
+        projection::*, runtime::*, scene::*, styling::*,
     };
+    pub use crate::{classes, register_ui_components, ui_view, UiComponent};
     pub use picus_core::bevy_ecs::hierarchy::{ChildOf, Children};
     pub use picus_core::bevy_ecs::message::MessageReader;
 }
@@ -194,7 +205,7 @@ pub mod prelude {
 // Root-level macros and hidden macro support (no `picus_core::*` dump).
 // ---------------------------------------------------------------------------
 
-pub use picus_macros::{UiComponent, ui_view};
+pub use picus_macros::{ui_view, UiComponent};
 
 /// Construct a [`StyleClass`] from string literals or expressions.
 #[macro_export]

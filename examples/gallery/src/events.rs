@@ -3,6 +3,8 @@
 use picus::app::bevy_ecs::{
     hierarchy::ChildOf, hierarchy::Children, message::MessageReader, prelude::*,
 };
+use picus::app::rfd;
+use picus::clipboard::Clipboard;
 use picus::prelude::{
     AppI18n, BuiltinUiAction, NavigationViewItem, OverlayPlacement, StyleClass, ToastKind,
     UiAction, UiComboBoxChanged, UiDialog, UiLabel, UiNavigationItem, UiNavigationSelectionChanged,
@@ -99,6 +101,18 @@ pub fn apply_gallery_actions(world: &mut World) {
                 }
                 GalleryButtonAction::Info { message } => {
                     spawn_toast(world, &message, ToastKind::Info, 2.0);
+                }
+                GalleryButtonAction::ClipboardCopy { text } => {
+                    apply_clipboard_copy(world, &text);
+                }
+                GalleryButtonAction::ClipboardRead => {
+                    apply_clipboard_read(world);
+                }
+                GalleryButtonAction::PickFile => {
+                    apply_pick_file(world);
+                }
+                GalleryButtonAction::PickFolder => {
+                    apply_pick_folder(world);
                 }
             }
         } else if let Some(marker) = world
@@ -356,4 +370,86 @@ fn spawn_toast(world: &mut World, message: &str, kind: ToastKind, duration: f32)
             .with_max_width(480.0)
             .with_placement(OverlayPlacement::BottomEnd),),
     );
+}
+
+fn apply_clipboard_copy(world: &mut World, text: &str) {
+    let outcome = match world.get_resource::<Clipboard>() {
+        None => Err(("Clipboard resource is not available.", ToastKind::Error)),
+        Some(clipboard) if !clipboard.is_available() => Err((
+            "System clipboard is unavailable in this environment.",
+            ToastKind::Warning,
+        )),
+        Some(clipboard) => {
+            clipboard.set_text(text);
+            Ok(())
+        }
+    };
+    match outcome {
+        Ok(()) => spawn_toast(
+            world,
+            &format!("Copied to clipboard: {text}"),
+            ToastKind::Success,
+            2.4,
+        ),
+        Err((message, kind)) => spawn_toast(world, message, kind, 3.0),
+    }
+}
+
+fn apply_clipboard_read(world: &mut World) {
+    let outcome = match world.get_resource::<Clipboard>() {
+        None => Err(("Clipboard resource is not available.", ToastKind::Error, 3.0)),
+        Some(clipboard) if !clipboard.is_available() => Err((
+            "System clipboard is unavailable in this environment.",
+            ToastKind::Warning,
+            3.0,
+        )),
+        Some(clipboard) => match clipboard.get_text() {
+            Some(text) if !text.is_empty() => {
+                let preview = if text.chars().count() > 120 {
+                    let truncated: String = text.chars().take(120).collect();
+                    format!("{truncated}\u{2026}")
+                } else {
+                    text
+                };
+                Ok(format!("Clipboard: {preview}"))
+            }
+            Some(_) => Err(("Clipboard is empty.", ToastKind::Info, 2.0)),
+            None => Err(("Could not read clipboard text.", ToastKind::Warning, 2.4)),
+        },
+    };
+    match outcome {
+        Ok(message) => spawn_toast(world, &message, ToastKind::Info, 3.2),
+        Err((message, kind, duration)) => spawn_toast(world, message, kind, duration),
+    }
+}
+
+fn apply_pick_file(world: &mut World) {
+    // Native modal dialogs intentionally block until dismissed.
+    match rfd::FileDialog::new()
+        .set_title("Pick a file")
+        .pick_file()
+    {
+        Some(path) => spawn_toast(
+            world,
+            &format!("Selected file: {}", path.display()),
+            ToastKind::Success,
+            4.0,
+        ),
+        None => spawn_toast(world, "File pick cancelled.", ToastKind::Info, 2.0),
+    }
+}
+
+fn apply_pick_folder(world: &mut World) {
+    match rfd::FileDialog::new()
+        .set_title("Pick a folder")
+        .pick_folder()
+    {
+        Some(path) => spawn_toast(
+            world,
+            &format!("Selected folder: {}", path.display()),
+            ToastKind::Success,
+            4.0,
+        ),
+        None => spawn_toast(world, "Folder pick cancelled.", ToastKind::Info, 2.0),
+    }
 }

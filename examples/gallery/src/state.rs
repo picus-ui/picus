@@ -112,6 +112,9 @@ pub enum GalleryPage {
     Markdown,
     Theme,
     I18n,
+    // System
+    Clipboard,
+    StoragePickers,
 }
 
 impl GalleryPage {
@@ -122,7 +125,7 @@ impl GalleryPage {
     /// Media (WebView2/MediaPlayer/Map/Camera/Sound/AnimatedVisual*),
     /// Motion interop, Shell JumpList/Badge notifications, AppWindow multi-window
     /// demos, Accessibility docs pages, platform-only CommandBarFlyout/Swipe, etc.
-    pub const ALL: [Self; 61] = [
+    pub const ALL: [Self; 63] = [
         // Basic Input
         Self::Button,
         Self::HyperlinkButton,
@@ -193,6 +196,9 @@ impl GalleryPage {
         Self::Markdown,
         Self::Theme,
         Self::I18n,
+        // System
+        Self::Clipboard,
+        Self::StoragePickers,
     ];
 
     /// Sidebar category groups — WinUI Gallery-style expandable MenuItem parents.
@@ -241,6 +247,11 @@ impl GalleryPage {
             label: "Media & Design",
             first_page_index: 50,
             page_count: 11,
+        },
+        NavCategory {
+            label: "System",
+            first_page_index: 61,
+            page_count: 2,
         },
     ];
 
@@ -416,6 +427,12 @@ impl GalleryPage {
             }
             Self::Theme => "Theme variant switching and interactive color transition samples.",
             Self::I18n => "Locale switching, Fluent bundle keys, and CJK font fallback samples.",
+            Self::Clipboard => {
+                "System clipboard helpers: set and get text through picus::clipboard::Clipboard."
+            }
+            Self::StoragePickers => {
+                "Native file and folder pickers via the rfd re-export on the picus facade (picus::app::rfd)."
+            }
         }
     }
 
@@ -483,6 +500,8 @@ impl GalleryPage {
             Self::Markdown => "Markdown",
             Self::Theme => "Theme",
             Self::I18n => "I18n",
+            Self::Clipboard => "Clipboard",
+            Self::StoragePickers => "StoragePickers",
         }
     }
 
@@ -552,6 +571,8 @@ impl GalleryPage {
             Self::Markdown => FluentIcon::Character,
             Self::Theme => FluentIcon::Brightness,
             Self::I18n => FluentIcon::Globe,
+            Self::Clipboard => FluentIcon::Character,
+            Self::StoragePickers => FluentIcon::Folder,
         }
     }
 }
@@ -578,6 +599,14 @@ pub enum GalleryButtonAction {
     },
     /// Show a transient informational toast with the given message.
     Info { message: String },
+    /// Copy fixed text to the system clipboard via [`picus::clipboard::Clipboard`].
+    ClipboardCopy { text: String },
+    /// Read the system clipboard and show the result as a toast.
+    ClipboardRead,
+    /// Open a native file open picker (`rfd::FileDialog::pick_file`).
+    PickFile,
+    /// Open a native folder picker (`rfd::FileDialog::pick_folder`).
+    PickFolder,
 }
 
 /// Runtime entity references and shell navigation state for the gallery.
