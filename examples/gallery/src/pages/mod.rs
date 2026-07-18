@@ -70,6 +70,9 @@ pub fn spawn_page_content(commands: &mut Commands, parent: Entity, page: Gallery
         GalleryPage::Card => layout::spawn_card_page(commands, parent),
         GalleryPage::BreadcrumbBar => navigation::spawn_breadcrumb_bar_page(commands, parent),
         GalleryPage::NavigationView => navigation::spawn_navigation_view_page(commands, parent),
+        GalleryPage::Color => design::spawn_color_page(commands, parent),
+        GalleryPage::Geometry => design::spawn_geometry_page(commands, parent),
+        GalleryPage::Spacing => design::spawn_spacing_page(commands, parent),
         GalleryPage::Image => design::spawn_image_page(commands, parent),
         GalleryPage::Icons => design::spawn_icons_page(commands, parent),
         GalleryPage::Shapes => design::spawn_shapes_page(commands, parent),
@@ -81,4 +84,5 @@ pub fn spawn_page_content(commands: &mut Commands, parent: Entity, page: Gallery
     }
 }
 
+pub use design::{FLUENT_ICON_ENTRIES, rebuild_icon_grid};
 pub use dialogs::{AnchoredFlyoutMarker, ManualOverlayMarkerAt};

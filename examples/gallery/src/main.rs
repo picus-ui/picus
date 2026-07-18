@@ -430,7 +430,7 @@ mod tests {
     #[test]
     fn gallery_pages_are_one_component_each() {
         let labels = GalleryPage::ALL.map(GalleryPage::label);
-        assert_eq!(labels.len(), 58);
+        assert_eq!(labels.len(), 61);
         assert_eq!(labels[0], "Button");
         assert_eq!(labels[1], "HyperlinkButton");
         assert_eq!(labels[2], "ToggleSwitch");
@@ -466,6 +466,13 @@ mod tests {
             labels.contains(&"Popover"),
             "expected Popover / Flyout / Popup page"
         );
+        assert!(labels.contains(&"Color"), "expected Color design page");
+        assert!(
+            labels.contains(&"Geometry"),
+            "expected Geometry design page"
+        );
+        assert!(labels.contains(&"Spacing"), "expected Spacing design page");
+        assert!(labels.contains(&"Icons"), "expected Icons iconography page");
         // No multi-component category labels from the old gallery.
         assert!(!labels.contains(&"Buttons"));
         assert!(!labels.contains(&"Inputs"));
@@ -688,6 +695,87 @@ mod tests {
         assert!(
             markdown_style.colors.text.is_some(),
             "gallery markdown sample needs an explicit text color"
+        );
+    }
+
+    #[test]
+    fn gallery_iconography_browser_lists_fluent_icons_and_filters() {
+        let mut app = build_gallery_app();
+        app.update();
+
+        let icon_search = {
+            let mut query = app
+                .world_mut()
+                .query_filtered::<Entity, With<state::GalleryIconSearch>>();
+            query
+                .iter(app.world())
+                .next()
+                .expect("Icons page should spawn a GalleryIconSearch field")
+        };
+        let icon_grid = {
+            let mut query = app
+                .world_mut()
+                .query_filtered::<Entity, With<state::GalleryIconGrid>>();
+            query
+                .iter(app.world())
+                .next()
+                .expect("Icons page should spawn a GalleryIconGrid")
+        };
+
+        let initial_children = app
+            .world()
+            .get::<Children>(icon_grid)
+            .map(|c| c.len())
+            .unwrap_or(0);
+        assert_eq!(
+            initial_children,
+            pages::FLUENT_ICON_ENTRIES.len(),
+            "browser should list every FluentIcon entry"
+        );
+
+        // Filter to "chevron" — ChevronDown/Left/Right/Up
+        {
+            let mut search = app
+                .world_mut()
+                .get_mut::<UiSearch>(icon_search)
+                .expect("icon search component");
+            search.value = "chevron".into();
+        }
+        app.world_mut().write_message(picus::UiAction {
+            source: icon_search,
+            action: picus::UiSearchChanged {
+                search: icon_search,
+                value: "chevron".into(),
+            },
+        });
+        app.update();
+
+        let filtered_children = app
+            .world()
+            .get::<Children>(icon_grid)
+            .map(|c| c.len())
+            .unwrap_or(0);
+        assert_eq!(
+            filtered_children, 4,
+            "filter 'chevron' should match four FluentIcon variants"
+        );
+
+        // Color / Geometry / Spacing token styles must resolve from the gallery sheet.
+        let accent =
+            picus::resolve_style_for_classes(app.world(), ["gallery.token.surface-accent"]);
+        assert!(
+            accent.colors.bg.is_some(),
+            "Color page swatches need resolved token backgrounds"
+        );
+        let radius = picus::resolve_style_for_classes(app.world(), ["gallery.radius.md"]);
+        assert!(
+            radius.layout.corner_radius > 0.0,
+            "Geometry page radius samples need corner_radius tokens"
+        );
+        let space = picus::resolve_style_for_classes(app.world(), ["gallery.space.md"]);
+        assert!(
+            space.layout.padding > 0.0,
+            "Spacing page samples need padding tokens"
         );
     }
 

@@ -20,6 +20,14 @@ pub struct GalleryBackdropPicker;
 #[derive(Component, Debug, Clone, Copy, Default)]
 pub struct GalleryLocaleCombo;
 
+/// Marks the Icons page search field that filters the Fluent glyph grid.
+#[derive(Component, Debug, Clone, Copy, Default)]
+pub struct GalleryIconSearch;
+
+/// Marks the Icons page grid whose children are rebuilt when the icon filter changes.
+#[derive(Component, Debug, Clone, Copy, Default)]
+pub struct GalleryIconGrid;
+
 /// A sidebar category heading that groups related control pages.
 ///
 /// Mapped to an expandable WinUI-style `NavigationViewItem` parent with nested
@@ -93,6 +101,9 @@ pub enum GalleryPage {
     BreadcrumbBar,
     NavigationView,
     // Media & design
+    Color,
+    Geometry,
+    Spacing,
     Image,
     Icons,
     Shapes,
@@ -111,7 +122,7 @@ impl GalleryPage {
     /// Media (WebView2/MediaPlayer/Map/Camera/Sound/AnimatedVisual*),
     /// Motion interop, Shell JumpList/Badge notifications, AppWindow multi-window
     /// demos, Accessibility docs pages, platform-only CommandBarFlyout/Swipe, etc.
-    pub const ALL: [Self; 58] = [
+    pub const ALL: [Self; 61] = [
         // Basic Input
         Self::Button,
         Self::HyperlinkButton,
@@ -171,6 +182,9 @@ impl GalleryPage {
         Self::BreadcrumbBar,
         Self::NavigationView,
         // Media & design
+        Self::Color,
+        Self::Geometry,
+        Self::Spacing,
         Self::Image,
         Self::Icons,
         Self::Shapes,
@@ -226,7 +240,7 @@ impl GalleryPage {
         NavCategory {
             label: "Media & Design",
             first_page_index: 50,
-            page_count: 8,
+            page_count: 11,
         },
     ];
 
@@ -373,11 +387,20 @@ impl GalleryPage {
             Self::NavigationView => {
                 "A navigation view provides a pane of destinations with hierarchical menu items, pane display modes, back chrome, info badges, and an optional Settings footer."
             }
+            Self::Color => {
+                "Design guidance: Fluent theme color tokens as live swatches (WinUI Color page)."
+            }
+            Self::Geometry => {
+                "Design guidance: corner radius and stroke width tokens with canvas shape notes."
+            }
+            Self::Spacing => {
+                "Design guidance: Fluent spacing scale and layout gap demos from theme tokens."
+            }
             Self::Image => {
                 "An image displays bitmap content, including empty fallback placeholders."
             }
             Self::Icons => {
-                "Fluent Design icon glyphs using the Segoe Fluent Icons font fallback stack."
+                "Iconography browser: searchable FluentIcon glyph grid (Segoe Fluent Icons stack)."
             }
             Self::Shapes => {
                 "Canvas-drawn primitives such as rectangles, circles, lines, and paths."
@@ -449,6 +472,9 @@ impl GalleryPage {
             Self::Card => "Card",
             Self::BreadcrumbBar => "BreadcrumbBar",
             Self::NavigationView => "NavigationView",
+            Self::Color => "Color",
+            Self::Geometry => "Geometry",
+            Self::Spacing => "Spacing",
             Self::Image => "Image",
             Self::Icons => "Icons",
             Self::Shapes => "Shapes",
@@ -514,6 +540,9 @@ impl GalleryPage {
             Self::Card => FluentIcon::ViewAll,
             Self::BreadcrumbBar => FluentIcon::Forward,
             Self::NavigationView => FluentIcon::GlobalNavigationButton,
+            Self::Color => FluentIcon::Edit,
+            Self::Geometry => FluentIcon::Placeholder,
+            Self::Spacing => FluentIcon::ViewAll,
             Self::Image => FluentIcon::Pictures,
             Self::Icons => FluentIcon::AllApps,
             Self::Shapes => FluentIcon::Placeholder,

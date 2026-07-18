@@ -3,14 +3,58 @@
 use crate::helpers::{
     card, class, generated_image, grid, info_button, note, placeholder, sample_canvas,
 };
-use crate::state::{GalleryButtonAction, GalleryLocaleCombo};
+use crate::state::{GalleryButtonAction, GalleryIconGrid, GalleryIconSearch, GalleryLocaleCombo};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 use picus::prelude::{
     FluentIcon, LocalizeText, UiButton, UiCanvas, UiCanvasCommand, UiComboBox, UiComboOption,
-    UiFlexColumn, UiFlexRow, UiGradientStop, UiImage, UiLabel, UiMarkdown, UiMultilineTextInput,
-    UiSwitch, UiThemePicker, xilem::Color,
+    UiFlexColumn, UiFlexRow, UiGradientStop, UiGrid, UiImage, UiLabel, UiMarkdown,
+    UiMultilineTextInput, UiSearch, UiSwitch, UiThemePicker, xilem::Color,
 };
-use picus::scene::{CommandsSceneExt, bsn, template_value};
+use picus::scene::{CommandsSceneExt, WorldSceneExt, bsn, template_value};
+
+/// Full `FluentIcon` set exposed by the Picus facade (WinUI Symbol-compatible core).
+pub const FLUENT_ICON_ENTRIES: &[(&str, FluentIcon)] = &[
+    ("Accept", FluentIcon::Accept),
+    ("Add", FluentIcon::Add),
+    ("AllApps", FluentIcon::AllApps),
+    ("Back", FluentIcon::Back),
+    ("Brightness", FluentIcon::Brightness),
+    ("Cancel", FluentIcon::Cancel),
+    ("Character", FluentIcon::Character),
+    ("Checkmark", FluentIcon::Checkmark),
+    ("Checkbox", FluentIcon::Checkbox),
+    ("ChevronDown", FluentIcon::ChevronDown),
+    ("ChevronLeft", FluentIcon::ChevronLeft),
+    ("ChevronRight", FluentIcon::ChevronRight),
+    ("ChevronUp", FluentIcon::ChevronUp),
+    ("Clock", FluentIcon::Clock),
+    ("Contact", FluentIcon::Contact),
+    ("Delete", FluentIcon::Delete),
+    ("DockLeft", FluentIcon::DockLeft),
+    ("Edit", FluentIcon::Edit),
+    ("Folder", FluentIcon::Folder),
+    ("Font", FluentIcon::Font),
+    ("Forward", FluentIcon::Forward),
+    ("GlobalNavigationButton", FluentIcon::GlobalNavigationButton),
+    ("Globe", FluentIcon::Globe),
+    ("Help", FluentIcon::Help),
+    ("Info", FluentIcon::Info),
+    ("List", FluentIcon::List),
+    ("Map", FluentIcon::Map),
+    ("Message", FluentIcon::Message),
+    ("More", FluentIcon::More),
+    ("Pictures", FluentIcon::Pictures),
+    ("Placeholder", FluentIcon::Placeholder),
+    ("Refresh", FluentIcon::Refresh),
+    ("Remove", FluentIcon::Remove),
+    ("Search", FluentIcon::Search),
+    ("Send", FluentIcon::Send),
+    ("Settings", FluentIcon::Settings),
+    ("Stop", FluentIcon::Stop),
+    ("Sync", FluentIcon::Sync),
+    ("TouchPointer", FluentIcon::TouchPointer),
+    ("ViewAll", FluentIcon::ViewAll),
+];
 
 const MARKDOWN_SAMPLE: &str = r#"# Markdown
 
@@ -68,38 +112,337 @@ pub fn spawn_image_page(commands: &mut Commands, parent: Entity) {
     );
 }
 
-pub fn spawn_icons_page(commands: &mut Commands, parent: Entity) {
-    let g = grid(commands, parent, 4);
+pub fn spawn_color_page(commands: &mut Commands, parent: Entity) {
+    note(
+        commands,
+        parent,
+        "WinUI Color design page → Picus theme RON tokens (fluent_theme variants) + gallery.token.* classes. Interactive picking lives on ColorPicker.",
+    );
 
-    for (name, icon) in [
-        ("Accept", FluentIcon::Accept),
-        ("Add", FluentIcon::Add),
-        ("Cancel", FluentIcon::Cancel),
-        ("Settings", FluentIcon::Settings),
-        ("Search", FluentIcon::Search),
-        ("Send", FluentIcon::Send),
-        ("Refresh", FluentIcon::Refresh),
-        ("Message", FluentIcon::Message),
+    let g = grid(commands, parent, 2);
+
+    let surfaces = card(commands, g, "Surface / fill tokens");
+    for (label, class_name) in [
+        ("surface-bg", "gallery.token.surface-bg"),
+        ("surface-panel", "gallery.token.surface-panel"),
+        ("surface-subtle", "gallery.token.surface-subtle"),
+        ("surface-card", "gallery.token.surface-card"),
+        ("surface-elevated", "gallery.token.surface-elevated"),
+        ("surface-accent", "gallery.token.surface-accent"),
+        ("fill-layer-default", "gallery.token.fill-layer-default"),
+        ("fill-control-default", "gallery.token.fill-control-default"),
     ] {
-        let c = card(commands, g, name);
+        commands.spawn_scene(bsn! {
+            template_value(UiLabel::new(label))
+            template_value(class(class_name))
+            ChildOf(surfaces)
+        });
+    }
+
+    let text = card(commands, g, "Text / accent tokens");
+    for (label, class_name) in [
+        ("text-primary", "gallery.token.text-primary"),
+        ("text-secondary", "gallery.token.text-secondary"),
+        ("text-heading", "gallery.token.text-heading"),
+        ("text-disabled", "gallery.token.text-disabled"),
+        ("accent-primary", "gallery.token.accent-primary"),
+        ("brand-foreground", "gallery.token.brand-foreground"),
+        ("text-link", "gallery.token.text-link"),
+        ("text-on-accent", "gallery.token.text-on-accent"),
+    ] {
+        commands.spawn_scene(bsn! {
+            template_value(UiLabel::new(label))
+            template_value(class(class_name))
+            ChildOf(text)
+        });
+    }
+
+    let status = card(commands, g, "Status tokens");
+    for (label, class_name) in [
+        ("status-info", "gallery.token.status-info"),
+        ("status-success", "gallery.token.status-success"),
+        ("status-warning", "gallery.token.status-warning"),
+        ("status-error", "gallery.token.status-error"),
+    ] {
+        commands.spawn_scene(bsn! {
+            template_value(UiLabel::new(label))
+            template_value(class(class_name))
+            ChildOf(status)
+        });
+    }
+
+    let borders = card(commands, g, "Border tokens");
+    for (label, class_name) in [
+        ("border-default", "gallery.token.border-default"),
+        ("border-muted", "gallery.token.border-muted"),
+        ("border-subtle", "gallery.token.border-subtle"),
+        ("focus-stroke", "gallery.token.focus-stroke"),
+    ] {
+        commands.spawn_scene(bsn! {
+            template_value(UiLabel::new(label))
+            template_value(class(class_name))
+            ChildOf(borders)
+        });
+    }
+}
+
+pub fn spawn_geometry_page(commands: &mut Commands, parent: Entity) {
+    note(
+        commands,
+        parent,
+        "WinUI Geometry → Picus layout tokens radius-* / border-* in fluent_theme RON. Vector primitives are on the Shapes page (UiCanvas).",
+    );
+
+    let g = grid(commands, parent, 2);
+
+    let radii = card(commands, g, "Corner radius tokens");
+    for (label, class_name) in [
+        ("radius-none (0)", "gallery.radius.none"),
+        ("radius-xs (2)", "gallery.radius.xs"),
+        ("radius-sm (4)", "gallery.radius.sm"),
+        ("radius-md (6)", "gallery.radius.md"),
+        ("radius-lg (8)", "gallery.radius.lg"),
+        ("radius-xl (12)", "gallery.radius.xl"),
+        ("radius-2xl (16)", "gallery.radius.2xl"),
+        ("radius-pill", "gallery.radius.pill"),
+    ] {
+        commands.spawn_scene(bsn! {
+            template_value(UiLabel::new(label))
+            template_value(class(class_name))
+            ChildOf(radii)
+        });
+    }
+
+    let strokes = card(commands, g, "Stroke width tokens");
+    for (label, class_name) in [
+        ("border-thin (1)", "gallery.stroke.thin"),
+        ("border-thick (2)", "gallery.stroke.thick"),
+        ("border-thicker (3)", "gallery.stroke.thicker"),
+        ("border-thickest (4)", "gallery.stroke.thickest"),
+    ] {
+        commands.spawn_scene(bsn! {
+            template_value(UiLabel::new(label))
+            template_value(class(class_name))
+            ChildOf(strokes)
+        });
+    }
+
+    let canvas_card = card(commands, g, "Canvas geometry sample");
+    commands.spawn_scene(bsn! {
+        template_value(sample_canvas())
+        template_value(class("gallery.canvas"))
+        ChildOf(canvas_card)
+    });
+    note(
+        commands,
+        canvas_card,
+        "Rounded rects, circles, and paths use absolute geometry on UiCanvas — not stylesheet corner_radius.",
+    );
+}
+
+pub fn spawn_spacing_page(commands: &mut Commands, parent: Entity) {
+    note(
+        commands,
+        parent,
+        "WinUI Spacing → Picus space-* and gap-* tokens. Apply via stylesheet padding/gap or InlineStyle; gallery.space.* demos resolve Var tokens.",
+    );
+
+    let g = grid(commands, parent, 1);
+
+    let scale = card(commands, g, "Spacing scale (padding demos)");
+    for (label, class_name) in [
+        ("space-xxs (2)", "gallery.space.xxs"),
+        ("space-xs (4)", "gallery.space.xs"),
+        ("space-sm (6)", "gallery.space.sm"),
+        ("space-md (8)", "gallery.space.md"),
+        ("space-lg (10)", "gallery.space.lg"),
+        ("space-m (12)", "gallery.space.m"),
+        ("space-xl (16)", "gallery.space.xl"),
+        ("space-xxl (24)", "gallery.space.xxl"),
+        ("space-xxxl (32)", "gallery.space.xxxl"),
+    ] {
+        commands.spawn_scene(bsn! {
+            template_value(UiLabel::new(label))
+            template_value(class(class_name))
+            ChildOf(scale)
+        });
+    }
+
+    let gaps = card(commands, g, "Layout gap demos");
+    note(
+        commands,
+        gaps,
+        "Rows below use gallery.gap.sm / md / lg (maps to gap-sm/md/lg tokens) around three sample tiles.",
+    );
+    for (title, gap_class) in [
+        ("gap-sm", "gallery.gap.sm"),
+        ("gap-md", "gallery.gap.md"),
+        ("gap-lg", "gallery.gap.lg"),
+    ] {
+        commands.spawn_scene(bsn! {
+            template_value(UiLabel::new(title))
+            template_value(class("gallery.note"))
+            ChildOf(gaps)
+        });
+        let row = commands
+            .spawn_scene(bsn! {
+                UiFlexRow
+                template_value(class(gap_class))
+                ChildOf(gaps)
+            })
+            .id();
+        for tile in ["A", "B", "C"] {
+            commands.spawn_scene(bsn! {
+                template_value(UiLabel::new(tile))
+                template_value(class("gallery.space.tile"))
+                ChildOf(row)
+            });
+        }
+    }
+
+    let stack = card(commands, g, "Stacked spacing");
+    let col = commands
+        .spawn_scene(bsn! {
+            UiFlexColumn
+            template_value(class("gallery.gap.lg"))
+            ChildOf(stack)
+        })
+        .id();
+    for label in ["First block", "Second block", "Third block"] {
+        commands.spawn_scene(bsn! {
+            template_value(UiLabel::new(label))
+            template_value(class("gallery.space.md"))
+            ChildOf(col)
+        });
+    }
+    note(
+        commands,
+        stack,
+        "Compose UiFlexColumn/UiFlexRow with gap tokens for StackPanel-style spacing (see also StackPanel page).",
+    );
+}
+
+pub fn spawn_icons_page(commands: &mut Commands, parent: Entity) {
+    note(
+        commands,
+        parent,
+        "WinUI Iconography → Picus FluentIcon (facade). Glyphs use Segoe Fluent Icons with Segoe MDL2 / FabricMDL2 / Segoe UI Symbol fallbacks.",
+    );
+
+    let browser = card(commands, parent, "Fluent glyph browser");
+    commands.spawn_scene(bsn! {
+        template_value(UiSearch::new("Filter icons by name\u{2026}"))
+        GalleryIconSearch
+        ChildOf(browser)
+    });
+    note(
+        commands,
+        browser,
+        "Type to filter the grid. Each cell shows FluentIcon::Name and its glyph codepoint via UiLabel + gallery.icon font stack.",
+    );
+
+    let g = commands
+        .spawn_scene(bsn! {
+            template_value(UiGrid::new(6, 1))
+            template_value(class("gallery.card_grid"))
+            GalleryIconGrid
+            ChildOf(browser)
+        })
+        .id();
+    spawn_icon_grid_cells(commands, g, "");
+}
+
+/// Populate (or re-populate) the icon browser grid with entries matching `filter`.
+pub fn spawn_icon_grid_cells(commands: &mut Commands, grid: Entity, filter: &str) {
+    let q = filter.trim().to_lowercase();
+    let mut matched = 0usize;
+    for &(name, icon) in FLUENT_ICON_ENTRIES {
+        if !q.is_empty() && !name.to_lowercase().contains(&q) {
+            continue;
+        }
+        matched += 1;
+        let cell = commands
+            .spawn_scene(bsn! {
+                UiFlexColumn
+                template_value(class("gallery.icon_cell"))
+                ChildOf(grid)
+            })
+            .id();
         commands.spawn_scene(bsn! {
             template_value(UiLabel::new(icon.glyph().to_string()))
             template_value(class("gallery.icon"))
-            ChildOf(c)
+            ChildOf(cell)
         });
         commands.spawn_scene(bsn! {
             template_value(UiLabel::new(name))
             template_value(class("gallery.icon_label"))
-            ChildOf(c)
+            ChildOf(cell)
         });
     }
+    if matched == 0 {
+        commands.spawn_scene(bsn! {
+            template_value(UiLabel::new("No icons match this filter."))
+            template_value(class("gallery.note"))
+            ChildOf(grid)
+        });
+    }
+}
 
-    placeholder(
-        commands,
-        parent,
-        "Full Fluent icon browser",
-        "Picus exposes FluentIcon glyphs backed by Segoe Fluent Icons with MDL2/Fabric fallback.",
-    );
+/// Rebuild the icon grid from a search query (exclusive-system path).
+pub fn rebuild_icon_grid(world: &mut World, filter: &str) {
+    let grids: Vec<Entity> = {
+        let mut query = world.query_filtered::<Entity, With<GalleryIconGrid>>();
+        query.iter(world).collect()
+    };
+    for grid in grids {
+        let children: Vec<Entity> = world
+            .get::<bevy_ecs::hierarchy::Children>(grid)
+            .map(|c| c.iter().collect())
+            .unwrap_or_default();
+        for child in children {
+            world.entity_mut(child).despawn();
+        }
+        // Spawn filtered cells via WorldSceneExt so exclusive systems can update the tree.
+        let q = filter.trim().to_lowercase();
+        let mut matched = 0usize;
+        for &(name, icon) in FLUENT_ICON_ENTRIES {
+            if !q.is_empty() && !name.to_lowercase().contains(&q) {
+                continue;
+            }
+            matched += 1;
+            let cell = world
+                .spawn_scene(bsn! {
+                    UiFlexColumn
+                    template_value(class("gallery.icon_cell"))
+                    ChildOf(grid)
+                })
+                .expect("icon cell scene should spawn")
+                .id();
+            world
+                .spawn_scene(bsn! {
+                    template_value(UiLabel::new(icon.glyph().to_string()))
+                    template_value(class("gallery.icon"))
+                    ChildOf(cell)
+                })
+                .expect("icon glyph scene should spawn");
+            world
+                .spawn_scene(bsn! {
+                    template_value(UiLabel::new(name))
+                    template_value(class("gallery.icon_label"))
+                    ChildOf(cell)
+                })
+                .expect("icon label scene should spawn");
+        }
+        if matched == 0 {
+            world
+                .spawn_scene(bsn! {
+                    template_value(UiLabel::new("No icons match this filter."))
+                    template_value(class("gallery.note"))
+                    ChildOf(grid)
+                })
+                .expect("empty-filter note should spawn");
+        }
+    }
 }
 
 pub fn spawn_shapes_page(commands: &mut Commands, parent: Entity) {

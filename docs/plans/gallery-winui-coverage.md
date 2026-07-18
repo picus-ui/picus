@@ -1,7 +1,7 @@
 # Plan: example_gallery ↔ WinUI Gallery control coverage
 
 **Status**: active  
-**Baseline**: `example_gallery` **58** pages (post Phase 1b MenuFlyout + Dialog/Flyout polish)  
+**Baseline**: `example_gallery` **61** pages (post Phase 1b+1c MenuFlyout/Dialog polish + Color/Geometry/Spacing + Iconography)  
 **Reference**: sibling repo `../WinUI-Gallery` (`ControlInfoData.json`, ~**120** sample pages)  
 **Owner path**: `examples/gallery/` + `crates/picus_core/src/components/` + `crates/picus` facade
 
@@ -61,10 +61,10 @@ Organized by WinUI Gallery categories. **“Picus target”** is the intended AP
 
 | WinUI UniqueId | Status | Picus target | Effort | Notes |
 |----------------|--------|--------------|--------|-------|
-| Color | GALLERY | Token / swatch page from theme RON + `ColorPicker` | M | Design guidance page, not a control |
-| Geometry | GALLERY | Corner radius / spacing tokens + canvas shapes | S | |
-| Iconography | POLISH | `Icons` page + fuller Fluent set browser | M | Expand glyph grid / search |
-| Spacing | GALLERY | Spacing scale from theme + layout demos | S | |
+| Color | DONE | Token / swatch page from theme RON + `ColorPicker` | M | Design guidance page, not a control |
+| Geometry | DONE | Corner radius / spacing tokens + canvas shapes | S | |
+| Iconography | DONE | `Icons` page + fuller Fluent set browser | M | Expand glyph grid / search |
+| Spacing | DONE | Spacing scale from theme + layout demos | S | |
 | Typography | POLISH | Existing `Typography` / `TextBlock` pages | S | Export `TypographyPreset` on facade if needed |
 
 ### 3.3 Accessibility — SKIP as doc-clone pages; track as test contracts later
@@ -284,8 +284,8 @@ Everything that is **not SKIP**, grouped by work type. This is the complete “c
 | A4 | ContentDialog buttons / content slot demos | Dialog API may need small extend |
 | A5 | Flyout / Popup variants on Popover page (or rename) | — |
 | A6 | ScrollView nested + programmatic scroll | — |
-| A7 | Iconography browser (searchable Fluent grid) | — |
-| A8 | Design pages: Color tokens, Geometry, Spacing | theme tokens |
+| A7 | Iconography browser (searchable Fluent grid) ✅ | — |
+| A8 | Design pages: Color tokens, Geometry, Spacing ✅ | theme tokens |
 | A9 | Acrylic / CompactSizing / ThemeShadow samples | theme |
 | A10 | Clipboard page | facade export |
 | A11 | StoragePickers page (`rfd`) | — |
@@ -363,7 +363,7 @@ Each phase ends with: `cargo test -p example_gallery`, component unit tests wher
 |----|--------|
 | **1a** | Nav search filter + NavigationView deep samples ✅ |
 | **1b** | MenuFlyout / Dialog / Flyout-Popup polish pages |
-| **1c** | Design guidance pages (Color, Geometry, Spacing) + Iconography browser |
+| **1c** | Design guidance pages (Color, Geometry, Spacing) + Iconography browser ✅ |
 | **1d** | Facade: clipboard + TypographyPreset; Clipboard + StoragePickers pages |
 
 **Exit**: Gallery feels closer to WinUI shell; no new `Ui*` types required.
@@ -472,8 +472,8 @@ Use this as the living “can still ship” list. Check when gallery + API meet 
 - [x] A4 ContentDialog polish  
 - [x] A5 Flyout/Popup polish  
 - [ ] A6 ScrollView polish  
-- [ ] A7 Iconography browser  
-- [ ] A8 Color / Geometry / Spacing  
+- [x] A7 Iconography browser  
+- [x] A8 Color / Geometry / Spacing  
 - [ ] A9 Acrylic / CompactSizing / ThemeShadow samples  
 - [ ] A10 Clipboard  
 - [ ] A11 StoragePickers  
@@ -534,7 +534,8 @@ Use this as the living “can still ship” list. Check when gallery + API meet 
 
 | Milestone | Approx gallery pages | Notes |
 |-----------|----------------------|-------|
-| Baseline (now) | **57** | Committed |
+| Baseline (pre-1c) | **57** | Committed |
+| After Phase 1c | **60** | Color + Geometry + Spacing (+ Iconography polish) |
 | After Phase 1 | ~65–70 | Design + system pages, no big components |
 | After Phase 2–3 | ~75–80 | Input + tips complete |
 | After Phase 4–5 | ~85–95 | Layout + nav chrome |

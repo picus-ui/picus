@@ -11,8 +11,10 @@ use picus::prelude::{
     spawn_manual_overlay_at, spawn_popover_in_overlay_root,
 };
 
+use crate::pages::rebuild_icon_grid;
 use crate::state::{
-    GalleryBackdropPicker, GalleryButtonAction, GalleryLocaleCombo, GalleryPage, GalleryRuntime,
+    GalleryBackdropPicker, GalleryButtonAction, GalleryIconSearch, GalleryLocaleCombo, GalleryPage,
+    GalleryRuntime,
 };
 
 #[derive(Resource, Default)]
@@ -48,6 +50,14 @@ pub fn apply_gallery_actions(world: &mut World) {
     let pending = std::mem::take(&mut *world.resource_mut::<PendingGalleryActions>());
 
     for event in pending.search {
+        if world.get::<GalleryIconSearch>(event.source).is_some()
+            || world
+                .get::<GalleryIconSearch>(event.action.search)
+                .is_some()
+        {
+            rebuild_icon_grid(world, &event.action.value);
+            continue;
+        }
         if event.source != rt.search_input && event.action.search != rt.search_input {
             continue;
         }
