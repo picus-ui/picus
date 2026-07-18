@@ -84,5 +84,5 @@ pub fn spawn_page_content(commands: &mut Commands, parent: Entity, page: Gallery
     }
 }
 
-pub use design::{FLUENT_ICON_ENTRIES, rebuild_icon_grid};
+pub use design::rebuild_icon_grid;
 pub use dialogs::{AnchoredFlyoutMarker, ManualOverlayMarkerAt};

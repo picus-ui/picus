@@ -699,28 +699,6 @@ mod tests {
     }
 
     #[test]
-    fn gallery_fluent_icon_entries_cover_all_variants() {
-        assert_eq!(
-            pages::FLUENT_ICON_ENTRIES.len(),
-            FluentIcon::ALL.len(),
-            "gallery table must list every FluentIcon::ALL variant"
-        );
-        let mut names = std::collections::HashSet::new();
-        for icon in FluentIcon::ALL {
-            let entry = pages::FLUENT_ICON_ENTRIES
-                .iter()
-                .find(|(_, i)| *i == icon)
-                .unwrap_or_else(|| panic!("missing FluentIcon::{:?} in FLUENT_ICON_ENTRIES", icon));
-            assert_eq!(entry.0, icon.name());
-            assert!(
-                names.insert(entry.0),
-                "duplicate icon name in FLUENT_ICON_ENTRIES: {}",
-                entry.0
-            );
-        }
-    }
-
-    #[test]
     fn gallery_iconography_browser_lists_fluent_icons_and_filters() {
         let mut app = build_gallery_app();
         app.update();
@@ -768,8 +746,8 @@ mod tests {
             .unwrap_or(0);
         assert_eq!(
             initial_children,
-            pages::FLUENT_ICON_ENTRIES.len(),
-            "browser should list every FluentIcon entry"
+            FluentIcon::ALL.len(),
+            "browser should list every FluentIcon::ALL entry"
         );
 
         // Filter to "chevron" — ChevronDown/Left/Right/Up

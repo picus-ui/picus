@@ -12,59 +12,16 @@ use picus::prelude::{
 };
 use picus::scene::{CommandsSceneExt, bsn, template_value};
 
-/// Gallery browser table: name + glyph for every [`FluentIcon::ALL`] entry.
-///
-/// Kept as a named table for filter UX; length/coverage is guarded by tests
-/// against `FluentIcon::ALL` so new enum variants cannot silently drop out.
-pub const FLUENT_ICON_ENTRIES: &[(&str, FluentIcon)] = &[
-    ("Accept", FluentIcon::Accept),
-    ("Add", FluentIcon::Add),
-    ("AllApps", FluentIcon::AllApps),
-    ("Back", FluentIcon::Back),
-    ("Brightness", FluentIcon::Brightness),
-    ("Cancel", FluentIcon::Cancel),
-    ("Character", FluentIcon::Character),
-    ("Checkmark", FluentIcon::Checkmark),
-    ("Checkbox", FluentIcon::Checkbox),
-    ("ChevronDown", FluentIcon::ChevronDown),
-    ("ChevronLeft", FluentIcon::ChevronLeft),
-    ("ChevronRight", FluentIcon::ChevronRight),
-    ("ChevronUp", FluentIcon::ChevronUp),
-    ("Clock", FluentIcon::Clock),
-    ("Contact", FluentIcon::Contact),
-    ("Delete", FluentIcon::Delete),
-    ("DockLeft", FluentIcon::DockLeft),
-    ("Edit", FluentIcon::Edit),
-    ("Folder", FluentIcon::Folder),
-    ("Font", FluentIcon::Font),
-    ("Forward", FluentIcon::Forward),
-    ("GlobalNavigationButton", FluentIcon::GlobalNavigationButton),
-    ("Globe", FluentIcon::Globe),
-    ("Help", FluentIcon::Help),
-    ("Info", FluentIcon::Info),
-    ("List", FluentIcon::List),
-    ("Map", FluentIcon::Map),
-    ("Message", FluentIcon::Message),
-    ("More", FluentIcon::More),
-    ("Pictures", FluentIcon::Pictures),
-    ("Placeholder", FluentIcon::Placeholder),
-    ("Refresh", FluentIcon::Refresh),
-    ("Remove", FluentIcon::Remove),
-    ("Search", FluentIcon::Search),
-    ("Send", FluentIcon::Send),
-    ("Settings", FluentIcon::Settings),
-    ("Stop", FluentIcon::Stop),
-    ("Sync", FluentIcon::Sync),
-    ("TouchPointer", FluentIcon::TouchPointer),
-    ("ViewAll", FluentIcon::ViewAll),
-];
-
 /// Icons whose names contain `filter` (case-insensitive). Empty filter → full set.
+///
+/// Driven solely from [`FluentIcon::ALL`] + [`FluentIcon::name`] so the browser
+/// cannot drift from the public enum set.
 fn filtered_icon_entries(filter: &str) -> impl Iterator<Item = (&'static str, FluentIcon)> + '_ {
     let q = filter.trim().to_lowercase();
-    FLUENT_ICON_ENTRIES
+    FluentIcon::ALL
         .iter()
         .copied()
+        .map(|icon| (icon.name(), icon))
         .filter(move |(name, _)| q.is_empty() || name.to_lowercase().contains(&q))
 }
 
