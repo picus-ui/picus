@@ -21,5 +21,5 @@ prefix is unchanged.
 Tests should cover empty input, one-chunk input, multiple appends, edits before
 the cache boundary, unfinished markdown followed by a final chunk, and a full
 parse versus incremental parse comparison. The `picuscode` example exercises
-the application-side streaming path; its CodeWhale integration tests must use
-fixtures and never touch the user's real `~/.codewhale/` directory.
+ the application-side streaming path; its omp integration tests must use
+ fixtures and never touch the user's real `~/.omp/` directory.

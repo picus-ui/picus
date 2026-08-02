@@ -10,7 +10,7 @@ use crate::bridge::{BridgeHandle, ChatMessage, ThreadSummary};
 /// Top-level picuscode app state shared across views.
 #[derive(Resource)]
 pub struct PicusState {
-    /// Bridge to the CodeWhale runtime thread.
+    /// Bridge to the omp (ACP) runtime thread.
     pub bridge: BridgeHandle,
     /// All known threads (refreshed from the bridge).
     pub threads: Vec<ThreadSummary>,

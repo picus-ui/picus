@@ -96,12 +96,10 @@ See [`docs/guide/styling-themes.md`](docs/guide/styling-themes.md).
 - Outside-click dismissal checks the top overlay hit path / bound widget IDs.
 - Nested wheel routing starts at the deepest hit target.
 
-### picuscode / CodeWhale
+### picuscode / omp
 
-- Integration example only; tests must not touch the user’s real `~/.codewhale/`.
-- Full sync procedure: [`docs/contributing/codewhale-submodule.md`](docs/contributing/codewhale-submodule.md).
-  Submodule-local hard steps may live under `thirdparty/` AGENTS without
-  editing submodule files.
+- Integration example only; tests must not touch the user's real `~/.omp/`.
+  Use temp dirs for session/config state.
 
 ## 5. Forbidden
 

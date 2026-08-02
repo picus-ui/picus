@@ -25,7 +25,6 @@ repository `AGENTS.md` files (root and nested where needed).
 | [guide/multi-window.md](guide/multi-window.md) | Multi-window runtime and sinks |
 | [guide/paint-isolation.md](guide/paint-isolation.md) | `PaintIsolation::{Inline, AnimEntry}` for continuous anim |
 | [examples/index.md](examples/index.md) | What each example teaches |
-| [contributing/codewhale-submodule.md](contributing/codewhale-submodule.md) | CodeWhale fork sync |
 | [reference/public-modules.md](reference/public-modules.md) | Public facade modules and advanced boundary |
 | [reference/style-tokens.md](reference/style-tokens.md) | Theme, token, and missing-rule contract |
 | [perf/frame-pipeline-baseline.md](perf/frame-pipeline-baseline.md) | Frame pipeline baseline protocol, PresentMon/ETW, result tables |

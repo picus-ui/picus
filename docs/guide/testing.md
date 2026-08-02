@@ -25,5 +25,5 @@ cargo test -p picus --test ui
 cargo check --workspace --all-targets
 ```
 
-Integration and CodeWhale tests use temporary fixtures. They must never read or
-write the developer's real `~/.codewhale/` state.
+Integration and omp bridge tests use temporary fixtures. They must never read or
+write the developer's real `~/.omp/` state.

@@ -1,18 +1,17 @@
-//! picuscode: a Codex-desktop-style GUI for CodeWhale.
+//! picuscode: a Codex-desktop-style GUI for Oh My Pi (omp).
 //!
 //! Architecture:
-//! - A background thread ([`bridge::spawn_bridge`]) owns the CodeWhale
-//!   `Runtime`, `ConfigStore`, and `StateStore`, talking to the ECS world
-//!   through crossbeam channels. Config and state persist to the same
-//!   `~/.codewhale/` files an installed `codewhale` binary uses, so the two
-//!   are interchangeable.
-//! - The UI is a Bevy + Picus ECS tree: a primary chat window (sidebar thread
+//! - A background thread ([`bridge::spawn_bridge`]) owns a resident `omp acp`
+//!   child process (Agent Client Protocol over stdio) plus a tokio runtime,
+//!   talking to the ECS world through crossbeam channels. Sessions persist to
+//!   the same `~/.omp/agent/sessions/` files an installed `omp` binary uses,
+//!   so the two are interchangeable.
+//! - The UI is a Bevy + Picus ECS tree: a primary chat window (sidebar session
 //!   list + streaming transcript + composer) plus secondary About and
 //!   Settings windows bound via `UiWindow`.
-//! - Model turns stream through the OpenAI-compatible `/chat/completions`
-//!   endpoint using provider/model/api_key resolved from the real codewhale
-//!   config, so the same provider setup an installed codewhale uses is
-//!   honored here.
+//! - Model turns stream as ACP `session/update` notifications from omp,
+//!   resolved through omp's own config/auth (`~/.omp/agent/config.yml`), so
+//!   the same provider setup an installed omp uses is honored here.
 
 // Event-routing logic uses `let`-chain guards for clarity; collapsing the
 // nested `if`s would obscure the active-thread/response-id matching.
@@ -46,22 +45,22 @@ use state::{
     StatusLineView, TranscriptColumnView,
 };
 
-/// A static welcome markdown blob shown when no thread is selected.
+/// A static welcome markdown blob shown when no session is selected.
 const WELCOME_MARKDOWN: &str = "\
 # picuscode
 
-A **Codex-desktop**-style GUI for CodeWhale, built on Picus.
+A **Codex-desktop**-style GUI for Oh My Pi (omp), built on Picus.
 
-- Left: your CodeWhale threads (shared with the installed `codewhale` CLI).
+- Left: your omp sessions (shared with the installed `omp` CLI).
 - Center: streaming assistant replies rendered as Markdown.
 - Bottom: composer — type a message and press **Send**.
-- Title bar: **+ New** thread, **Settings** (provider/model/key), **About**.
+- Title bar: **+ New** session, **Settings** (model/thinking), **About**.
 
-Config and state persist to `~/.codewhale/`, so picuscode and your installed
-`codewhale` stay in sync.
+Sessions persist to `~/.omp/agent/sessions/`, so picuscode and your installed
+`omp` stay in sync.
 
 ```rust
-// picuscode embeds codewhale-core in-process:
+// picuscode drives a resident `omp acp` child over ACP:
 let bridge = picuscode::bridge::spawn_bridge();
 bridge.send(BridgeRequest::SendMessage { thread_id, input });
 ```
@@ -802,8 +801,8 @@ fn handle_secondary_window_closed(
     }
 }
 
-/// Periodically request a thread list refresh so newly created threads (from
-/// other codewhale clients) show up.
+/// Periodically request a session list refresh so newly created sessions
+/// (from other omp clients) show up.
 fn refresh_thread_list(period: std::time::Duration) -> impl std::ops::FnMut(&mut World) {
     let mut last = std::time::Instant::now();
     move |world: &mut World| {

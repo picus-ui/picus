@@ -19,28 +19,6 @@ members = [
 	"examples/shared_utils",
 	"examples/timer",
 	"examples/todo_list",
-	# CodeWhale fork crates embedded by example_picuscode. They are path deps
-	# and picus workspace members so their `*.workspace = true` inheritance
-	# resolves against this root; see `workspace.dependencies` below for the
-	# shared dep versions, which are kept compatible with the fork's own
-	# `thirdparty/CodeWhale/Cargo.toml` workspace manifest.
-	"thirdparty/CodeWhale/crates/protocol",
-	"thirdparty/CodeWhale/crates/secrets",
-	"thirdparty/CodeWhale/crates/execpolicy",
-	"thirdparty/CodeWhale/crates/config",
-	"thirdparty/CodeWhale/crates/agent",
-	"thirdparty/CodeWhale/crates/state",
-	"thirdparty/CodeWhale/crates/tools",
-	"thirdparty/CodeWhale/crates/mcp",
-	"thirdparty/CodeWhale/crates/hooks",
-	"thirdparty/CodeWhale/crates/release",
-	"thirdparty/CodeWhale/crates/core",
-]
-exclude = [
-	# The fork's own workspace root is kept for standalone maintenance, but
-	# its crate members are claimed by the picus workspace above, so exclude
-	# the fork root to avoid a dual-membership conflict.
-	"thirdparty/CodeWhale",
 ]
 
 [workspace.package]
@@ -112,9 +90,7 @@ webbrowser = "1"
 pulldown-cmark = { version = "0.13", default-features = false }
 syntect = { version = "5.2", default-features = false, features = ["default-fancy"] }
 
-# Shared dep versions for the embedded CodeWhale fork crates. Kept aligned
-# with `thirdparty/CodeWhale/Cargo.toml` so the fork can still build
-# standalone against the same versions.
+# Shared dep versions.
 async-trait = "0.1.89"
 dirs = "6.0.0"
 rusqlite = { version = "0.39.0", features = ["bundled"] }
@@ -126,17 +102,17 @@ toml_edit = "0.25.12"
 libc = "0.2"
 tracing-appender = "0.2"
 keyring = "3"
-# chrono: unify picus (clock) and codewhale (serde) features.
+# chrono: unify picus (clock) and omp session-timestamp parsing.
 chrono = { version = "0.4.43", default-features = false, features = ["clock", "serde"] }
-# tokio: codewhale needs `full`; picus only needed rt-multi-thread (subset).
+# tokio: picus + example_picuscode (process/io for the omp ACP child).
 tokio = { version = "1.50.0", features = ["full"] }
-# reqwest: unify picus + codewhale feature sets and add `stream` for SSE
-# streaming of chat-completion deltas in example_picuscode.
+# reqwest: no longer used by picuscode (omp drives model calls). Kept for
+# other workspace members / future needs.
 reqwest = { version = "0.13.1", default-features = false, features = ["blocking", "json", "form", "rustls", "stream", "socks"] }
 raw-window-handle = "0.6.2"
 windows-sys = "0.61.2"
 minhook = "0.9"
-# rustls: needed by codewhale-release (release discovery uses rustls directly).
+# rustls: kept for potential network use.
 rustls = { version = "0.23.36", default-features = false, features = ["ring", "std", "tls12"] }
 
 picus_core = { path = "crates/picus_core" }
@@ -145,24 +121,7 @@ picus = { path = "crates/picus" }
 picus_surface = { path = "crates/picus_surface" }
 shared_utils = { path = "examples/shared_utils" }
 
-# CodeWhale fork (thirdparty) — embedded in-process by example_picuscode.
-# These crates remain members of thirdparty/CodeWhale's own workspace, so
-# their internal `.workspace = true` deps resolve there; picus only references
-# them by path. Config/state persistence shares `~/.codewhale/` with an
-# installed codewhale binary, keeping config compatibility.
-codewhale-protocol = { path = "thirdparty/CodeWhale/crates/protocol" }
-codewhale-secrets = { path = "thirdparty/CodeWhale/crates/secrets" }
-codewhale-execpolicy = { path = "thirdparty/CodeWhale/crates/execpolicy" }
-codewhale-config = { path = "thirdparty/CodeWhale/crates/config" }
-codewhale-agent = { path = "thirdparty/CodeWhale/crates/agent" }
-codewhale-state = { path = "thirdparty/CodeWhale/crates/state" }
-codewhale-tools = { path = "thirdparty/CodeWhale/crates/tools" }
-codewhale-mcp = { path = "thirdparty/CodeWhale/crates/mcp" }
-codewhale-hooks = { path = "thirdparty/CodeWhale/crates/hooks" }
-codewhale-release = { path = "thirdparty/CodeWhale/crates/release" }
-codewhale-core = { path = "thirdparty/CodeWhale/crates/core" }
-
-# Used by example_picuscode for SSE streaming of chat-completion deltas.
+# Used by other examples for async streaming work.
 futures = "0.3"
 async-stream = "0.3"
 

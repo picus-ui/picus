@@ -13,6 +13,6 @@ Prefer real examples over a separate “minimal” crate. Start with **timer** o
 | `game_2048` | Keyboard + button actions | Custom hotkey widget |
 | `chess_game` | Multi-resource projection, engine thread | Board grid projection |
 | `gallery` | Full Fluent control surface | NavigationView shell, backdrop picker; **Spinner** / indeterminate **ProgressBar** use `PaintIsolation::AnimEntry` (anim host path — not full-window base encode on pure anim ticks). See [paint-isolation](../guide/paint-isolation.md). |
-| `picuscode` | Multi-window, streaming markdown | CodeWhale bridge (do not touch `~/.codewhale/` in tests) |
+| `picuscode` | Multi-window, streaming markdown | omp (ACP) bridge (do not touch `~/.omp/` in tests) |
 
 Every example loads a theme explicitly and uses `run_picus`.

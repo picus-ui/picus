@@ -262,7 +262,7 @@ impl UiComponentTemplate for ComposerView {
             resolve_style_for_classes(ctx.world, ["picuscode.composer.input-row"]);
         let input = apply_direct_text_input_style(
             text_input(input_entity, draft, PicusCodeAction::ComposerChanged)
-                .placeholder("Message CodeWhale...")
+                .placeholder("Message omp...")
                 .insert_newline(InsertNewline::OnShiftEnter)
                 .on_enter({
                     let sender = ctx.action_sender::<PicusCodeAction>();
@@ -636,7 +636,7 @@ fn sidebar_brand_block(ctx: &ProjectionCtx<'_>) -> UiView {
             brand_mark(ctx, 34.0).into_any_flex(),
             flex_col(vec![
                 text_view(ctx, ["picuscode.sidebar.brand.title"], "picuscode").into_any_flex(),
-                text_view(ctx, ["picuscode.sidebar.brand.meta"], "CodeWhale desktop")
+                text_view(ctx, ["picuscode.sidebar.brand.meta"], "omp desktop")
                     .into_any_flex(),
             ])
             .gap(Length::px(1.0))
@@ -749,7 +749,7 @@ fn sidebar_empty_state(ctx: &ProjectionCtx<'_>) -> UiView {
             text_view(
                 ctx,
                 ["picuscode.empty.body"],
-                "Create one to sync CodeWhale state.",
+                "Create one to sync omp sessions.",
             )
             .into_any_flex(),
         ])
@@ -894,7 +894,7 @@ fn message_role_row_class(role: MessageRole) -> &'static str {
 fn message_role_label(role: MessageRole) -> &'static str {
     match role {
         MessageRole::User => "You",
-        MessageRole::Assistant => "CodeWhale",
+        MessageRole::Assistant => "omp",
         MessageRole::System => "System",
         MessageRole::Other => "Message",
     }
@@ -992,7 +992,7 @@ impl TranscriptSummary {
         let Some(state) = state else {
             return Self {
                 title: "Starting bridge".to_string(),
-                subtitle: "Waiting for CodeWhale state".to_string(),
+                subtitle: "Waiting for omp state".to_string(),
                 ..Default::default()
             };
         };
@@ -1018,7 +1018,7 @@ impl TranscriptSummary {
                     format_timestamp(thread.updated_at)
                 )
             })
-            .unwrap_or_else(|| "Thread list is shared with CodeWhale".to_string());
+            .unwrap_or_else(|| "Session list is shared with omp".to_string());
         let user_count = state
             .messages
             .iter()
@@ -1095,7 +1095,7 @@ fn transcript_empty_state(ctx: &ProjectionCtx<'_>, summary: &TranscriptSummary) 
     let (title, body, primary_prompt) = if summary.active_thread.is_none() {
         (
             "picuscode",
-            "A CodeWhale desktop shell for focused coding sessions.",
+            "A omp desktop shell for focused coding sessions.",
             "Explain this workspace's architecture",
         )
     } else {
@@ -1222,7 +1222,7 @@ fn settings_header(ctx: &ProjectionCtx<'_>, state: Option<&PicusState>) -> UiVie
         .unwrap_or_else(|| "Config bridge starting".to_string());
     Arc::new(apply_widget_style(
         flex_col(vec![
-            text_view(ctx, ["picuscode.settings.title"], "CodeWhale Settings").into_any_flex(),
+            text_view(ctx, ["picuscode.settings.title"], "omp Settings").into_any_flex(),
             text_view(ctx, ["picuscode.settings.subtitle"], subtitle).into_any_flex(),
         ])
         .gap(Length::px(2.0)),
