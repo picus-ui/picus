@@ -81,7 +81,7 @@ pollster = "0.4"
 anyhow = "1"
 arboard = "3"
 base64 = "0.22"
-image = { version = "0.25", default-features = true }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "ico", "bmp"] }
 md5 = "0.8"
 serde_json = "1"
 sha2 = "0.11"
@@ -104,8 +104,8 @@ tracing-appender = "0.2"
 keyring = "3"
 # chrono: unify picus (clock) and omp session-timestamp parsing.
 chrono = { version = "0.4.43", default-features = false, features = ["clock", "serde"] }
-# tokio: picus + example_picuscode (process/io for the omp ACP child).
-tokio = { version = "1.50.0", features = ["full"] }
+# tokio: picus core UI runtime + timer. (example_picuscode adds process/io-util/fs).
+tokio = { version = "1.50.0", default-features = false, features = ["rt", "rt-multi-thread", "time", "sync", "macros"] }
 # reqwest: no longer used by picuscode (omp drives model calls). Kept for
 # other workspace members / future needs.
 reqwest = { version = "0.13.1", default-features = false, features = ["blocking", "json", "form", "rustls", "stream", "socks"] }
@@ -203,3 +203,12 @@ opt-level = 2
 opt-level = 2
 [profile.dev.package.picus_imaging]
 opt-level = 2
+
+# Release profile optimized for compact binary size and dead-code elimination.
+[profile.release]
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
+

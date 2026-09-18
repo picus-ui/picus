@@ -123,7 +123,7 @@ pub fn default_property_set() -> DefaultProperties {
     properties.insert::<Badge, _>(ContentColor::new(Color::WHITE));
     {
         let mut stack = PropertyStack::new();
-        stack.push(
+        stack.push_layer(
             Selector::new().with_disabled(true),
             Background::Color(SURFACE_DISABLED),
         );
@@ -145,7 +145,7 @@ pub fn default_property_set() -> DefaultProperties {
     properties.insert::<Button, _>(ContentColor::new(TEXT_COLOR));
     {
         let mut stack = PropertyStack::new();
-        stack.push(
+        stack.push_layer(
             Selector::new().with_hovered(true),
             (
                 BorderColor {
@@ -154,17 +154,17 @@ pub fn default_property_set() -> DefaultProperties {
                 Background::Color(SURFACE_SUBTLE_HOVER),
             ),
         );
-        stack.push(
+        stack.push_layer(
             Selector::new().with_focused(true),
             (BorderColor {
                 color: Color::TRANSPARENT,
             },),
         );
-        stack.push(
+        stack.push_layer(
             Selector::new().with_active(true),
             Background::Color(SURFACE_SUBTLE_PRESSED),
         );
-        stack.push(
+        stack.push_layer(
             Selector::new().with_disabled(true),
             (
                 Background::Color(SURFACE_DISABLED),
@@ -189,23 +189,23 @@ pub fn default_property_set() -> DefaultProperties {
     properties.insert::<Checkbox, _>(CheckmarkColor { color: TEXT_COLOR });
     {
         let mut stack = PropertyStack::new();
-        stack.push(
+        stack.push_layer(
             Selector::new().with_hovered(true),
             BorderColor {
                 color: BORDER_DEFAULT,
             },
         );
-        stack.push(
+        stack.push_layer(
             Selector::new().with_focused(true),
             BorderColor {
                 color: FOCUS_OUTER_COLOR,
             },
         );
-        stack.push(
+        stack.push_layer(
             Selector::new().with_active(true),
             Background::Color(SURFACE_SUBTLE_PRESSED),
         );
-        stack.push(
+        stack.push_layer(
             Selector::new().with_disabled(true),
             PropertySet::new()
                 .with(Background::Color(SURFACE_DISABLED))
@@ -235,19 +235,19 @@ pub fn default_property_set() -> DefaultProperties {
     properties.insert::<Switch, _>(TrackThickness(20.px()));
     {
         let mut stack = PropertyStack::new();
-        stack.push(
+        stack.push_layer(
             Selector::new().with_hovered(true),
             BorderColor {
                 color: BORDER_DEFAULT,
             },
         );
-        stack.push(
+        stack.push_layer(
             Selector::new().with_focused(true),
             BorderColor {
                 color: FOCUS_OUTER_COLOR,
             },
         );
-        stack.push(
+        stack.push_layer(
             Selector::classes(&["#toggled"]),
             (
                 Background::Color(SURFACE_ACCENT),
@@ -256,11 +256,11 @@ pub fn default_property_set() -> DefaultProperties {
                 },
             ),
         );
-        stack.push(
+        stack.push_layer(
             Selector::new().with_active(true),
             Background::Color(SURFACE_SUBTLE_PRESSED),
         );
-        stack.push(
+        stack.push_layer(
             Selector::new().with_disabled(true),
             Background::Color(SURFACE_DISABLED),
         );
@@ -289,25 +289,25 @@ pub fn default_property_set() -> DefaultProperties {
     properties.insert::<TextInput, _>(ContentColor::new(TEXT_COLOR));
     {
         let mut stack = PropertyStack::new();
-        stack.push(
+        stack.push_layer(
             Selector::classes(&["#unfocused"]),
             SelectionColor {
                 color: DISABLED_TEXT_COLOR,
             },
         );
-        stack.push(
+        stack.push_layer(
             Selector::new().with_hovered(true),
             BorderColor {
                 color: BORDER_DEFAULT,
             },
         );
-        stack.push(
+        stack.push_layer(
             Selector::new().with_focused(true),
             BorderColor {
                 color: FOCUS_OUTER_COLOR,
             },
         );
-        stack.push(
+        stack.push_layer(
             Selector::new().with_disabled(true),
             (
                 Background::Color(SURFACE_DISABLED),
@@ -324,7 +324,7 @@ pub fn default_property_set() -> DefaultProperties {
     properties.insert::<TextArea<false>, _>(Background::Color(SURFACE_INPUT));
     {
         let mut stack = PropertyStack::new();
-        stack.push(
+        stack.push_layer(
             Selector::new().with_disabled(true),
             ContentColor::new(DISABLED_TEXT_COLOR),
         );
@@ -336,7 +336,7 @@ pub fn default_property_set() -> DefaultProperties {
     properties.insert::<TextArea<true>, _>(Background::Color(SURFACE_INPUT));
     {
         let mut stack = PropertyStack::new();
-        stack.push(
+        stack.push_layer(
             Selector::new().with_disabled(true),
             ContentColor::new(DISABLED_TEXT_COLOR),
         );
@@ -347,7 +347,7 @@ pub fn default_property_set() -> DefaultProperties {
     properties.insert::<Label, _>(ContentColor::new(TEXT_COLOR));
     {
         let mut stack = PropertyStack::new();
-        stack.push(
+        stack.push_layer(
             Selector::new().with_disabled(true),
             ContentColor::new(DISABLED_TEXT_COLOR),
         );
@@ -378,23 +378,23 @@ pub fn default_property_set() -> DefaultProperties {
     properties.insert::<RadioButton, _>(CheckmarkColor { color: TEXT_COLOR });
     {
         let mut stack = PropertyStack::new();
-        stack.push(
+        stack.push_layer(
             Selector::new().with_active(true),
             Background::Color(SURFACE_SUBTLE_PRESSED),
         );
-        stack.push(
+        stack.push_layer(
             Selector::new().with_hovered(true),
             BorderColor {
                 color: BORDER_DEFAULT,
             },
         );
-        stack.push(
+        stack.push_layer(
             Selector::new().with_focused(true),
             BorderColor {
                 color: FOCUS_OUTER_COLOR,
             },
         );
-        stack.push(
+        stack.push_layer(
             Selector::new().with_disabled(true),
             (
                 CheckmarkColor::new(DISABLED_TEXT_COLOR),
@@ -419,21 +419,21 @@ pub fn default_property_set() -> DefaultProperties {
     });
     {
         let mut stack = PropertyStack::new();
-        stack.push(
+        stack.push_layer(
             Selector::new().with_hovered(true),
             TrackColor {
                 active: BRAND_COLOR_HOVER,
                 inactive: CONTROL_STRONG_FILL,
             },
         );
-        stack.push(
+        stack.push_layer(
             Selector::new().with_active(true),
             TrackColor {
                 active: BRAND_COLOR_PRESSED,
                 inactive: CONTROL_STRONG_FILL,
             },
         );
-        stack.push(
+        stack.push_layer(
             Selector::new().with_focused(true),
             BorderColor {
                 color: FOCUS_OUTER_COLOR,
@@ -488,20 +488,20 @@ fn default_step_input_style<T: Steppable>(properties: &mut DefaultProperties) {
     });
     {
         let mut stack = PropertyStack::new();
-        stack.push(
+        stack.push_layer(
             Selector::new().with_disabled(true),
             (
                 ContentColor::new(DISABLED_TEXT_COLOR),
                 Background::Color(SURFACE_DISABLED),
             ),
         );
-        stack.push(
+        stack.push_layer(
             Selector::new().with_hovered(true),
             BorderColor {
                 color: BORDER_DEFAULT,
             },
         );
-        stack.push(
+        stack.push_layer(
             Selector::new().with_focused(true),
             BorderColor {
                 color: FOCUS_OUTER_COLOR,
