@@ -85,7 +85,7 @@ pub(crate) enum CapabilityEvidence {
 /// Capabilities of the pinned Masonry/xilem paint boundary (Phase 2a inventory).
 ///
 /// Values are fixed for the git pin in workspace `Cargo.toml` (`xilem` rev
-/// `4b1922c9728f7b86642b6759c6608f32e0badec2`). Re-run the module tests when
+/// `271a27a6d4a930f7878d404f9014e3c50a3a9b88`). Re-run the module tests when
 /// bumping the pin.
 ///
 /// | Field | Evidence |

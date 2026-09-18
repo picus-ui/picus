@@ -205,7 +205,7 @@ Gate closed before multi-texture composite; inventory remains the pin-bump
 checklist. Source of truth: `picus_core::runtime::layers` (crate-private; not on
 the app facade).
 
-#### Gate questions and results (xilem rev `4b1922c`)
+#### Gate questions and results (xilem rev `271a27a`)
 
 | # | Question | Result |
 |---|----------|--------|
