@@ -9,8 +9,6 @@ use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 /// - **Determinate** (`Some`): [`PaintIsolation::Inline`] into the base scene;
 ///   no permanent anim tick.
 ///
-/// See `docs/guide/paint-isolation.md`.
-///
 /// [`PaintIsolation::AnimEntry`]: picus_widget::PaintIsolation::AnimEntry
 /// [`PaintIsolation::Inline`]: picus_widget::PaintIsolation::Inline
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq)]

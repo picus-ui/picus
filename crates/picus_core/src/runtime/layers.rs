@@ -41,7 +41,7 @@
 //!   compositor [`LayerId`]). Unknown External stays transparent placeholder.
 //! - **Known limitation:** custom widgets that only `AnimEntry.apply` are not
 //!   discovered; path forward is trait / TypeId host-painter registry (no
-//!   inventory/linkme). See `docs/guide/paint-isolation.md`.
+//!   inventory/linkme).
 //!
 //! ## Delivered vs not yet
 //!
@@ -50,8 +50,6 @@
 //! - **G2 unit contracts:** Spinner + indeterminate ProgressBar host paths in-tree.
 //! - **Not yet:** open custom-AnimEntry discovery; full PresentMon G3/G4 protocol
 //!   numbers (baseline tables may still be placeholders — do not invent fake numbers).
-//!
-//! See `docs/guide/paint-isolation.md` and `docs/architecture/runtime.md`.
 
 use std::collections::HashMap;
 
@@ -1532,8 +1530,7 @@ impl LayerRegistry {
 ///
 /// Once resolved, the **enum value** decides promotion (`promotes_to_anim_host`).
 /// Host **scene paint** is a separate type-dispatched step (Spinner arms /
-/// ProgressBar segment). Custom retained widgets are not discoverable yet —
-/// see module docs and `docs/guide/paint-isolation.md`.
+/// ProgressBar segment). Custom retained widgets are not discoverable yet.
 fn widget_paint_isolation(render_root: &RenderRoot, widget_id: WidgetId) -> PaintIsolation {
     let Some(wref) = render_root.get_widget(widget_id) else {
         return PaintIsolation::Inline;

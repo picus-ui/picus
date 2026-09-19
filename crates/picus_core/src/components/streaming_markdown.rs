@@ -10,15 +10,19 @@ use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 /// keeps per-frame cost roughly proportional to the number of new tokens
 /// rather than the total document length.
 ///
-/// Append tokens through [`Self::append`] (or [`Self::append_str`]) as they
-/// arrive from the model. When a chunk is known to be complete (for example a
-/// finished paragraph or code block), call [`Self::flush_completed`] to
-/// promote it into the cached completed prefix. Call [`Self::finish`] once
-/// the stream is fully delivered; this flushes any remaining in-progress text
-/// and marks the document as completed.
+/// # Streaming Contracts
+///
+/// - **Monotonic Appends**: Append incoming text to the source buffer via [`Self::append`].
+/// - **Prefix Cache Reuse**: Re-use parsed blocks whose source range is unchanged; only
+///   re-parse the suffix that has changed.
+/// - **In-Progress Tail**: Update the final incomplete block while the stream is active.
+/// - **Finalization**: Call [`Self::finish`] once the producer closes the stream. This
+///   ensures unclosed fences, trailing emphasis, and paragraph boundaries are properly resolved.
+///   A finalized stream produces the exact same block layout as a full-document parse.
 ///
 /// The projection layer renders the completed prefix from cache and the
 /// in-progress tail with a fresh parse, then composes both into one view.
+
 #[derive(Component, Debug, Clone, Default, PartialEq, Eq)]
 pub struct UiStreamingMarkdown {
     /// Cached, fully-parsed completed prefix source.

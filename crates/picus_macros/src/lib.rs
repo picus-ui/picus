@@ -70,13 +70,30 @@ impl UiComponentAttrs {
 
 /// Derive Picus registration metadata for a UI component.
 ///
-/// Does **not** implement [`UiComponentTemplate`]; you still write `project` by hand.
+/// Generates registration metadata (`UiComponentRegistration`) used by
+/// `register_ui_components!(app, ...)`. It does **not** implement
+/// `UiComponentTemplate`; you still implement `project` by hand.
 ///
 /// # Attributes
 ///
-/// - `#[ui_component(resources(Count, Draft))]` — register projection resource deps
-/// - `#[ui_component(style_name = "todo.item")]` — selector type alias
-/// - `#[ui_component(runtime_only)]` — skip Default + Clone authoring assertions
+/// | Attribute | Effect |
+/// |-----------|--------|
+/// | `#[ui_component(resources(A, B))]` | Registers projection resource dependencies. Changes to these resources dirty and rebuild the component's root. |
+/// | `#[ui_component(style_name = "...")]` | Registers a selector type alias usable by `Selector::Type("...")` in stylesheets. |
+/// | `#[ui_component(runtime_only)]` | Skips compile-time `Default + Clone` authoring assertions for runtime-only types. |
+///
+/// # Failure Modes
+///
+/// - Missing `UiComponentTemplate` impl causes a compile error at the registration site.
+/// - Types missing `Default` or `Clone` will fail compile-time assertions unless `runtime_only` is set.
+///
+/// # Example
+///
+/// ```ignore
+/// #[derive(Component, Clone, Default, UiComponent)]
+/// #[ui_component(resources(Count), style_name = "todo.item")]
+/// struct CountLabel;
+/// ```
 #[proc_macro_derive(UiComponent, attributes(ui_component))]
 pub fn derive_ui_component(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -186,19 +203,37 @@ impl Parse for UiViewAttrItem {
 
 /// Turn a function into a zero-sized `UiComponent` + `UiComponentTemplate`.
 ///
+/// Prefer `#[ui_view]` when a projected region has no authoring state beyond declared
+/// resources. It generates a zero-sized struct with `Default + Clone + Component`,
+/// implements `UiComponentTemplate::project` using the function body, and generates
+/// registration metadata for `register_ui_components!(app, Name)`.
+///
+/// # Attributes
+///
+/// | Attribute | Effect |
+/// |-----------|--------|
+/// | `resources(A, B)` | Registers projection resource dependencies. |
+/// | `style_name = "..."` | Registers a selector type alias for stylesheets. |
+/// | `runtime_only` | Skips Default+Clone asserts (always true for the generated ZST). |
+///
+/// # Failure Modes
+///
+/// - Generic functions are not supported.
+/// - The function must accept exactly one parameter of type `ProjectionCtx<'_>`.
+/// - Must return `UiView` (or an alias thereof).
+///
+/// # Example
+///
 /// ```ignore
 /// #[ui_view(resources(Count))]
 /// fn CountLabel(ctx: ProjectionCtx<'_>) -> UiView {
 ///     let n = ctx.world.resource::<Count>().0;
 ///     Arc::new(label(format!("{n}")))
 /// }
+///
+/// // Register with:
+/// register_ui_components!(app, CountLabel);
 /// ```
-///
-/// Expands to a `Component + Clone + Default` struct with the function name,
-/// implements `UiComponentTemplate::project` with the function body, and
-/// implements registration metadata (same as `#[derive(UiComponent)]`).
-///
-/// Register with `register_ui_components!(app, CountLabel)`.
 #[proc_macro_attribute]
 pub fn ui_view(attr: TokenStream, item: TokenStream) -> TokenStream {
     match expand_ui_view(attr, item) {

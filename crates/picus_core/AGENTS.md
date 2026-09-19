@@ -1,8 +1,7 @@
 # picus_core — agent rules
 
 Implementation crate for Picus. Applications must depend on the **`picus` facade**,
-not this crate. See root [`AGENTS.md`](../../AGENTS.md) and
-[`docs/architecture/crates.md`](../../docs/architecture/crates.md).
+not this crate. See root [`AGENTS.md`](../../AGENTS.md).
 
 ## Hard invariants
 
@@ -46,6 +45,6 @@ not this crate. See root [`AGENTS.md`](../../AGENTS.md) and
 
 ## When changing this crate
 
-- Keep docs under `docs/guide/` and root AGENTS in sync for any public-contract
+- Keep Rustdoc and root AGENTS in sync for any public-contract
   change that surfaces through the facade.
 - Prefer extending dispatcher handlers over new application-side drain systems.

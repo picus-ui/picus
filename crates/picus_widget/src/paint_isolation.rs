@@ -23,8 +23,6 @@
 //! Path forward for third-party retained widgets: open discovery (e.g. trait or
 //! TypeId-keyed host painter registry — not inventory/linkme). Until then stock
 //! anim widgets are framework-known only.
-//!
-//! See `docs/guide/paint-isolation.md` and `docs/architecture/runtime.md`.
 
 use crate::core::{PaintCtx, PaintLayerMode};
 
@@ -64,7 +62,7 @@ use crate::core::{PaintCtx, PaintLayerMode};
 /// A third-party widget that only calls [`Self::apply`] with
 /// [`Self::AnimEntry`] gets an External placeholder but is **not** promoted to
 /// Anim until discovery is opened (trait / TypeId host-painter registry). See
-/// module docs and `docs/guide/paint-isolation.md`.
+/// module docs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum PaintIsolation {
     /// Paint into the base / cached scene segment (default for most widgets).

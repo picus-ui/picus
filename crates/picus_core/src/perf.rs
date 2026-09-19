@@ -49,8 +49,7 @@
 //!
 //! `present_submit_ms` (and every other phase above) is **CPU-side wall time**.
 //! It is **not** displayed-frame latency, DWM composition time, or vsync-aligned
-//! frame time. On Windows, use PresentMon/ETW for actual display-path metrics;
-//! see `docs/perf/frame-pipeline-baseline.md`.
+//! frame time. On Windows, use PresentMon/ETW for actual display-path metrics.
 //!
 //! Example log line:
 //!

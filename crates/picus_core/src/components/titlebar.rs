@@ -35,6 +35,14 @@ pub struct TitleBarState {
 ///
 /// Renders a horizontal bar with an optional icon, a title label, and
 /// window control buttons (minimize, maximize, close).
+///
+/// # Caption Action Gating
+///
+/// Window caption actions ([`TitleBarAction`]) resolve and mutate the owning Bevy window.
+/// Caption actions are gated: they are active only when the owning window opts into
+/// client-side decorations (`ExtendsContentIntoTitleBar`) or sets `TitleBarControlsWindow`.
+/// In-card or preview title bars (such as in gallery pages) safely no-op without mutating
+/// the host window.
 #[derive(Component, Debug, Clone)]
 pub struct UiTitleBar {
     pub title: String,

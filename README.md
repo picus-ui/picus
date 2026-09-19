@@ -41,9 +41,10 @@ If you're working with this workspace directly, use path dependencies from the r
 
 ## Quick start
 
-Recommended path (explicit theme, `UiAction` messages, component macro list,
-`run_picus`). Full guide: [`docs/guide/app.md`](docs/guide/app.md). Prefer the
-real **`timer`** or **`calculator`** examples over inventing a separate minimal crate.
+Recommended path: explicit theme, `UiAction` messages, component macro list, and
+`run_picus`. Prefer the real **`timer`** or **`calculator`** examples over inventing
+a separate minimal crate. API contracts and full module documentation are available
+via `cargo doc -p picus --open`.
 
 ```rust,ignore
 use std::sync::Arc;
@@ -116,18 +117,35 @@ fn main() -> Result<(), EventLoopError> {
 3. Derive `UiComponent` + `register_ui_components!` for custom regions.
 4. Run with `run_picus`.
 
-## Documentation map
+## Architecture & Frame stages
 
-| Doc | Contents |
-|-----|----------|
-| [`docs/README.md`](docs/README.md) | Full documentation index |
-| [`docs/guide/app.md`](docs/guide/app.md) | Application authoring |
-| [`docs/guide/styling-themes.md`](docs/guide/styling-themes.md) | Theme / “no theme” contract |
-| [`docs/guide/events-messages.md`](docs/guide/events-messages.md) | `UiAction` / scheduling |
-| [`docs/examples/index.md`](docs/examples/index.md) | Example index |
-| [`docs/reference/public-modules.md`](docs/reference/public-modules.md) | Public facade module map |
-| [`docs/guide/testing.md`](docs/guide/testing.md) | Headless and integration testing |
-| [`AGENTS.md`](AGENTS.md) | Hard rules for agents (not a tutorial) |
+Picus is a **Bevy-first** UI framework: Bevy owns scheduling, windows, and input;
+Masonry Core runs as a retained runtime driven by Bevy systems.
+
+```text
+Application (depends on `picus` facade only)
+    │
+    ▼
+picus  ──facade──►  picus_core  ──►  picus_view / picus_widget::masonry_core
+                         │              └── xilem::core / xilem::winit
+                         └──► picus_surface ──► picus_imaging (desktop Vello/wgpu)
+```
+
+### Frame stages
+
+| Stage | Work |
+|-------|------|
+| `PreUpdate` | Input injection, retained message routing, **action dispatch** (`PicusUiSet`) |
+| `Update` | Application systems, state changes, overlay lifecycle, style/theme transitions |
+| `PostUpdate` | Projection invalidation, UI synthesis, retained rebuild, IME sync |
+| `Last` | Vello paint and presentation for each attached window |
+
+### Key architectural contracts
+
+- **Projection invalidation** tracks components and resources registered as dependencies.
+- **Application actions** use Bevy `Message` (`UiAction<T>`), not a public drain queue.
+- **Theme contract**: missing style data draws nothing visible (transparent); no default brand palette in widgets.
+- **Paint isolation**: continuous animations (Spinner, indeterminate ProgressBar) use `PaintIsolation::AnimEntry` to avoid dirtying the base present path.
 
 ---
 
@@ -210,61 +228,40 @@ real entity reference when the value matters at runtime.
 
 ## Workspace crates
 
-### picus (public facade)
+| Crate | Role |
+|-------|------|
+| `picus` | **Only** application dependency. Grouped modules + macros facade. |
+| `picus_macros` | Proc-macros (`UiComponent`, `ui_view`). Re-exported by `picus`. |
+| `picus_core` | Implementation: projection, styling, overlays, plugin, runner. |
+| `picus_widget` | Lookless retained widgets/properties; owns `masonry_core` re-export module. |
+| `picus_view` | Xilem-compatible view adapter on `picus_widget` (`xilem::core`). |
+| `picus_surface` | wgpu/Vello surface for Bevy windows. |
+| `picus_imaging` | Desktop imaging adapters (paint → WGPU texture). No wasm. |
+| `picus_theme_test` | Test-only dark property sets; not for apps. |
 
-The main application-facing crate. It provides grouped modules for clearer imports:
+### Upstream dependencies
 
-- `picus::app` for plugins, runners, and Bevy re-exports
-- `picus::components` for ECS authoring components and common action helpers
-- `picus::projection` for low-level custom projector helpers
-- `picus::styling` for style resolution and theme APIs
-- `picus::events` for `UiAction`, `UiActionSender`, and related action APIs
-- `picus::overlay`, `picus::runtime`, `picus::i18n`, and `picus::scene` for focused subsystems
-
-The root is intentionally limited to the proc macros and macro support boundary.
-Application types are imported from the grouped modules or `picus::prelude::*`;
-low-level registration and projector APIs are isolated under
-`picus::runtime::advanced`.
-
-### picus_core
-
-The implementation crate. It provides:
-
-- The `PicusPlugin` that wires all core systems
-- UI component library and registration API
-- Styling system with selector-based rules
-- Overlay and modal management
-- Font and i18n bridges
-- Run helpers for desktop applications
-
-Most applications should depend on `picus` instead of `picus_core`.
-
-### picus_surface
-
-A low-level bridge that attaches a Vello renderer to an external Bevy window. Picus uses this internally for the `Last` paint pass. You typically won't interact with this crate directly unless you're customizing the rendering pipeline.
-
-### picus_widget and picus_view
-
-`picus_widget` is the Picus-owned retained backend crate. It owns widgets, properties, and layers on top of `masonry_core`. Widgets are lookless: production colours come from stylesheet RON via `picus_core`. Test harness skins live in `picus_theme_test`.
-
-`picus_view` is the Picus-owned Xilem-compatible view adapter. It builds on `picus_widget` and `xilem_core` without depending on upstream `masonry` or upstream `xilem`.
+- **`xilem`** facade (git-pinned until an upstream crates.io release includes imaging/layout APIs):
+  - `picus_widget::masonry_core` ← `xilem::masonry`
+  - `xilem::core` (reactive core)
+  - `xilem::winit` (winit event loop and window integration)
+- **`picus_imaging`** on crates.io `imaging*` (desktop Vello/wgpu paint adapter).
 
 ---
 
 ## Examples
 
-The workspace includes several example applications:
-
-| App | Cargo package | Description |
-|-----|---------------|-------------|
-| `gallery` | `example_gallery` | Component gallery with Picus controls |
-| `chess_game` | `example_chess_game` | Full chess UI with embedded engine |
-| `async_downloader` | `example_async_downloader` | Async operations with progress UI |
-| `calculator` | `example_calculator` | Standard calculator interface |
-| `timer` | `example_timer` | Countdown timer with start/stop controls |
-| `todo_list` | `example_todo_list` | Task management with add/remove |
-| `game_2048` | `example_game_2048` | Classic 2048 game implementation |
-| `overlay_hit_routing` | `example_overlay_hit_routing` | Overlay interaction patterns |
+| App | Cargo package | Description / Teaches |
+|-----|---------------|-----------------------|
+| `timer` | `example_timer` | Full DX path: `UiAction`, macros, `run_picus`, explicit theme; canvas dial, async tick task + `UiActionSender` |
+| `calculator` | `example_calculator` | Keypad BSN composition + `UiAction`; engine resource projection |
+| `todo_list` | `example_todo_list` | Dynamic entities, filters, text input; virtual scroll list |
+| `overlay_hit_routing` | `example_overlay_hit_routing` | Builtin click vs overlay hit order; manual overlay spawn |
+| `async_downloader` | `example_async_downloader` | Async tasks → `UiActionSender` / messages; dialogs, `IoTaskPool` |
+| `game_2048` | `example_game_2048` | Keyboard + button actions; custom hotkey widget |
+| `chess_game` | `example_chess_game` | Multi-resource projection, engine thread; board grid projection |
+| `gallery` | `example_gallery` | Full Fluent control surface; NavigationView shell, backdrop picker; `UiSpinner` / indeterminate `UiProgressBar` use `PaintIsolation::AnimEntry` |
+| `picuscode` | `example_picuscode` | Multi-window, streaming markdown, omp bridge |
 
 Run any example from the repository root:
 
@@ -279,12 +276,41 @@ cargo run -p example_gallery
 Picus includes a complete styling pipeline inspired by CSS:
 
 - Define rules in a `StyleSheet` resource (loaded from RON files or set directly)
-- Attach classes to entities with `StyleClass`
+- Attach classes to entities with `StyleClass` (or `classes!("foo", "bar")`)
 - Resolve styles in projectors using helper functions
 - Support for hover/pressed states and smooth color transitions
 
-See [styling and themes](docs/guide/styling-themes.md) for selectors, cascade
-rules, variants, and transition configuration.
+### Theme contract (non-negotiable)
+
+1. **No theme / no selected variant** → controls show **no** framework default visible fill or text colour (transparent / empty). This is not an error.
+2. The framework **never** auto-selects dark or light.
+3. **Partial themes are legal**: implement only the components you use. Missing component or property rules stay empty.
+4. Errors are for **structure** only (bad RON, wrong value type, invalid token).
+
+### Loading themes via `AppPicusExt`
+
+| Method | Purpose |
+|--------|---------|
+| `load_style_sheet(path)` | Asset-path RON with hot-reload |
+| `load_style_sheet_ron(text)` | Embedded RON string |
+| `style_variant(name)` | Select registered variant (`"dark"`, `"light"`, …) |
+| `theme_backdrop(material)` | Override window backdrop |
+| `clear_theme_backdrop_override()` | Clear backdrop override |
+
+Priority when resolving:
+1. Explicit `style_variant` / already active variant
+2. Stylesheet `default_variant`
+3. **No fallback** (transparent / empty)
+
+### Style layers
+
+| Layer | Use |
+|-------|-----|
+| 0 | No theme = no visible defaults |
+| 1 | Load Fluent bundle / app RON + variant |
+| 2 | Inline / builder styles (`InlineStyle`, `styled`) |
+| 3 | Class + app RON override |
+| 4 | Full multi-brand stylesheet |
 
 ---
 
@@ -314,6 +340,27 @@ The framework follows a clear pipeline each frame:
 5. The retained Masonry scene is painted and presented in `Last`
 
 This keeps interaction handling explicit and fully ECS-compatible.
+
+---
+
+## Testing
+
+Picus applications are designed for headless Bevy testing. Build an `App` with `PicusPlugin`,
+register actions and components, and advance schedules without creating real windows:
+
+- Test action routing with `MessageReader<UiAction<T>>` in test systems.
+- Input actions are visible to `Update` readers in the same frame (`PreUpdate` dispatch).
+- Sender emissions from `Update` are visible on the next frame.
+- Verify component invalidation with `UiProjectionDirtyDebug`.
+
+Common verification commands:
+
+```bash
+cargo fmt --all -- --check
+cargo test -p picus_core
+cargo test -p picus --test ui
+cargo check --workspace --all-targets
+```
 
 ---
 

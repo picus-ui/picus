@@ -2640,8 +2640,7 @@ pub fn route_masonry_view_messages(runtime: Option<NonSendMut<MasonryRuntime>>) 
 /// (internal). Demands are OR-merged across windows. Content presents and
 /// AnimEntry clocks write [`RequestRedraw`] immediately. AnimTick-only clocks
 /// without Anim entries arm a slow wait instead. Bevy's reactive
-/// `WinitSettings` still runs a full schedule on any wake — see
-/// `docs/architecture/runtime.md` (redraw semantics).
+/// `WinitSettings` still runs a full schedule on any wake.
 pub(crate) fn paint_masonry_ui(
     runtime: Option<NonSendMut<MasonryRuntime>>,
     active_window_query: Query<&Window, Without<ClosingWindow>>,
