@@ -44,14 +44,16 @@ display-rate (or similar), for example:
 
 - Indefinite loading spinners
 - Indeterminate progress “candy bar” motion
+- Caret blink on a focused text area
 - Any future **host-known** widget that would otherwise `request_paint` every
   frame into the base scene and force full-window rewrite + encode
 
 Stay on **`Inline`** when:
 
 - Paint is event/state driven (clicks, theme, layout, discrete progress value)
-- Animation is short, one-shot, or already covered by property transitions that
-  do not need a permanent 60 Hz present loop on the base path
+- Animation is short, one-shot, or already covered by property transitions.
+  Color transitions patch retained widget properties from `CurrentColorStyle`
+  and must **not** rebuild projection or rewrite the full window each tick.
 
 **Hard rule (AGENTS):** continuous ~60 Hz visual animation must not default to
 dirtying the full-window base present path.
@@ -63,10 +65,12 @@ dirtying the full-window base present path.
 | `UiSpinner` / retained `Spinner` | Always `AnimEntry` |
 | `UiProgressBar` indeterminate (`progress == None`) | `AnimEntry` |
 | `UiProgressBar` determinate (`Some`) | `Inline` |
+| Focused `TextArea` (caret blink) | `AnimEntry` |
+| Unfocused `TextArea` | `Inline` |
 | Other stock widgets | `Inline` |
 
-No gallery or entity hardcodes. Host **scene paint** for Spinner / ProgressBar
-remains type-dispatched (arms / indeterminate segment).
+No gallery or entity hardcodes. Host **scene paint** for Spinner / ProgressBar /
+focused TextArea remains type-dispatched (arms / indeterminate segment / text+caret).
 
 ## Authoring notes
 
@@ -85,7 +89,7 @@ A custom retained widget that **only** calls `PaintIsolation::AnimEntry.apply(ct
 
 **Required today for real anim isolation:** framework-known type with both
 `paint_isolation()` discovery and a host scene painter (stock: Spinner /
-indeterminate ProgressBar).
+indeterminate ProgressBar / focused TextArea).
 
 **Path forward (not P3):** open discovery without inventory/linkme, e.g.:
 

@@ -22,7 +22,7 @@ use crate::{
     resize::{AppBreakpoints, WindowSize},
     retained_bridge::entity_scope,
     runtime::MasonryRuntime,
-    styling::{ActiveStyleVariant, ComputedStyle, CurrentColorStyle, InteractionState, StyleSheet},
+    styling::{ActiveStyleVariant, ComputedStyle, InteractionState, StyleSheet},
 };
 
 /// Snapshot containing synthesized views for the current frame, grouped by
@@ -351,9 +351,7 @@ fn synthesize_entity(
     );
 
     let must_reproject = recompute.is_none_or(|set| set.contains(&entity));
-    if !must_reproject
-        && let Some(cached) = cache.get(&entity)
-    {
+    if !must_reproject && let Some(cached) = cache.get(&entity) {
         stats.node_count += 1;
         stats.cache_hits += 1;
         let popped = visiting.pop();
@@ -423,8 +421,7 @@ fn synthesize_child_views(
         } else {
             false
         };
-        let skip_deep = skip_unselected_content
-            || (skip_collapsed_nav_children && is_nav_item);
+        let skip_deep = skip_unselected_content || (skip_collapsed_nav_children && is_nav_item);
 
         if skip_deep {
             // Keep a slot so projector child indices match ECS Children order.
@@ -434,14 +431,7 @@ fn synthesize_child_views(
             children.push(Arc::new(label("")) as UiView);
         } else {
             children.push(synthesize_entity(
-                world,
-                registry,
-                child,
-                visiting,
-                stats,
-                entities,
-                cache,
-                recompute,
+                world, registry, child, visiting, stats, entities, cache, recompute,
             ));
         }
     }
@@ -450,7 +440,10 @@ fn synthesize_child_views(
 
 /// Expand dirty seed entities to include all ancestors so parent projectors
 /// recompose with updated child views.
-fn collect_recompute_set(world: &World, seeds: impl IntoIterator<Item = Entity>) -> HashSet<Entity> {
+fn collect_recompute_set(
+    world: &World,
+    seeds: impl IntoIterator<Item = Entity>,
+) -> HashSet<Entity> {
     let mut set = HashSet::new();
     for entity in seeds {
         let mut current = Some(entity);
@@ -458,7 +451,9 @@ fn collect_recompute_set(world: &World, seeds: impl IntoIterator<Item = Entity>)
             if !set.insert(entity) {
                 break;
             }
-            current = world.get::<ChildOf>(entity).map(|child_of| child_of.parent());
+            current = world
+                .get::<ChildOf>(entity)
+                .map(|child_of| child_of.parent());
         }
     }
     set
@@ -828,7 +823,6 @@ pub(crate) fn register_projection_invalidation_dependencies(registry: &mut UiPro
         .register_dependency::<UiWindow>()
         .register_dependency::<InteractionState>()
         .register_dependency::<ComputedStyle>()
-        .register_dependency::<CurrentColorStyle>()
         .register_dependency::<LocalizeText>()
         .register_dependency::<TypographyPreset>()
         .register_dependency::<OverlayComputedPosition>()
@@ -897,20 +891,23 @@ mod tests {
 
         let root = world.spawn((UiRoot, UiFlexColumn)).id();
         let a = world
-            .spawn((UiLabel::new("a"), InteractionState::default(), ChildOf(root)))
+            .spawn((
+                UiLabel::new("a"),
+                InteractionState::default(),
+                ChildOf(root),
+            ))
             .id();
         let b = world
-            .spawn((UiLabel::new("b"), InteractionState::default(), ChildOf(root)))
+            .spawn((
+                UiLabel::new("b"),
+                InteractionState::default(),
+                ChildOf(root),
+            ))
             .id();
 
         let mut cache = HashMap::new();
-        let (views1, stats1, entities1) = synthesize_roots_with_cache(
-            &world,
-            &registry,
-            [root],
-            Some(&mut cache),
-            None,
-        );
+        let (views1, stats1, entities1) =
+            synthesize_roots_with_cache(&world, &registry, [root], Some(&mut cache), None);
         assert_eq!(views1.len(), 1);
         assert!(entities1.contains(&a) && entities1.contains(&b));
         assert_eq!(stats1.cache_hits, 0);
@@ -1032,7 +1029,10 @@ mod tests {
         ));
 
         let form_row = world
-            .spawn((crate::UiFormRow::new("Name").with_label_width(96.0), ChildOf(root)))
+            .spawn((
+                crate::UiFormRow::new("Name").with_label_width(96.0),
+                ChildOf(root),
+            ))
             .id();
         world.spawn((
             crate::UiTextInput::new("").with_placeholder("value"),

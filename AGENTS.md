@@ -58,6 +58,8 @@ Guide: [`docs/guide/app.md`](docs/guide/app.md). Entry examples: `timer`,
   `#[ui_component(resources(...))]` / derive metadata or advanced APIs).
 - Avoid no-op mutable writes on projection-visible state so change detection
   stays meaningful.
+- Style color transitions (`CurrentColorStyle`) must not be projection
+  dependencies; apply interpolated colors on the retained tree.
 
 ### Actions / messages
 
@@ -88,7 +90,9 @@ See [`docs/guide/styling-themes.md`](docs/guide/styling-themes.md).
 - Font registration broadcasts to all windows and replays on attach.
 - Continuous ~60Hz visual animation must not default to dirtying the full-window
   base present path — use `PaintIsolation::AnimEntry` (painter slot, not global
-  top layer). See [`docs/guide/paint-isolation.md`](docs/guide/paint-isolation.md).
+  top layer). Stock: Spinner, indeterminate ProgressBar, focused TextArea caret.
+  See [`docs/guide/paint-isolation.md`](docs/guide/paint-isolation.md).
+- Pure anim-only frames skip Picus projection/style/overlay (`PicusUiSet::HeavyEcs`).
 
 ### Overlays / scroll
 

@@ -14,8 +14,10 @@ use crate::core::{
 use crate::imaging::Painter;
 use crate::kurbo::{Affine, Axis, Point, Rect, Size};
 use crate::layout::{AsUnit, LenReq, Length};
+use crate::paint_isolation::PaintIsolation;
 use crate::parley::PlainEditor;
 use crate::parley::editing::{Generation, SplitString};
+use crate::peniko::color::{AlphaColor, Srgb};
 use crate::properties::{CaretColor, ContentColor, SelectionColor};
 use crate::text_rendering::should_hint_text;
 use crate::theme::default_text_styles;
@@ -80,6 +82,10 @@ pub struct TextArea<const USER_EDITABLE: bool> {
 
     /// Time elapsed (ms) to calculate the timeout of the cursor's blink animation.
     anim_elapsed: u64,
+
+    /// When true, paint uses [`PaintIsolation::AnimEntry`] so caret blink is
+    /// hosted on the G2 anim path instead of rewriting the window base scene.
+    isolate_as_anim: bool,
 }
 
 // --- MARK: BUILDERS
@@ -124,7 +130,70 @@ impl<const EDITABLE: bool> TextArea<EDITABLE> {
             anim_cursor_visible: true,
             anim_prev_interval: 0,
             anim_elapsed: 0,
+            isolate_as_anim: false,
         }
+    }
+
+    /// Paint isolation: [`PaintIsolation::AnimEntry`] while this area is the
+    /// focus target so caret blink does not rewrite the full-window base scene.
+    #[inline]
+    pub fn paint_isolation(&self) -> PaintIsolation {
+        if self.isolate_as_anim {
+            PaintIsolation::AnimEntry
+        } else {
+            PaintIsolation::Inline
+        }
+    }
+
+    /// Discrete caret phase for host versioning (`0` hidden, `1` visible).
+    #[inline]
+    pub fn caret_visual_phase(&self) -> u8 {
+        u8::from(self.anim_cursor_visible)
+    }
+
+    /// Whether the caret is currently drawn.
+    #[inline]
+    pub fn caret_visible(&self) -> bool {
+        self.anim_cursor_visible
+    }
+
+    /// Record text, selection, and caret into `painter` in content-box space.
+    ///
+    /// Used by widget `paint` and by the Picus anim host on the selective path.
+    /// Returns `false` when layout has not been computed yet.
+    pub fn paint_contents(
+        &self,
+        painter: &mut Painter<'_>,
+        text_color: AlphaColor<Srgb>,
+        caret_color: AlphaColor<Srgb>,
+        selection_color: AlphaColor<Srgb>,
+        show_focus_chrome: bool,
+        caret_visible: bool,
+        scale_factor: f64,
+    ) -> bool {
+        let Some(layout) = self.editor.try_layout() else {
+            return false;
+        };
+        if show_focus_chrome {
+            for (rect, _) in self.editor.selection_geometry().iter() {
+                let rect = bounding_box_to_rect(*rect);
+                painter.fill(rect, selection_color).draw();
+            }
+            if let Some(cursor) = self.editor.cursor_geometry(1.5)
+                && caret_visible
+            {
+                let rect = bounding_box_to_rect(cursor);
+                painter.fill(rect, caret_color).draw();
+            }
+        }
+        render_text(
+            painter,
+            Affine::IDENTITY,
+            layout,
+            &[text_color.into()],
+            should_hint_text(self.hint, scale_factor),
+        );
+        true
     }
 
     /// Sets a style property for the new text area.
@@ -452,7 +521,9 @@ impl<const EDITABLE: bool> Widget for TextArea<EDITABLE> {
                     self.anim_prev_interval = self.anim_prev_interval.rem_euclid(CURSOR_BLINK_TIME);
                 }
 
-                // TODO: request timer here
+                // Keep Masonry's anim flag so the host can send the next
+                // AnimFrame. Picus coalesces AnimTick-only clocks without
+                // Anim entries to ~500ms instead of spinning Bevy at display rate.
                 ctx.request_anim_frame();
 
                 // Request paint only if changed.
@@ -858,8 +929,12 @@ impl<const EDITABLE: bool> Widget for TextArea<EDITABLE> {
                 let _ = self.editor.edit_styles();
                 ctx.request_layout();
             }
-            Update::FocusChanged(_) => {
+            Update::FocusChanged(focused) => {
+                self.isolate_as_anim = *focused;
                 ctx.request_render();
+                if *focused {
+                    ctx.request_anim_frame();
+                }
             }
             Update::DisabledChanged(_) => {
                 // We might need to use the disabled brush, and stop displaying the selection.
@@ -991,45 +1066,25 @@ impl<const EDITABLE: bool> Widget for TextArea<EDITABLE> {
         props: &PropertiesRef<'_>,
         painter: &mut Painter<'_>,
     ) {
-        let layout = if let Some(layout) = self.editor.try_layout() {
-            layout
-        } else {
+        self.paint_isolation().apply(ctx);
+        if self.editor.try_layout().is_none() {
             debug_panic!("Widget `layout` should have happened before paint");
             let (fctx, lctx) = ctx.text_contexts();
-            // The `layout` method takes `&mut self`, so we get borrow-checker errors if we return it from this block.
             self.editor.refresh_layout(fctx, lctx);
-            self.editor.try_layout().unwrap()
-        };
-        if ctx.is_focus_target() {
-            let (caret_color, selection_color) = {
-                let cache = ctx.property_cache();
-                (
-                    props.get::<CaretColor>(cache).color,
-                    props.get::<SelectionColor>(cache).color,
-                )
-            };
-            for (rect, _) in self.editor.selection_geometry().iter() {
-                let rect = bounding_box_to_rect(*rect);
-                painter.fill(rect, selection_color).draw();
-            }
-            if let Some(cursor) = self.editor.cursor_geometry(1.5)
-                && self.anim_cursor_visible
-                && ctx.is_window_focused()
-            {
-                let rect = bounding_box_to_rect(cursor);
-                painter.fill(rect, caret_color).draw();
-            };
         }
-
         let cache = ctx.property_cache();
-        let text_color = props.get::<ContentColor>(cache);
-
-        render_text(
+        let text_color = props.get::<ContentColor>(cache).color;
+        let caret_color = props.get::<CaretColor>(cache).color;
+        let selection_color = props.get::<SelectionColor>(cache).color;
+        let show_caret = self.anim_cursor_visible && ctx.is_window_focused();
+        let _ = self.paint_contents(
             painter,
-            Affine::IDENTITY,
-            layout,
-            &[text_color.color.into()],
-            should_hint_text(self.hint, ctx.scale_factor()),
+            text_color,
+            caret_color,
+            selection_color,
+            ctx.is_focus_target(),
+            show_caret,
+            ctx.scale_factor(),
         );
     }
 

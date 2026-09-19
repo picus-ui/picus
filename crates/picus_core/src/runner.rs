@@ -1,6 +1,7 @@
 use crate::backdrop::{
     ThemeManagedWindowBackdrop, WindowBackdropColorScheme, WindowBackdropMaterial,
 };
+use crate::runtime::{PicusManagedWinitSettings, idle_winit_settings};
 use crate::styling::{
     StyleSheet, resolve_theme_backdrop_color_scheme, resolve_theme_backdrop_material,
 };
@@ -9,8 +10,7 @@ use bevy_a11y::AccessibilityPlugin;
 use bevy_app::App;
 use bevy_input::InputPlugin;
 use bevy_window::{PrimaryWindow, Window, WindowPlugin};
-use bevy_winit::{UpdateMode, WinitPlugin, WinitSettings};
-use std::time::Duration;
+use bevy_winit::{WinitPlugin, WinitSettings};
 
 /// Compatibility window options applied to Bevy's primary window before `App::run()`.
 #[derive(Clone, Debug, Default)]
@@ -60,10 +60,7 @@ impl BevyWindowOptions {
 
     /// Requests an explicit light/dark appearance for the native backdrop.
     #[must_use]
-    pub fn with_backdrop_color_scheme(
-        mut self,
-        color_scheme: WindowBackdropColorScheme,
-    ) -> Self {
+    pub fn with_backdrop_color_scheme(mut self, color_scheme: WindowBackdropColorScheme) -> Self {
         self.backdrop_color_scheme = Some(color_scheme);
         self
     }
@@ -146,16 +143,10 @@ fn primary_window_exists(app: &mut App) -> bool {
     query.iter(app.world_mut()).next().is_some()
 }
 
-fn latency_bounded_winit_settings() -> WinitSettings {
-    WinitSettings {
-        focused_mode: UpdateMode::reactive(Duration::from_secs_f64(1.0 / 120.0)),
-        unfocused_mode: UpdateMode::reactive_low_power(Duration::from_secs_f64(1.0 / 30.0)),
-    }
-}
-
 fn ensure_latency_bounded_winit_settings(app: &mut App) {
     if !app.world().contains_resource::<WinitSettings>() {
-        app.insert_resource(latency_bounded_winit_settings());
+        app.insert_resource(idle_winit_settings());
+        app.insert_resource(PicusManagedWinitSettings);
     }
 }
 
@@ -250,8 +241,8 @@ pub(crate) fn run_app_with_window_options(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{StyleValue, ThemeBackdrop};
     use crate::xilem::winit::dpi::{LogicalSize, PhysicalSize};
+    use crate::{StyleValue, ThemeBackdrop};
     use std::collections::HashMap;
 
     #[test]
@@ -275,7 +266,8 @@ mod tests {
     #[test]
     fn options_apply_backdrop_window_flags() {
         let mut window = Window::default();
-        let options = BevyWindowOptions::default().with_backdrop_material(WindowBackdropMaterial::Mica);
+        let options =
+            BevyWindowOptions::default().with_backdrop_material(WindowBackdropMaterial::Mica);
 
         apply_window_options(&mut window, "Test", &options);
 
@@ -360,14 +352,12 @@ mod tests {
         ensure_latency_bounded_winit_settings(&mut app);
 
         let settings = app.world().resource::<WinitSettings>();
-        assert_eq!(
-            settings.focused_mode,
-            UpdateMode::reactive(Duration::from_secs_f64(1.0 / 120.0))
-        );
+        assert_eq!(settings.focused_mode, idle_winit_settings().focused_mode);
         assert_eq!(
             settings.unfocused_mode,
-            UpdateMode::reactive_low_power(Duration::from_secs_f64(1.0 / 30.0))
+            idle_winit_settings().unfocused_mode
         );
+        assert!(app.world().contains_resource::<PicusManagedWinitSettings>());
     }
 
     #[test]

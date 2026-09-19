@@ -24,6 +24,9 @@ not this crate. See root [`AGENTS.md`](../../AGENTS.md) and
 - Resource dependencies must be registered (`register_projection_resource` or
   `UiComponentTemplate::register_projection_dependencies` / derive `resources`).
 - Avoid no-op mutable writes on projection-visible state.
+- `CurrentColorStyle` is not a projection dependency; tween ticks patch the
+  retained tree.
+- Pure anim-only frames skip `PicusUiSet::HeavyEcs` (projection/style/overlay).
 
 ### Overlay / scroll
 

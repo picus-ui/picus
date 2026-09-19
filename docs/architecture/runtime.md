@@ -92,7 +92,8 @@ Window (swapchain)
 ```
 
 - **Discovery / promotion:** allowlisted widgets report `PaintIsolation`; only
-  `AnimEntry` promotes External → Anim host. See
+  `AnimEntry` promotes External → Anim host (Spinner, indeterminate ProgressBar,
+  focused TextArea caret). See
   [guide/paint-isolation.md](../guide/paint-isolation.md).
 - **Anim target:** tight per-widget transparent RT from window-space External
   bounds; a viewport/scissor blitter restores exact painter order. Full-window
@@ -169,26 +170,31 @@ escalate to `InputOrRebuild`).
 
 #### Relationship to `WinitSettings` reactive mode
 
-`run_picus` installs latency-bounded reactive updates when the app has not
-already inserted `WinitSettings` (`bevy_winit`):
+`run_picus` installs idle-first reactive updates when the app has not already
+inserted `WinitSettings` (`bevy_winit`):
 
-- focused: `UpdateMode::reactive(~1/120 s)` — wake on window/device/user events,
-  `RequestRedraw`, or the wait timeout
-- unfocused: `UpdateMode::reactive_low_power(~1/30 s)` — ignores pure device
-  motion; still wakes on window/user events and `RequestRedraw`
+- focused / unfocused: `UpdateMode::reactive(Duration::MAX)` (low-power when
+  unfocused) — wake on window/device/user events or `RequestRedraw`
+- Picus then shortens that wait only when a slow UI clock is armed (caret
+  blink, hover debounce, overlay auto-dismiss)
 
 Implications:
 
-1. **Idle UI sleeps** until input, resize, proxy wake, timeout, or Picus
-   `RequestRedraw` — we do **not** use continuous/game mode by default.
-2. **Any** `RequestRedraw` (anim-only or content) runs a **full Bevy schedule**
+1. **Idle UI sleeps** until input, resize, proxy wake, or Picus
+   `RequestRedraw`. There is no 120 Hz timeout on the default path.
+2. Style color tweens write `RequestRedraw` while a `TimeRunner` is live.
+   Spinner / indeterminate ProgressBar keep display-rate `RequestRedraw`
+   through AnimEntry ticks.
+3. AnimTick-only clocks **without** Anim entries (caret blink, portal
+   auto-hide) arm a ~500 ms wait instead of spinning the full Bevy schedule.
+4. **Any** `RequestRedraw` still runs a **full Bevy schedule**
    (`PreUpdate` → `Update` → `PostUpdate` → `Last` paint). Bevy has no public
    “paint-only / Last-only” update path; Phase 1b therefore **classifies**
    demand but does **not** skip the system table for pure `AnimTick`.
-3. Tradeoff (P1b.2): avoiding full empty spins on anim-only wakes would need a
-   custom winit integration or a dedicated anim timer outside the full schedule
-   — deferred; measurable today is correct wake **reason** and no Failed/content
-   redraw loops.
+5. Tradeoff (P1b.2): Bevy still has no public Last-only schedule. Pure anim-only
+   frames (Spinner G2 / caret blink) skip Picus projection, style, overlay, and
+   a11y systems via `PicusUiSet::HeavyEcs`. Application `Update` systems still
+   run. A custom winit paint-only loop remains out of scope.
 4. Two layers stay separate: (a) content stickies set `need_content_present` so
    Bevy **wakes** (a `RequestRedraw` is written and not dropped); (b) G5 dirty
    reasons (`FirstPaint` / `InputOrRebuild` / `ResizeMetrics` / `RetrySurface`)

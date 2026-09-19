@@ -14,7 +14,8 @@
 //! - **Promotion decision** is isolation-keyed: only
 //!   [`PaintIsolation::AnimEntry`] becomes an anim compositor entry.
 //! - **Resolving** isolation for a live widget is still a **closed type
-//!   allowlist** in the Picus host (`Spinner`, indeterminate `ProgressBar`).
+//!   allowlist** in the Picus host (`Spinner`, indeterminate `ProgressBar`,
+//!   focused [`TextArea`](crate::widgets::TextArea)).
 //!   Calling [`PaintIsolation::apply`] alone makes Masonry reserve an External
 //!   placeholder; without host discovery + a host painter the slot stays a
 //!   transparent External forever (never an empty Anim).
@@ -41,6 +42,8 @@ use crate::core::{PaintCtx, PaintLayerMode};
 /// | [`Spinner`](crate::widgets::Spinner) | [`AnimEntry`](Self::AnimEntry) |
 /// | Indeterminate [`ProgressBar`](crate::widgets::ProgressBar) | [`AnimEntry`](Self::AnimEntry) |
 /// | Determinate [`ProgressBar`](crate::widgets::ProgressBar) | [`Inline`](Self::Inline) |
+/// | Focused [`TextArea`](crate::widgets::TextArea) (caret blink) | [`AnimEntry`](Self::AnimEntry) |
+/// | Unfocused [`TextArea`](crate::widgets::TextArea) | [`Inline`](Self::Inline) |
 ///
 /// # Contract
 ///
@@ -53,7 +56,8 @@ use crate::core::{PaintCtx, PaintLayerMode};
 ///   Unknown External stays transparent External — never an empty Anim.
 /// - Continuous ~60 Hz visual animation **must not** default to dirtying the
 ///   full-window base present path; use [`AnimEntry`](Self::AnimEntry) **and**
-///   a host-known painter path (stock: Spinner / indeterminate ProgressBar).
+///   a host-known painter path (stock: Spinner / indeterminate ProgressBar /
+///   focused TextArea caret).
 ///
 /// # Known limitation (custom widgets)
 ///

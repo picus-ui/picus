@@ -12,6 +12,15 @@ use crate::bevy_tween::{
     interpolation::EaseKind,
     tween::{ComponentTween, TweenInterpolationValue, TweenPreviousValue},
 };
+use crate::masonry_core::core::UsesProperty;
+use crate::masonry_core::{
+    layout::Length,
+    parley::{
+        Alignment as ParleyTextAlign, FontFamily, FontFamilyName, GenericFamily, LineHeight,
+        style::FontWeight,
+    },
+    properties::{Background, BorderColor, BorderWidth, BoxShadow, CornerRadius, Padding},
+};
 use crate::xilem::{Color, style::Style as _};
 use bevy_asset::{
     Asset, AssetEvent, AssetLoader, AssetServer, Assets, Handle, LoadContext, io::Reader,
@@ -26,19 +35,8 @@ use bevy_ecs::{
 };
 use bevy_reflect::TypePath;
 use bevy_time::Time;
-use crate::masonry_core::core::UsesProperty;
-use crate::masonry_core::{
-    layout::Length,
-    parley::{
-        Alignment as ParleyTextAlign, FontFamily, FontFamilyName, GenericFamily, LineHeight,
-        style::FontWeight,
-    },
-    properties::{Background, BorderColor, BorderWidth, BoxShadow, CornerRadius, Padding},
-};
-use picus_view::picus_widget::properties::{
-    AbsoluteLinearGradient, BorderBrush, LineBreaking,
-};
 use picus_view::picus_widget::properties::types::Gradient;
+use picus_view::picus_widget::properties::{AbsoluteLinearGradient, BorderBrush, LineBreaking};
 use picus_view::{
     WidgetView,
     view::{CrossAxisAlignment, Flex, Label, MainAxisAlignment, TextInput, sized_box, transformed},
@@ -87,6 +85,13 @@ pub(crate) struct HoverDebounce {
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq)]
 pub(crate) struct PendingHoverState {
     entered_at_secs: f64,
+}
+
+impl PendingHoverState {
+    pub(crate) fn remaining_until_active(&self, now_secs: f64, delay_secs: f32) -> Duration {
+        let remaining = (delay_secs as f64 - (now_secs - self.entered_at_secs)).max(0.0);
+        Duration::from_secs_f64(remaining)
+    }
 }
 
 /// Consolidated inline style overrides.
@@ -270,7 +275,10 @@ pub struct ComputedStyle {
     pub transition: Option<StyleTransition>,
 }
 
-/// Interpolated color state currently rendered by projectors.
+/// Interpolated color state currently shown on the retained widget tree.
+///
+/// Not a projection dependency: tween ticks patch Masonry properties in place
+/// so hover/press color animation does not rebuild the synthesized view.
 #[derive(Component, Debug, Clone, Copy, PartialEq)]
 pub struct CurrentColorStyle {
     pub bg: Option<Color>,
@@ -802,9 +810,7 @@ fn resolve_backdrop_value(
 
 /// Resolve the native window material selected by a stylesheet backdrop object.
 #[must_use]
-pub fn resolve_theme_backdrop_material(
-    stylesheet: &StyleSheet,
-) -> Option<WindowBackdropMaterial> {
+pub fn resolve_theme_backdrop_material(stylesheet: &StyleSheet) -> Option<WindowBackdropMaterial> {
     stylesheet
         .backdrop
         .as_ref()
@@ -2866,8 +2872,9 @@ pub fn sync_style_targets(world: &mut World) {
                 match world.get::<ComputedStyle>(entity) {
                     Some(current) if *current == next_computed => {}
                     Some(_) => {
-                        *world.get_mut::<ComputedStyle>(entity).expect("just checked") =
-                            next_computed;
+                        *world
+                            .get_mut::<ComputedStyle>(entity)
+                            .expect("just checked") = next_computed;
                     }
                     None => {
                         world.entity_mut(entity).insert(next_computed);
@@ -3638,11 +3645,7 @@ impl ControlElevationDef {
     fn into_brush(self) -> io::Result<BorderBrush> {
         let secondary = self.secondary.into_color()?;
         let default = self.default.into_color()?;
-        let extent = if self.extent > 0.0 {
-            self.extent
-        } else {
-            3.0
-        };
+        let extent = if self.extent > 0.0 { self.extent } else { 3.0 };
         Ok(BorderBrush::AbsoluteLinear(AbsoluteLinearGradient {
             start: (0.0, 0.0),
             end: (0.0, extent),
@@ -4263,12 +4266,8 @@ impl ColorStyleDef {
     ) -> io::Result<Option<StyleValue<BorderBrush>>> {
         match value {
             None => Ok(None),
-            Some(StyleValueDef::Value(value)) => {
-                Ok(Some(StyleValue::Value(value.into_brush()?)))
-            }
-            Some(StyleValueDef::Var(name)) => {
-                Ok(Some(StyleValue::Var(name)))
-            }
+            Some(StyleValueDef::Value(value)) => Ok(Some(StyleValue::Value(value.into_brush()?))),
+            Some(StyleValueDef::Var(name)) => Ok(Some(StyleValue::Var(name))),
         }
     }
 
@@ -5333,14 +5332,11 @@ mod tests {
             crate::resolve_theme_backdrop_color_scheme(&sheet),
             Some(crate::WindowBackdropColorScheme::Dark)
         );
-        assert!(
-            sheet
-                .backdrop
-                .as_ref()
-                .is_some_and(|backdrop| backdrop
-                    .styles
-                    .contains_key(&crate::WindowBackdropMaterial::Mica))
-        );
+        assert!(sheet.backdrop.as_ref().is_some_and(|backdrop| {
+            backdrop
+                .styles
+                .contains_key(&crate::WindowBackdropMaterial::Mica)
+        }));
     }
     #[test]
     fn fluent_backdrop_override_updates_material_and_public_fill_tokens() {
@@ -5360,10 +5356,7 @@ mod tests {
             Some(crate::xilem::Color::from_rgb8(0x1F, 0x1F, 0x1F))
         );
 
-        crate::set_theme_backdrop_material(
-            app.world_mut(),
-            crate::WindowBackdropMaterial::Mica,
-        );
+        crate::set_theme_backdrop_material(app.world_mut(), crate::WindowBackdropMaterial::Mica);
 
         let sheet = app.world().resource::<crate::StyleSheet>();
         assert_eq!(
@@ -5402,8 +5395,14 @@ mod tests {
             resolve_style(app.world(), search).colors.bg,
             Some(crate::xilem::Color::from_rgba8(255, 255, 255, 15))
         );
-        assert_eq!(nav_content.colors.bg, Some(crate::xilem::Color::TRANSPARENT));
-        assert_eq!(nav_sidebar.colors.bg, Some(crate::xilem::Color::TRANSPARENT));
+        assert_eq!(
+            nav_content.colors.bg,
+            Some(crate::xilem::Color::TRANSPARENT)
+        );
+        assert_eq!(
+            nav_sidebar.colors.bg,
+            Some(crate::xilem::Color::TRANSPARENT)
+        );
         assert_eq!(nav_sidebar.layout.border_width, 0.0);
         assert_eq!(
             dimmer.colors.bg,
@@ -5427,24 +5426,19 @@ mod tests {
         crate::set_active_style_variant_by_name(app.world_mut(), "dark");
         crate::apply_active_style_variant(app.world_mut())
             .expect("embedded Fluent dark theme should apply");
-        crate::set_theme_backdrop_material(
-            app.world_mut(),
-            crate::WindowBackdropMaterial::Mica,
-        );
+        crate::set_theme_backdrop_material(app.world_mut(), crate::WindowBackdropMaterial::Mica);
         let window = app.world_mut().spawn(Window::default()).id();
 
         app.update();
         assert_eq!(
-            app.world()
-                .get::<crate::WindowBackdropColorScheme>(window),
+            app.world().get::<crate::WindowBackdropColorScheme>(window),
             Some(&crate::WindowBackdropColorScheme::Dark)
         );
 
         crate::set_active_style_variant_by_name(app.world_mut(), "light");
         app.update();
         assert_eq!(
-            app.world()
-                .get::<crate::WindowBackdropColorScheme>(window),
+            app.world().get::<crate::WindowBackdropColorScheme>(window),
             Some(&crate::WindowBackdropColorScheme::Light)
         );
     }
@@ -5487,10 +5481,7 @@ mod tests {
             resolve_style(app.world(), entity).colors.bg,
             Some(crate::xilem::Color::from_rgb8(0x22, 0x33, 0x44))
         );
-        crate::set_theme_backdrop_material(
-            app.world_mut(),
-            crate::WindowBackdropMaterial::Mica,
-        );
+        crate::set_theme_backdrop_material(app.world_mut(), crate::WindowBackdropMaterial::Mica);
         assert_eq!(
             resolve_style(app.world(), entity).colors.bg,
             Some(crate::xilem::Color::TRANSPARENT)
@@ -6203,10 +6194,7 @@ mod tests {
             let i18n = app.world().resource::<AppI18n>();
             assert_eq!(
                 i18n.get_font_stack(),
-                vec![
-                    "Inter".to_string(),
-                    "sans-serif".to_string()
-                ]
+                vec!["Inter".to_string(), "sans-serif".to_string()]
             );
         }
 
@@ -6451,9 +6439,7 @@ mod tests {
         let mut world = World::new();
         world.insert_resource(sheet);
 
-        let covered = world
-            .spawn(crate::StyleClass(vec!["covered".into()]))
-            .id();
+        let covered = world.spawn(crate::StyleClass(vec!["covered".into()])).id();
         let uncovered = world.spawn_empty().id();
 
         crate::mark_style_dirty(&mut world);
@@ -6472,8 +6458,8 @@ mod tests {
 
     #[test]
     fn invalid_stylesheet_ron_is_structural_error() {
-        let err = crate::parse_stylesheet_ron("not valid ron {{{")
-            .expect_err("invalid RON must fail");
+        let err =
+            crate::parse_stylesheet_ron("not valid ron {{{").expect_err("invalid RON must fail");
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
     }
 }

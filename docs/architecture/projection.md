@@ -24,6 +24,11 @@ value can cause needless rebuilds and hide the real dependency boundary. Keep
 projection functions deterministic and read dependencies declared by their
 metadata.
 
+`CurrentColorStyle` is **not** a projection dependency. Hover/press color
+transitions interpolate that component and patch retained Masonry properties
+in place. Structural style changes still go through `ComputedStyle` /
+`InteractionState`.
+
 Projection helpers such as `ProjectionCtx::button`, `flex_row`, `flex_col`, and
 `styled` provide the application-level path. Raw projector registration and
 retained view details belong to the advanced module.

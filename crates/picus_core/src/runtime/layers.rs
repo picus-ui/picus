@@ -27,7 +27,7 @@
 //! Widgets declare [`PaintIsolation`] (P3 public API). [`PaintIsolation::AnimEntry`]
 //! applies as Masonry External every paint. **Promotion** is isolation-keyed
 //! (`promotes_to_anim_host`); **discovery** of isolation still downcasts known
-//! types (`paint_isolation()` on Spinner / ProgressBar) — not gallery/entity
+//! types (`paint_isolation()` on Spinner / ProgressBar / focused TextArea) — not gallery/entity
 //! hardcode, but not open third-party discovery either. Host **scene paint** is
 //! separately type-dispatched (arms / segment). G2 selective anim path unchanged.
 //!
@@ -63,8 +63,10 @@ use crate::masonry_core::{
     peniko::color::{AlphaColor, Srgb},
 };
 use picus_widget::PaintIsolation;
-use picus_widget::properties::{BarColor, BorderWidth, ContentColor, CornerRadius};
-use picus_widget::widgets::{ProgressBar, Spinner};
+use picus_widget::properties::{
+    BarColor, BorderWidth, CaretColor, ContentColor, CornerRadius, SelectionColor,
+};
+use picus_widget::widgets::{ProgressBar, Spinner, TextArea};
 
 // ---------------------------------------------------------------------------
 // Gate inventory (what pinned xilem actually offers)
@@ -237,6 +239,9 @@ pub(crate) struct AnimLayerEntry {
     pub visual_phase: Option<u8>,
     /// Last continuous phase baked into `scene` (ProgressBar indeterminate ∈ [0,1)).
     pub continuous_phase: Option<f64>,
+    /// When true, this entry needs a display-rate Bevy wake (Spinner / bar).
+    /// Caret blink is discrete and uses the slow anim clock instead.
+    pub display_rate: bool,
 }
 
 /// Result of host scene sync for one anim widget (Spinner or ProgressBar).
@@ -327,6 +332,7 @@ impl AnimLayerHost {
                 scene: Scene::new(),
                 visual_phase: None,
                 continuous_phase: None,
+                display_rate: true,
             },
         );
         id
@@ -347,6 +353,7 @@ impl AnimLayerHost {
                 scene: Scene::new(),
                 visual_phase: None,
                 continuous_phase: None,
+                display_rate: true,
             },
         );
         id
@@ -525,6 +532,51 @@ impl AnimLayerHost {
         }
     }
 
+    /// Sync a focused [`TextArea`] scene (text + selection + caret) in window space.
+    ///
+    /// Discrete caret phase (`0` hidden / `1` visible) gates version bumps so
+    /// blink is G2-encode-only. `display_rate` is forced off — caret uses the
+    /// slow anim clock, not a 60 Hz Bevy wake.
+    pub(crate) fn sync_text_area_scene(
+        &mut self,
+        id: AnimLayerId,
+        caret_phase: u8,
+        window_transform: Affine,
+        window_bounds: Rect,
+        local: Scene,
+    ) -> AnimWidgetSyncResult {
+        let Some(entry) = self.entries.get_mut(&id) else {
+            return AnimWidgetSyncResult::default();
+        };
+        entry.display_rate = false;
+        let phase_changed = entry.visual_phase != Some(caret_phase);
+        let geom_changed = entry.bounds != window_bounds || entry.transform != window_transform;
+        let needs_build = phase_changed || geom_changed || entry.scene.is_empty();
+        entry.bounds = window_bounds;
+        entry.transform = window_transform;
+        if !needs_build {
+            return AnimWidgetSyncResult {
+                version_bumped: false,
+                geometry_changed: false,
+                visual_phase: Some(caret_phase),
+                continuous_phase: None,
+            };
+        }
+        let mut scene = Scene::new();
+        scene.append_transformed(&local, window_transform);
+        entry.scene = scene;
+        entry.visual_phase = Some(caret_phase);
+        entry.continuous_phase = None;
+        entry.version = entry.version.saturating_add(1);
+        entry.dirty = true;
+        AnimWidgetSyncResult {
+            version_bumped: true,
+            geometry_changed: geom_changed,
+            visual_phase: Some(caret_phase),
+            continuous_phase: None,
+        }
+    }
+
     pub(crate) fn clear_dirty_after_encode(&mut self, id: AnimLayerId) {
         if let Some(entry) = self.entries.get_mut(&id) {
             entry.dirty = false;
@@ -550,6 +602,11 @@ impl AnimLayerHost {
 
     pub(crate) fn len(&self) -> usize {
         self.entries.len()
+    }
+
+    /// True when any host entry needs display-rate wakes (Spinner / bar).
+    pub(crate) fn has_display_rate_anim(&self) -> bool {
+        self.entries.values().any(|entry| entry.display_rate)
     }
 
     /// Paint mode widgets must request **every paint** so Masonry leaves an
@@ -1404,6 +1461,11 @@ impl LayerRegistry {
             .any(|e| e.kind == CompositorEntryKind::Anim)
     }
 
+    /// Spinner / indeterminate bar need display-rate wakes; caret does not.
+    pub(crate) fn has_display_rate_anim_entries(&self) -> bool {
+        self.host.has_display_rate_anim()
+    }
+
     /// True when any non-Anim entry needs encode (blocks pure-anim selective path).
     pub(crate) fn non_anim_needs_encode(&self) -> bool {
         self.plan
@@ -1482,6 +1544,12 @@ fn widget_paint_isolation(render_root: &RenderRoot, widget_id: WidgetId) -> Pain
     if let Some(bar) = wref.downcast::<ProgressBar>() {
         return bar.inner().paint_isolation();
     }
+    if let Some(area) = wref.downcast::<TextArea<true>>() {
+        return area.inner().paint_isolation();
+    }
+    if let Some(area) = wref.downcast::<TextArea<false>>() {
+        return area.inner().paint_isolation();
+    }
     PaintIsolation::Inline
 }
 
@@ -1555,8 +1623,63 @@ fn sync_one_anim_widget(
         );
     }
 
+    if let Some(area) = wref.downcast::<TextArea<true>>() {
+        return sync_text_area_widget(registry, anim_id, area.inner(), area);
+    }
+    if let Some(area) = wref.downcast::<TextArea<false>>() {
+        return sync_text_area_widget(registry, anim_id, area.inner(), area);
+    }
+
     // Unknown External: leave empty transparent host scene.
     AnimWidgetSyncResult::default()
+}
+
+fn sync_text_area_widget<const EDITABLE: bool>(
+    registry: &mut LayerRegistry,
+    anim_id: AnimLayerId,
+    area: &TextArea<EDITABLE>,
+    wref: crate::masonry_core::core::WidgetRef<'_, TextArea<EDITABLE>>,
+) -> AnimWidgetSyncResult {
+    if !area.paint_isolation().promotes_to_anim_host() {
+        let _ = registry.host_mut().remove_widget(wref.id());
+        return AnimWidgetSyncResult {
+            version_bumped: false,
+            geometry_changed: true,
+            visual_phase: None,
+            continuous_phase: None,
+        };
+    }
+    let window_transform = wref.ctx().window_transform();
+    let window_bounds = wref.ctx().bounding_box();
+    let text_color = wref.get_prop::<ContentColor>().color;
+    let caret_color = wref.get_prop::<CaretColor>().color;
+    let selection_color = wref.get_prop::<SelectionColor>().color;
+    let show_focus = wref.ctx().is_focus_target();
+    let caret_visible = area.caret_visible() && wref.ctx().is_window_focused();
+    let caret_phase = u8::from(caret_visible);
+    let mut local = Scene::new();
+    {
+        let sink: &mut dyn PaintSink = &mut local;
+        let mut painter = Painter::new(sink);
+        if !area.paint_contents(
+            &mut painter,
+            text_color,
+            caret_color,
+            selection_color,
+            show_focus,
+            caret_visible,
+            wref.ctx().scale_factor(),
+        ) {
+            return AnimWidgetSyncResult::default();
+        }
+    }
+    registry.host_mut().sync_text_area_scene(
+        anim_id,
+        caret_phase,
+        window_transform,
+        window_bounds,
+        local,
+    )
 }
 
 fn layer_bounds_estimate(layer: &VisualLayer, window_bounds: Rect) -> Rect {
@@ -1595,7 +1718,7 @@ mod tests {
         layout::{LenReq, Length},
         peniko::Color,
     };
-    use picus_widget::widgets::{Flex, ProgressBar, SizedBox, Spinner};
+    use picus_widget::widgets::{Flex, ProgressBar, SizedBox, Spinner, TextArea};
 
     // --- minimal widgets for layer-mode spikes --------------------------------
 
@@ -2643,6 +2766,63 @@ mod tests {
             PaintIsolation::Inline,
             "determinate ProgressBar Inline"
         );
+        assert_eq!(
+            TextArea::<true>::new("").paint_isolation(),
+            PaintIsolation::Inline,
+            "unfocused TextArea stays Inline"
+        );
+    }
+
+    #[test]
+    fn focused_text_area_caret_is_g2_anim_not_display_rate() {
+        let area = NewWidget::new(TextArea::<true>::new("hello"));
+        let area_id = area.id();
+        let root_widget = NewWidget::new(
+            SizedBox::new(area)
+                .width(Length::px(80.0))
+                .height(Length::px(24.0)),
+        );
+        let mut root = test_root(root_widget);
+        assert!(root.focus_on(Some(area_id)), "TextArea must accept focus");
+        let _ =
+            root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(1)));
+        let (plan, _) = root.redraw();
+        assert!(
+            plan.layers
+                .iter()
+                .any(|l| matches!(l.kind, VisualLayerKind::External { .. })),
+            "focused TextArea must reserve External; plan={plan:?}"
+        );
+
+        let mut registry = LayerRegistry::new(AnimTargetStrategy::WidgetBoundsTexture);
+        registry.register_external_widgets_from_visual(&plan, &root);
+        registry.rebuild_from_visual_plan(&plan, Rect::new(0.0, 0.0, 80.0, 40.0));
+        let first = registry.sync_anim_entries_from_widgets(&root);
+        assert!(
+            first.any_version_bumped,
+            "initial focused TextArea host scene must dirty anim"
+        );
+        assert!(registry.has_anim_entries());
+        assert!(
+            !registry.has_display_rate_anim_entries(),
+            "caret must not request display-rate wakes"
+        );
+        registry.clear_dirty_after_successful_present();
+        assert!(!registry.non_anim_needs_encode());
+
+        let _ = root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(
+            500,
+        )));
+        let dirtied = registry.sync_anim_entries_from_widgets(&root);
+        assert!(
+            dirtied.any_version_bumped,
+            "half blink cycle must toggle caret phase"
+        );
+        assert!(
+            registry.only_anim_needs_encode(),
+            "G2: only Anim needs encode on caret blink"
+        );
+        assert!(!registry.non_anim_needs_encode());
     }
 
     #[test]

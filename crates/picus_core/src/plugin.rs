@@ -39,14 +39,18 @@ use crate::{
         handle_context_menu_right_clicks, handle_global_overlay_clicks, reparent_overlay_entities,
         sync_overlay_positions, sync_overlay_stack_lifecycle,
     },
+    perf::FrameTiming,
     projection::markdown::{
         StreamingMarkdownParseCache, evict_streaming_markdown_cache,
         update_streaming_markdown_cache,
     },
     projection::{UiProjectorRegistry, register_core_projectors},
     runtime::{
-        MasonryRuntime, initialize_masonry_runtime_from_windows, inject_bevy_input_into_masonry,
-        paint_masonry_ui, rebuild_masonry_runtime, route_masonry_view_messages,
+        MasonryRuntime, PicusHeavyEcsGate, UiScheduledWake, apply_live_color_styles,
+        heavy_ecs_enabled, initialize_masonry_runtime_from_windows, inject_bevy_input_into_masonry,
+        paint_masonry_ui, rebuild_masonry_runtime, refresh_heavy_ecs_gate_after_input,
+        refresh_heavy_ecs_gate_after_update, request_redraw_for_style_tweens,
+        route_masonry_view_messages, schedule_pending_ui_clocks,
         sync_masonry_ime_state_to_bevy_window, sync_masonry_window_lifecycle,
     },
     styling::{
@@ -59,7 +63,6 @@ use crate::{
         sync_active_style_variant, sync_style_targets, sync_stylesheet_asset_events,
         sync_ui_interaction_markers,
     },
-    perf::FrameTiming,
     synthesize::{
         SynthesizedUiViews, UiProjectionDirtyDebug, UiProjectionInvalidation, UiSynthesisStats,
         register_projection_invalidation_dependencies, sync_focus_state, synthesize_ui,
@@ -96,6 +99,8 @@ pub enum PicusUiSet {
     RetainedRouting,
     /// Sole drain of the internal UI action queue and TypeId dispatch.
     DispatchActions,
+    /// Projection, style, overlay, and a11y work skipped on pure anim-only frames.
+    HeavyEcs,
 }
 
 impl Plugin for PicusBuiltinsPlugin {
@@ -159,6 +164,8 @@ impl Plugin for PicusPlugin {
             .init_resource::<ValidationRegistry>()
             .init_resource::<StreamingMarkdownParseCache>()
             .init_resource::<FrameTiming>()
+            .init_resource::<UiScheduledWake>()
+            .init_resource::<PicusHeavyEcsGate>()
             .init_non_send::<MasonryRuntime>()
             .add_message::<CursorMoved>()
             .add_message::<CursorLeft>()
@@ -180,6 +187,8 @@ impl Plugin for PicusPlugin {
                 )
                     .chain(),
             )
+            .configure_sets(Update, PicusUiSet::HeavyEcs.run_if(heavy_ecs_enabled))
+            .configure_sets(PostUpdate, PicusUiSet::HeavyEcs.run_if(heavy_ecs_enabled))
             .add_systems(
                 PreUpdate,
                 (
@@ -223,14 +232,22 @@ impl Plugin for PicusPlugin {
                     .in_set(PicusUiSet::DispatchActions),
             )
             .add_systems(
+                PreUpdate,
+                refresh_heavy_ecs_gate_after_input.after(PicusUiSet::DispatchActions),
+            )
+            .add_systems(
+                Update,
+                (activate_debounced_hovers, tick_auto_dismiss)
+                    .chain()
+                    .before(TweenSystemSet::UpdateInterpolationValue),
+            )
+            .add_systems(
                 Update,
                 (
                     ensure_overlay_root,
                     reparent_overlay_entities,
                     ensure_overlay_defaults,
-                    activate_debounced_hovers,
                     handle_tooltip_hovers,
-                    tick_auto_dismiss,
                     sync_overlay_stack_lifecycle,
                     ensure_active_stylesheet_asset_handle,
                     sync_stylesheet_asset_events,
@@ -240,26 +257,45 @@ impl Plugin for PicusPlugin {
                     sync_style_targets,
                 )
                     .chain()
-                    .before(TweenSystemSet::UpdateInterpolationValue),
+                    .before(TweenSystemSet::UpdateInterpolationValue)
+                    .in_set(PicusUiSet::HeavyEcs),
             )
             .add_systems(
                 Update,
-                sync_focus_state.after(inject_bevy_input_into_masonry),
+                sync_focus_state
+                    .after(inject_bevy_input_into_masonry)
+                    .in_set(PicusUiSet::HeavyEcs),
             )
             .add_systems(
                 Update,
-                animate_style_transitions.after(TweenSystemSet::ApplyTween),
+                (
+                    animate_style_transitions,
+                    request_redraw_for_style_tweens,
+                    schedule_pending_ui_clocks,
+                    refresh_heavy_ecs_gate_after_update,
+                )
+                    .after(TweenSystemSet::ApplyTween),
             )
             .add_systems(
                 Update,
                 (sync_composition_visuals, apply_composition_effects)
                     .chain()
-                    .before(TweenSystemSet::UpdateInterpolationValue),
+                    .before(TweenSystemSet::UpdateInterpolationValue)
+                    .in_set(PicusUiSet::HeavyEcs),
             )
-            .add_systems(Update, run_validation)
-            .add_systems(Update, update_streaming_markdown_cache)
-            .add_systems(Update, evict_streaming_markdown_cache)
-            .add_systems(Update, handle_accessibility_actions)
+            .add_systems(Update, run_validation.in_set(PicusUiSet::HeavyEcs))
+            .add_systems(
+                Update,
+                update_streaming_markdown_cache.in_set(PicusUiSet::HeavyEcs),
+            )
+            .add_systems(
+                Update,
+                evict_streaming_markdown_cache.in_set(PicusUiSet::HeavyEcs),
+            )
+            .add_systems(
+                Update,
+                handle_accessibility_actions.in_set(PicusUiSet::HeavyEcs),
+            )
             .add_systems(
                 PostUpdate,
                 (
@@ -269,14 +305,23 @@ impl Plugin for PicusPlugin {
                     rebuild_masonry_runtime,
                     sync_masonry_ime_state_to_bevy_window,
                 )
-                    .chain(),
+                    .chain()
+                    .in_set(PicusUiSet::HeavyEcs),
             );
 
         // Run overlay placement after Masonry's retained tree has been rebuilt,
         // so anchor/widget geometry is up-to-date for this frame.
         app.add_systems(
             PostUpdate,
-            sync_overlay_positions.after(rebuild_masonry_runtime),
+            sync_overlay_positions
+                .after(rebuild_masonry_runtime)
+                .in_set(PicusUiSet::HeavyEcs),
+        );
+        app.add_systems(
+            PostUpdate,
+            apply_live_color_styles
+                .after(rebuild_masonry_runtime)
+                .in_set(PicusUiSet::HeavyEcs),
         );
 
         app.add_systems(Last, paint_masonry_ui);
@@ -610,6 +655,12 @@ mod tests {
         assert_eq!(stats.root_count, 2);
 
         let _runtime = app.world().non_send::<crate::MasonryRuntime>();
+        assert!(
+            !app.world()
+                .resource::<crate::runtime::PicusHeavyEcsGate>()
+                .skip_heavy_ecs,
+            "first content frame must not skip projection"
+        );
     }
 
     #[test]

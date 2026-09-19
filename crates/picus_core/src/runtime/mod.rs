@@ -11,6 +11,8 @@
 
 pub(crate) mod frame_driver;
 pub(crate) mod layers;
+pub(crate) mod live_style;
+pub(crate) mod wake;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -24,6 +26,12 @@ use self::frame_driver::{
 };
 use self::layers::{
     AnimTargetStrategy, CompositorEntryKind, LayerRegistry, VisualRun, coalesce_visual_runs,
+};
+pub(crate) use self::live_style::apply_live_color_styles;
+pub(crate) use self::wake::{
+    PicusHeavyEcsGate, PicusManagedWinitSettings, UiScheduledWake, heavy_ecs_enabled,
+    idle_winit_settings, refresh_heavy_ecs_gate_after_input, refresh_heavy_ecs_gate_after_update,
+    request_redraw_for_style_tweens, schedule_pending_ui_clocks, settle_frame_wake,
 };
 
 use crate::masonry_core::{
@@ -923,6 +931,26 @@ impl WindowRuntime {
     ///
     /// `need_content_present` here is **host sticky/rewrite wake** — not
     /// [`DirtyBudget::needs_content_present`] (decision-table / encode path).
+    #[inline]
+    pub(crate) fn has_anim_entries(&self) -> bool {
+        self.layer_registry.has_anim_entries()
+    }
+
+    #[inline]
+    pub(crate) fn has_display_rate_anim_entries(&self) -> bool {
+        self.layer_registry.has_display_rate_anim_entries()
+    }
+
+    #[inline]
+    pub(crate) fn has_pending_content_work(&self) -> bool {
+        self.needs_redraw
+            || self.resize_dirty
+            || self.retry_dirty
+            || self.theme_or_font_dirty
+            || self.base_invalidated
+            || self.render_root.needs_rewrite_passes()
+    }
+
     fn redraw_demand_after_work(&self) -> RedrawDemand {
         let need_anim_tick = self.needs_anim_frame || self.render_root.needs_anim();
         let need_content_present = self.needs_redraw
@@ -2609,16 +2637,22 @@ pub fn route_masonry_view_messages(runtime: Option<NonSendMut<MasonryRuntime>>) 
 /// # Bevy wake (Phase 1b)
 ///
 /// Each window returns a structured anim-tick vs content-present demand
-/// (internal). Demands are OR-merged across windows; a single
-/// [`RequestRedraw`] is written when either flag is set. Bevy's reactive
-/// `WinitSettings` still runs a full schedule on that wake — see
+/// (internal). Demands are OR-merged across windows. Content presents and
+/// AnimEntry clocks write [`RequestRedraw`] immediately. AnimTick-only clocks
+/// without Anim entries arm a slow wait instead. Bevy's reactive
+/// `WinitSettings` still runs a full schedule on any wake — see
 /// `docs/architecture/runtime.md` (redraw semantics).
-pub fn paint_masonry_ui(
+pub(crate) fn paint_masonry_ui(
     runtime: Option<NonSendMut<MasonryRuntime>>,
     active_window_query: Query<&Window, Without<ClosingWindow>>,
     time: Res<Time>,
     mut redraw_requests: MessageWriter<RequestRedraw>,
     mut frame_timing: ResMut<crate::perf::FrameTiming>,
+    managed_winit: Option<Res<PicusManagedWinitSettings>>,
+    mut scheduled_wake: ResMut<UiScheduledWake>,
+    mut winit_settings: Option<ResMut<bevy_winit::WinitSettings>>,
+    mut heavy_ecs: ResMut<self::wake::PicusHeavyEcsGate>,
+    time_runners: Query<(), bevy_ecs::prelude::With<crate::bevy_tween::TimeRunner>>,
 ) {
     let Some(mut runtime) = runtime else {
         return;
@@ -2628,6 +2662,8 @@ pub fn paint_masonry_ui(
 
     let window_entities: Vec<Entity> = runtime.window_entities().collect();
     let mut redraw_demand = RedrawDemand::none();
+    let mut any_anim_entries = false;
+    let mut any_display_rate_anim = false;
 
     for window_entity in window_entities {
         let Ok(bevy_window) = active_window_query.get(window_entity) else {
@@ -2670,6 +2706,8 @@ pub fn paint_masonry_ui(
         // FrameDriver decision + host execution spine.
         let result = window_runtime.step_frame(time.delta());
         redraw_demand.merge(result.redraw_demand);
+        any_anim_entries |= window_runtime.has_anim_entries();
+        any_display_rate_anim |= window_runtime.has_display_rate_anim_entries();
         // Skip pure idle (Skipped reason with no work) from frame_id accounting.
         let entered_work = result.paint_reasons & crate::perf::PaintReason::Skipped as u32 == 0;
         if entered_work {
@@ -2686,16 +2724,32 @@ pub fn paint_masonry_ui(
         }
     }
 
-    // Write RequestRedraw only when ContentPresent or AnimTick scheduling needs it.
-    if redraw_demand.any() {
-        tracing::trace!(
-            target: "picus_core::perf",
-            need_anim_tick = redraw_demand.need_anim_tick,
-            need_content_present = redraw_demand.need_content_present,
-            "paint_masonry_ui RequestRedraw"
-        );
-        redraw_requests.write(RequestRedraw);
-    }
+    // Content presents and display-rate AnimEntry clocks (Spinner / bar)
+    // request an immediate frame. Caret blink is an AnimEntry but discrete —
+    // arm the slow wait instead of a 60 Hz Bevy spin.
+    let immediate = redraw_demand.need_content_present
+        || (redraw_demand.need_anim_tick && any_display_rate_anim);
+    let slow_anim_clock = redraw_demand.need_anim_tick && !any_display_rate_anim && !immediate;
+    heavy_ecs.skip_heavy_ecs = redraw_demand.is_anim_only() && time_runners.is_empty();
+    settle_frame_wake(
+        redraw_demand.any(),
+        immediate,
+        slow_anim_clock,
+        managed_winit.is_some(),
+        &mut scheduled_wake,
+        &mut || {
+            tracing::trace!(
+                target: "picus_core::perf",
+                need_anim_tick = redraw_demand.need_anim_tick,
+                need_content_present = redraw_demand.need_content_present,
+                any_anim_entries,
+                any_display_rate_anim,
+                "paint_masonry_ui RequestRedraw"
+            );
+            redraw_requests.write(RequestRedraw);
+        },
+        winit_settings.as_deref_mut(),
+    );
 }
 
 #[cfg(test)]
@@ -3169,6 +3223,88 @@ mod tests {
             .expect("primary window runtime should exist")
             .rebuild_count_for_tests();
         assert_eq!(idle_rebuild_count, changed_rebuild_count);
+    }
+
+    #[test]
+    fn button_color_tween_does_not_rebuild_every_frame() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let mut window = Window {
+            visible: false,
+            ..Default::default()
+        };
+        window.resolution.set(480.0, 320.0);
+        app.world_mut().spawn((window, PrimaryWindow));
+        let base = crate::xilem::Color::from_rgb8(0x20, 0x2A, 0x44);
+        let hover = crate::xilem::Color::from_rgb8(0x90, 0x99, 0xB3);
+        let button = app
+            .world_mut()
+            .spawn((
+                UiRoot,
+                crate::UiButton::new("Tween"),
+                crate::ColorStyle {
+                    bg: Some(base),
+                    hover_bg: Some(hover),
+                    ..crate::ColorStyle::default()
+                },
+                crate::StyleTransition {
+                    duration: 0.2,
+                    easing: None,
+                },
+            ))
+            .id();
+
+        app.update();
+        let initial = app
+            .world()
+            .non_send::<crate::MasonryRuntime>()
+            .primary()
+            .expect("primary")
+            .rebuild_count_for_tests();
+
+        app.world_mut().entity_mut(button).insert(InteractionState {
+            hovered: true,
+            ..InteractionState::default()
+        });
+        app.update();
+        let after_hover = app
+            .world()
+            .non_send::<crate::MasonryRuntime>()
+            .primary()
+            .expect("primary")
+            .rebuild_count_for_tests();
+        assert_eq!(
+            after_hover,
+            initial + 1,
+            "hover should project once: initial={initial} after={after_hover}"
+        );
+        assert!(
+            app.world()
+                .entity(button)
+                .get::<crate::bevy_tween::TimeRunner>()
+                .is_some(),
+            "hover should start a color tween"
+        );
+
+        app.world_mut()
+            .resource_mut::<Time>()
+            .advance_by(std::time::Duration::from_millis(16));
+        app.update();
+        app.world_mut()
+            .resource_mut::<Time>()
+            .advance_by(std::time::Duration::from_millis(16));
+        app.update();
+        let during_tween = app
+            .world()
+            .non_send::<crate::MasonryRuntime>()
+            .primary()
+            .expect("primary")
+            .rebuild_count_for_tests();
+        assert_eq!(
+            during_tween, after_hover,
+            "color tween ticks must not rebuild the retained view"
+        );
     }
 
     #[test]
